@@ -5,6 +5,8 @@
 (require racket/tcp)
 (require net/url-string)
 
+(provide fetch)
+
 (define (url-path->selector pp-list)
   (if (null? pp-list)
       "."
@@ -21,6 +23,7 @@
   (define path (url-path url-struct))
   (define port (url-port url-struct))
 
+  (eprintf "fetching: ~a, ~a, ~a, ~a~n" scheme host path port)
   (cond
     [(equal? scheme "gopher")
      (define selector (url-path->selector path))
@@ -28,6 +31,8 @@
                    selector
                    (or port 70))]
     [else #f]))
+     
+
 
 (define (gopher-fetch host selector port)
   (define (send-selector sel-string out)

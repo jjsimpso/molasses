@@ -49,10 +49,16 @@
   (new menu%
        (label "&Edit")
        (parent menu-bar)))
+#;(define font-menu
+  (new menu%
+       [label "Font"]
+       [parent menu-bar]))
 (define help-menu
   (new menu%
        (label "&Help")
        (parent menu-bar)))
+
+;(append-editor-font-menu-items font-menu)
 
 (new menu-item%
      (label "Exit")
