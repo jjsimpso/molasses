@@ -113,14 +113,27 @@
       (change-tab item event)))
 
 (define (goto-url address-field)
+  ;; find the text% widget for the tab
   (define (get-page-text addr-field)
     (define tab-contents-children
       (send (send (send addr-field get-parent) get-parent) get-children))
     (send (second tab-contents-children) get-editor))
 
+  (define page-text (get-page-text address-field))
   (define address-url (send address-field get-value))
-  (define response (fetch address-url))
-  (when response
-    (define page-text (get-page-text address-field))
-    (send page-text erase)
-    (send page-text insert (bytes->string/utf-8 response))))
+  (define resp (fetch address-url))
+  ;; default the item type to directory
+  (define item-type (if (response-item-type resp)
+                        (response-item-type resp)
+                        "1"))
+  (cond
+    [(response-error? resp)
+     (send page-text erase)
+     (send page-text insert (response-data resp))]
+    [(equal? item-type "1")
+     (send page-text erase)
+     (send page-text insert (bytes->string/utf-8 (response-data resp)))]
+    [(equal? (response-item-type resp) "0")
+     (send page-text erase)
+     (send page-text insert (bytes->string/utf-8 (response-data resp)))]
+    [else (void)]))
