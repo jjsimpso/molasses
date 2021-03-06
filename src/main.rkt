@@ -37,8 +37,8 @@
            (send this on-traverse-char event))))
    
    [label "Molasses"]
-   [width 500]
-   [height 700]))
+   [width 1200]
+   [height 800]))
 
 (define menu-bar (new menu-bar% (parent frame)))
 (define file-menu 

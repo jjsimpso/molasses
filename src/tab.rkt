@@ -1,6 +1,7 @@
 #lang racket/gui
 
-(require "gopher.rkt")
+(require "gopher.rkt"
+         "widgets.rkt")
 
 (provide init-new-tab
          tab-panel-callback)
@@ -48,6 +49,7 @@
   (define address-field
     (new text-field% (parent address-pane)
          (label "")
+         (init-value "gopher://gopher.endangeredsoft.org")
          (style '(single))
          (callback (lambda (item event)
                      (when (equal? (send event get-event-type)
@@ -58,9 +60,9 @@
     (new text%))
 
   (define page-canvas
-    (new editor-canvas% (parent tab-contents)
+    (new browser-canvas% (parent tab-contents)
          (editor page-text)
-         (style '(no-focus auto-hscroll auto-vscroll))
+         (style '(auto-hscroll auto-vscroll))
          (wheel-step 3)))
 
   (init-styles (send page-text get-style-list))
@@ -130,9 +132,18 @@
     [(response-error? resp)
      (send page-text erase)
      (send page-text insert (response-data resp))]
-    [(equal? item-type "1")
+    [(equal? item-type "1") ; directory
+     (define standard-style
+       (send (send page-text get-style-list)
+             find-named-style "Standard"))
      (send page-text erase)
-     (send page-text insert (bytes->string/utf-8 (response-data resp)))]
+     (for ([line (in-lines (open-input-bytes (response-data resp)))])
+       (define line-snip (new string-snip%))
+       (send line-snip set-style standard-style)
+       (send line-snip insert line (string-length line))
+       (send page-text insert line-snip)
+       (send page-text insert "\n")
+       )]
     [(equal? (response-item-type resp) "0")
      (send page-text erase)
      (send page-text insert (bytes->string/utf-8 (response-data resp)))]
