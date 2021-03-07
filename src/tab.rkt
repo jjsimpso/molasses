@@ -51,10 +51,11 @@
          (label "")
          (init-value "gopher://gopher.endangeredsoft.org")
          (style '(single))
-         (callback (lambda (item event)
-                     (when (equal? (send event get-event-type)
-                                   'text-field-enter)
-                       (goto-url item))))))
+         (callback
+          (lambda (item event)
+            (when (equal? (send event get-event-type)
+                          'text-field-enter)
+              (goto-url (send item get-value) page-text))))))
 
   (define page-text
     (new text%))
@@ -114,15 +115,28 @@
         (init-new-tab item tab-index))
       (change-tab item event)))
 
-(define (goto-url address-field)
+(define (insert-directory-line text-widget style line)
+  (cond
+    [(not (non-empty-string? line))
+     (send text-widget insert "\n")]
+    [(equal? (string-ref line 0) #\i)
+     ;; insert informational lines as plain text
+     (define text (car (string-split (substring line 1) "\t" #:trim? #f)))
+     (send text-widget insert text)
+     (send text-widget insert "\n")]
+    [else
+     (define line-snip (new string-snip%))
+     (send line-snip set-style style)
+     (send line-snip insert line (string-length line))
+     (send text-widget insert line-snip)
+     (send text-widget insert "\n")]))
+
+(define (goto-url address-url page-text)
   ;; find the text% widget for the tab
-  (define (get-page-text addr-field)
+  #;(define (get-page-text addr-field)
     (define tab-contents-children
       (send (send (send addr-field get-parent) get-parent) get-children))
     (send (second tab-contents-children) get-editor))
-
-  (define page-text (get-page-text address-field))
-  (define address-url (send address-field get-value))
   (define resp (fetch address-url))
   ;; default the item type to directory
   (define item-type (if (response-item-type resp)
@@ -138,12 +152,7 @@
              find-named-style "Standard"))
      (send page-text erase)
      (for ([line (in-lines (open-input-bytes (response-data resp)))])
-       (define line-snip (new string-snip%))
-       (send line-snip set-style standard-style)
-       (send line-snip insert line (string-length line))
-       (send page-text insert line-snip)
-       (send page-text insert "\n")
-       )]
+       (insert-directory-line page-text standard-style line))]
     [(equal? (response-item-type resp) "0")
      (send page-text erase)
      (send page-text insert (bytes->string/utf-8 (response-data resp)))]

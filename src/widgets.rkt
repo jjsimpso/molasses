@@ -19,5 +19,14 @@
     ))
 
 (define menu-item-snip%
-  (class string-snip% (super-new)
-    ))
+  (class string-snip%
+    (init-field [url ""])
+    (inherit get-flags set-flags)
+    (super-new)
+    (set-flags (cons 'handles-all-mouse-events (get-flags)))
+    (define/override (on-event dc x y editorx editory e)
+      (when (send e button-down? 'left)
+        (follow-link url)))))
+
+(define (follow-link url-string)
+  (void))
