@@ -124,6 +124,10 @@
      (define text (car (string-split (substring line 1) "\t" #:trim? #f)))
      (send text-widget insert text)
      (send text-widget insert "\n")]
+    #;[(equal? (string-ref line 0) #\0)
+     (define fields (string-split (substring line 1) "\t" #:trim? #f))
+     (define line-snip (new menu-item-snip%))
+     (send line-snip set-style style)]
     [else
      (define line-snip (new string-snip%))
      (send line-snip set-style style)
@@ -139,21 +143,21 @@
     (send (second tab-contents-children) get-editor))
   (define resp (fetch address-url))
   ;; default the item type to directory
-  (define item-type (if (response-item-type resp)
-                        (response-item-type resp)
-                        "1"))
+  (define item-type (if (gopher-response-item-type resp)
+                        (gopher-response-item-type resp)
+                        #\1))
   (cond
-    [(response-error? resp)
+    [(gopher-response-error? resp)
      (send page-text erase)
-     (send page-text insert (response-data resp))]
-    [(equal? item-type "1") ; directory
+     (send page-text insert (gopher-response-data resp))]
+    [(equal? item-type #\1) ; directory
      (define standard-style
        (send (send page-text get-style-list)
              find-named-style "Standard"))
      (send page-text erase)
-     (for ([line (in-lines (open-input-bytes (response-data resp)))])
+     (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
        (insert-directory-line page-text standard-style line))]
-    [(equal? (response-item-type resp) "0")
+    [(equal? (gopher-response-item-type resp) #\0)
      (send page-text erase)
-     (send page-text insert (bytes->string/utf-8 (response-data resp)))]
+     (send page-text insert (bytes->string/utf-8 (gopher-response-data resp)))]
     [else (void)]))

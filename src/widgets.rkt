@@ -1,6 +1,6 @@
 #lang racket/gui
 
-(provide browser-canvas%)
+(provide browser-canvas% menu-item-snip%)
 
 (define browser-canvas%
   (class editor-canvas% (super-new)
@@ -20,13 +20,14 @@
 
 (define menu-item-snip%
   (class string-snip%
-    (init-field [url ""])
+    (init-field [url ""]
+                [type #\1])
     (inherit get-flags set-flags)
     (super-new)
     (set-flags (cons 'handles-all-mouse-events (get-flags)))
     (define/override (on-event dc x y editorx editory e)
       (when (send e button-down? 'left)
-        (follow-link url)))))
+        (follow-link url type)))))
 
-(define (follow-link url-string)
+(define (follow-link url-string type)
   (void))

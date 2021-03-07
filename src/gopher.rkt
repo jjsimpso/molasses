@@ -6,14 +6,23 @@
 (require net/url-string)
 
 (provide fetch
-         (struct-out response))
+         (struct-out gopher-response)
+         (struct-out gopher-selector))
 
-(struct response
+(struct gopher-response
   (item-type
    error?
    data)
   #:prefab)
 
+(struct gopher-selector
+  (item-type
+   text
+   path
+   host
+   port)
+  #:prefab)
+   
 (define (gopher-item-type? type-string)
   (or (string=? type-string "0")
       (string=? type-string "1")
@@ -30,6 +39,15 @@
       (string=? type-string "I")
       ;; unofficial
       (string=? type-string "h")))
+
+(define (parse-selector s)
+  (define type (string-ref s 0))
+  (define fields (string-split (substring s 1) "\t" #:trim? #f))
+  (gopher-selector type
+                   (car fields)
+                   (cadr fields)
+                   (caddr fields)
+                   (cadddr fields)))
 
 (define (url-path->selector pp-list)
   (if (null? pp-list)
@@ -59,7 +77,8 @@
     (if (and (not type)
              (not (null? path-list))
              (gopher-item-type? (path/param-path (car path-list))))
-        (path/param-path (car path-list))
+        ; return a character for the item type
+        (string-ref (path/param-path (car path-list)) 0)
         #f))
   (define selector
     (if item-type-from-url
@@ -68,7 +87,7 @@
   
   (define-values (data error?) (gopher-fetch-data host selector port))
 
-  (response (or type item-type-from-url)
+  (gopher-response (or type item-type-from-url)
             error?
             data))
 
