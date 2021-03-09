@@ -69,6 +69,7 @@
   (init-styles (send page-text get-style-list))
 
   (send page-text set-max-undo-history 0)
+  ;(send page-text hide-caret #t)
   (send* page-canvas
     (set-canvas-background (make-object color% "black"))
     (force-display-focus #t)
@@ -87,7 +88,19 @@
     (set-delta 'change-size 11)
     (set-delta-foreground (make-object color% "white"))
     (set-delta-background (make-object color% "black")))
-  (send standard set-delta standard-delta))
+  (send standard set-delta standard-delta)
+
+  (define (make-color-style name color)
+    ;; Each style created with this procedure copies "Standard" style
+    ;; and creates a new style by name 'name' and with the foreground
+    ;; color 'color'.
+    (send (send style-list new-named-style name standard)
+          set-delta (send* (make-object style-delta%)
+                      (copy standard-delta)
+                      (set-delta-foreground color))))
+
+  (make-color-style "Link" (make-object color% "green"))
+)
 
 
 (define (change-tab tp event)
@@ -115,24 +128,56 @@
         (init-new-tab item tab-index))
       (change-tab item event)))
 
-(define (insert-directory-line text-widget style line)
+(define (insert-menu-item text-widget line)
+  (define (gopher-menu-type-text type)
+    (case type
+      [(#\0) "(TEXT) "]
+      [(#\1) "(DIR)  "]
+      [(#\3) "(ERROR) "]
+      [(#\g) "(GIF)  "]
+      [(#\I) "(IMG)  "]
+      [(#\7) "(SEARCH) "]
+      [(#\8) "(TELNET) "]
+      [else  "(BIN)  "]))
+
+  (define standard-style
+    (send (send text-widget get-style-list) find-named-style "Standard"))
+  (define link-style
+    (send (send text-widget get-style-list) find-named-style "Link"))
+  
+  (define selector (parse-selector line))
+  (define type-snip (new string-snip%))
+  (define link-snip
+    (new menu-item-snip%
+         (type (gopher-selector-item-type selector))
+         (url (string-append "gopher://"
+                             (gopher-selector-host selector) ":"
+                             (gopher-selector-port selector)
+                             (gopher-selector-path selector)))))
+  
+  (define type-text (gopher-menu-type-text (gopher-selector-item-type selector)))
+  (define display-text (gopher-selector-text selector))
+  
+  (send type-snip set-style standard-style)
+  (send type-snip insert type-text (string-length type-text))
+  (send text-widget insert type-snip)
+  (send link-snip set-style link-style)
+  (send link-snip insert display-text (string-length display-text)) ;(send link-snip get-count))
+  (send text-widget insert link-snip)
+  (send text-widget change-style standard-style)
+)
+
+(define (insert-directory-line text-widget line)
   (cond
     [(not (non-empty-string? line))
      (send text-widget insert "\n")]
+    ;; insert informational lines as plain text
     [(equal? (string-ref line 0) #\i)
-     ;; insert informational lines as plain text
      (define text (car (string-split (substring line 1) "\t" #:trim? #f)))
      (send text-widget insert text)
      (send text-widget insert "\n")]
-    #;[(equal? (string-ref line 0) #\0)
-     (define fields (string-split (substring line 1) "\t" #:trim? #f))
-     (define line-snip (new menu-item-snip%))
-     (send line-snip set-style style)]
     [else
-     (define line-snip (new string-snip%))
-     (send line-snip set-style style)
-     (send line-snip insert line (string-length line))
-     (send text-widget insert line-snip)
+     (insert-menu-item text-widget line)
      (send text-widget insert "\n")]))
 
 (define (goto-url address-url page-text)
@@ -151,12 +196,9 @@
      (send page-text erase)
      (send page-text insert (gopher-response-data resp))]
     [(equal? item-type #\1) ; directory
-     (define standard-style
-       (send (send page-text get-style-list)
-             find-named-style "Standard"))
      (send page-text erase)
      (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
-       (insert-directory-line page-text standard-style line))]
+       (insert-directory-line page-text line))]
     [(equal? (gopher-response-item-type resp) #\0)
      (send page-text erase)
      (send page-text insert (bytes->string/utf-8 (gopher-response-data resp)))]

@@ -6,6 +6,7 @@
 (require net/url-string)
 
 (provide fetch
+         parse-selector
          (struct-out gopher-response)
          (struct-out gopher-selector))
 

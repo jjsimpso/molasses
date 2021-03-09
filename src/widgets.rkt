@@ -30,4 +30,5 @@
         (follow-link url type)))))
 
 (define (follow-link url-string type)
-  (void))
+  (eprintf "follow-link:~n")
+)
