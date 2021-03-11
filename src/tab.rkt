@@ -198,7 +198,8 @@
     [(equal? item-type #\1) ; directory
      (send page-text erase)
      (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
-       (insert-directory-line page-text line))]
+       (insert-directory-line page-text line))
+     (set-field! selection (send page-text get-canvas) (send page-text find-first-snip))]
     [(equal? (gopher-response-item-type resp) #\0)
      (send page-text erase)
      (send page-text insert (bytes->string/utf-8 (gopher-response-data resp)))]
