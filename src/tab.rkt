@@ -72,7 +72,7 @@
   (send page-text set-max-undo-history 0)
   ;(send page-text hide-caret #t)
   (send* page-canvas
-    (set-canvas-background (make-object color% "black"))
+    (set-canvas-background (send the-color-database find-color "black"))
     (force-display-focus #t)
     (lazy-refresh #t))
 
@@ -86,9 +86,9 @@
   (send* standard-delta
     (set-family 'modern)
     ;(set-face font-name)
-    (set-delta 'change-size 11)
-    (set-delta-foreground (make-object color% "white"))
-    (set-delta-background (make-object color% "black")))
+    (set-delta 'change-size 12)
+    (set-delta-foreground (send the-color-database find-color "white smoke"))
+    (set-delta-background (send the-color-database find-color "black")))
   (send standard set-delta standard-delta)
 
   (define (make-color-style name color)
@@ -100,8 +100,8 @@
                       (copy standard-delta)
                       (set-delta-foreground color))))
 
-  (make-color-style "Link" (make-object color% "green"))
-  (make-color-style "Link Highlight" (make-object color% "yellow"))
+  (make-color-style "Link" (send the-color-database find-color "lawn green"))
+  (make-color-style "Link Highlight" (send the-color-database find-color "yellow"))
 )
 
 
@@ -134,13 +134,13 @@
   (define (gopher-menu-type-text type)
     (case type
       [(#\0) "(TEXT) "]
-      [(#\1) "(DIR)  "]
-      [(#\3) "(ERROR) "]
-      [(#\g) "(GIF)  "]
-      [(#\I) "(IMG)  "]
-      [(#\7) "(SEARCH) "]
-      [(#\8) "(TELNET) "]
-      [else  "(BIN)  "]))
+      [(#\1) " (DIR) "]
+      [(#\3) " (ERR) "]
+      [(#\g) " (GIF) "]
+      [(#\I) " (IMG) "]
+      [(#\7) "(SRCH) "]
+      [(#\8) " (TEL) "]
+      [else  " (BIN) "]))
 
   (define standard-style
     (send (send text-widget get-style-list) find-named-style "Standard"))
