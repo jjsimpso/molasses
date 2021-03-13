@@ -55,10 +55,11 @@
           (lambda (item event)
             (when (equal? (send event get-event-type)
                           'text-field-enter)
-              (goto-url (send item get-value) page-text))))))
+              (goto-url (send item get-value) page-text)
+              (send page-canvas focus))))))
 
   (define page-text
-    (new text%))
+    (new browser-text%))
 
   (define page-canvas
     (new browser-canvas% (parent tab-contents)
@@ -199,7 +200,7 @@
      (send page-text erase)
      (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
        (insert-directory-line page-text line))
-     (set-field! selection (send page-text get-canvas) (send page-text find-first-snip))]
+     (set-field! selection page-text (send page-text find-first-snip))]
     [(equal? (gopher-response-item-type resp) #\0)
      (send page-text erase)
      (send page-text insert (bytes->string/utf-8 (gopher-response-data resp)))]
