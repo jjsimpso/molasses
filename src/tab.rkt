@@ -203,11 +203,6 @@
      (send text-widget insert "\n")]))
 
 (define (goto-url address-url page-text)
-  ;; find the text% widget for the tab
-  #;(define (get-page-text addr-field)
-    (define tab-contents-children
-      (send (send (send addr-field get-parent) get-parent) get-children))
-    (send (second tab-contents-children) get-editor))
   (define resp (fetch address-url))
   ;; default the item type to directory
   (define item-type (if (gopher-response-item-type resp)
