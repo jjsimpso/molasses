@@ -13,6 +13,7 @@
    address-text)
   #:prefab)
 
+;; list of tab-info structs
 (define tab-list '())
 
 (define (init-new-tab tp index)
@@ -77,7 +78,7 @@
     (lazy-refresh #t))
 
   (set! tab-list
-        (cons (cons index tab-contents)
+        (cons (tab-info index tab-contents (send address-field get-value))
               tab-list)))
 
 (define (init-styles style-list)
@@ -104,19 +105,38 @@
   (make-color-style "Link Highlight" (send the-color-database find-color "yellow"))
 )
 
+;; returns a tab-info struct from the global tab-list or #f
+(define (find-tab-at-index index)
+  (for/first ([tab (in-list tab-list)]
+              #:when (= index (tab-info-index tab)))
+    tab))
+
+;; returns the tab at index's canvas widget or #f
+(define (find-tab-canvas index)
+  (define tab (find-tab-at-index index))
+  (when tab
+    (define children (send (tab-info-contents tab) get-children))
+    (eprintf "tab children: ~a~n" children)
+    (for/first ([child (in-list children)]
+                #:when (is-a? child browser-canvas%))
+      child)))
 
 (define (change-tab tp event)
   (when (eq? (send event get-event-type) 'tab-panel)
     (define tab-index (send tp get-selection))
     (define tab-label (send tp get-item-label tab-index))
     (printf "changing to tab ~a~n" tab-label)
-    (fill-tab-content tp)))
+    (fill-tab-content tp)
+    (define tab-canvas (find-tab-canvas tab-index))
+    (when tab-canvas
+      (send tab-canvas focus))))
 
 (define (fill-tab-content tp)
   (define current-tab-index (send tp get-selection))
   (send tp change-children
         (lambda (c*)
-          (list (cdr (assoc current-tab-index tab-list))))))
+          ;; return contents of the tab as a list
+          (list (tab-info-contents (find-tab-at-index current-tab-index))))))
 
 (define (tab-panel-callback item event)
   (define tab-index (send item get-selection))
