@@ -24,7 +24,8 @@
 
 (define browser-text%
   (class text% (super-new)
-    (init-field [selection #f])
+    (init-field [selection #f]
+                [gopher-menu? #f])
     (inherit get-snip-position
              set-position
              move-position
@@ -46,35 +47,37 @@
                     (+ pos (send new-sel get-count))))
     
     (define/override (on-local-char event)
-      (case (send event get-key-code)
-        [(down)
-         (define item (find-next-menu-snip selection))
-         (eprintf "browser-text on-local-char down: new selection = ~a~n" item)
-         (when item
-           (define pos (get-snip-position item))
-           (change-highlight selection item)
-           (set! selection item)
-           (set-position pos 'same #f #t 'default))]
-        [(up)
-         (define item (find-prev-menu-snip selection))
-         (eprintf "browser-text on-local-char up: new selection = ~a~n" item)
-         (when item
-           (define pos (get-snip-position item))
-           (change-highlight selection item)
-           (set! selection item)
-           (set-position pos 'same #f #t 'default))]
-        [(left)
-         (void)]
-        [(right)
-         (when selection
-           (send selection follow-link))]
-        [(next prior)
-         (eprintf "browser-text on-local-char: got page up/down key~n")
-         (move-position (send event get-key-code))]
-        [else
-         (define key-code (send event get-key-code))
-         (eprintf "browser-text on-local-char: unhandled key ~a~n" key-code)
-         (void)]))
+      (if (not gopher-menu?)
+          (super on-local-char event)
+          (case (send event get-key-code)
+            [(down)
+             (define item (find-next-menu-snip selection))
+             (eprintf "browser-text on-local-char down: new selection = ~a~n" item)
+             (when item
+               (define pos (get-snip-position item))
+               (change-highlight selection item)
+               (set! selection item)
+               (set-position pos 'same #f #t 'default))]
+            [(up)
+             (define item (find-prev-menu-snip selection))
+             (eprintf "browser-text on-local-char up: new selection = ~a~n" item)
+             (when item
+               (define pos (get-snip-position item))
+               (change-highlight selection item)
+               (set! selection item)
+               (set-position pos 'same #f #t 'default))]
+            [(left)
+             (void)]
+            [(right)
+             (when selection
+               (send selection follow-link))]
+            [(next prior)
+             (eprintf "browser-text on-local-char: got page up/down key~n")
+             (move-position (send event get-key-code))]
+            [else
+             (define key-code (send event get-key-code))
+             (eprintf "browser-text on-local-char: unhandled key ~a~n" key-code)
+             (void)])))
     ))
 
 (define browser-canvas%

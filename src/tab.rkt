@@ -213,6 +213,10 @@
   (define item-type (if (gopher-response-item-type resp)
                         (gopher-response-item-type resp)
                         #\1))
+
+  ;; reset gopher-menu? boolean to default
+  (set-field! gopher-menu? page-text #f)
+  
   (cond
     [(gopher-response-error? resp)
      (send page-text erase)
@@ -221,6 +225,7 @@
      (send page-text erase)
      (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
        (insert-directory-line page-text line))
+     (set-field! gopher-menu? page-text #t)
      (set-field! selection page-text (send page-text find-first-snip))]
     [(equal? (gopher-response-item-type resp) #\0)
      (send page-text erase)
