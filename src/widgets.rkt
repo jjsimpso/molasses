@@ -27,7 +27,24 @@
     (init-field [selection #f])
     (inherit get-snip-position
              set-position
-             move-position)
+             move-position
+             get-style-list
+             change-style)
+    
+    (define/private (change-highlight old-sel new-sel)
+      (when old-sel
+        ;; unhighlight previous selection
+        (define old-style (send (get-style-list) find-named-style "Link"))
+        (define pos (get-snip-position old-sel))
+        (change-style old-style
+                      pos
+                      (+ pos (send old-sel get-count))))
+      (define new-style (send (get-style-list) find-named-style "Link Highlight"))
+      (define pos (get-snip-position new-sel))
+      (change-style new-style
+                    pos
+                    (+ pos (send new-sel get-count))))
+    
     (define/override (on-local-char event)
       (case (send event get-key-code)
         [(down)
@@ -35,6 +52,7 @@
          (eprintf "browser-text on-local-char down: new selection = ~a~n" item)
          (when item
            (define pos (get-snip-position item))
+           (change-highlight selection item)
            (set! selection item)
            (set-position pos 'same #f #t 'default))]
         [(up)
@@ -42,6 +60,7 @@
          (eprintf "browser-text on-local-char up: new selection = ~a~n" item)
          (when item
            (define pos (get-snip-position item))
+           (change-highlight selection item)
            (set! selection item)
            (set-position pos 'same #f #t 'default))]
         [(left)

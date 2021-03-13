@@ -101,6 +101,7 @@
                       (set-delta-foreground color))))
 
   (make-color-style "Link" (make-object color% "green"))
+  (make-color-style "Link Highlight" (make-object color% "yellow"))
 )
 
 
