@@ -109,6 +109,8 @@
     (inherit get-snip-position
              set-position
              move-position
+             scroll-to-position
+             get-visible-position-range
              get-style-list
              change-style
              find-first-snip)
@@ -128,7 +130,17 @@
         (set-position pos 'same #f #t 'default)
         (change-style new-style
                       pos
-                      (+ pos (send selection get-count)))))
+                      (+ pos (send selection get-count)))
+        (scroll-to-position 0)))
+
+    (define/private (current-selection-visible?)
+      (define pos (get-snip-position selection))
+      (define start (box 0))
+      (define end (box 0))
+      (get-visible-position-range start end #f)
+      (if (and (>= pos (unbox start)) (<= pos (unbox end)))
+          #t
+          #f))
     
     (define/private (change-highlight old-sel new-sel)
       (when old-sel
@@ -149,13 +161,19 @@
           (super on-local-char event)
           (case (send event get-key-code)
             [(down)
-             (define item (find-next-menu-snip selection))
-             (eprintf "browser-text on-local-char down: new selection = ~a~n" item)
-             (when item
-               (define pos (get-snip-position item))
-               (change-highlight selection item)
-               (set! selection item)
-               (set-position pos 'same #f #t 'default))]
+             (cond
+               [(or (not selection) (current-selection-visible?))
+                ;; change selection to the next menu snip
+                (define item (find-next-menu-snip selection))
+                (eprintf "browser-text on-local-char down: new selection = ~a~n" item)
+                (when item
+                  (define pos (get-snip-position item))
+                  (change-highlight selection item)
+                  (set! selection item)
+                  (set-position pos 'same #f #t 'default))]
+               [else
+                ;; else scroll to make the current selection visible
+                (scroll-to-position (get-snip-position selection))])]
             [(up)
              (define item (find-prev-menu-snip selection))
              (eprintf "browser-text on-local-char up: new selection = ~a~n" item)
