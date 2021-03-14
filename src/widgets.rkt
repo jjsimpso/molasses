@@ -1,8 +1,88 @@
 #lang racket/gui
 
+(require "gopher.rkt")
+
 (provide browser-text%
          browser-canvas%
-         menu-item-snip%)
+         menu-item-snip%
+         goto-url)
+
+(define (insert-menu-item text-widget line)
+  (define (gopher-menu-type-text type)
+    (case type
+      [(#\0) "(TEXT) "]
+      [(#\1) " (DIR) "]
+      [(#\3) " (ERR) "]
+      [(#\g) " (GIF) "]
+      [(#\I) " (IMG) "]
+      [(#\7) "(SRCH) "]
+      [(#\8) " (TEL) "]
+      [else  " (BIN) "]))
+
+  (define standard-style
+    (send (send text-widget get-style-list) find-named-style "Standard"))
+  (define link-style
+    (send (send text-widget get-style-list) find-named-style "Link"))
+  
+  (define selector (parse-selector line))
+  (define type-snip (new string-snip%))
+  (define link-snip
+    (new menu-item-snip%
+         (type (gopher-selector-item-type selector))
+         (url (string-append "gopher://"
+                             (gopher-selector-host selector) ":"
+                             (gopher-selector-port selector)
+                             (gopher-selector-path selector)))))
+  
+  (define type-text (gopher-menu-type-text (gopher-selector-item-type selector)))
+  (define display-text (gopher-selector-text selector))
+  
+  (send type-snip set-style standard-style)
+  (send type-snip insert type-text (string-length type-text))
+  (send text-widget insert type-snip)
+  (send link-snip set-style link-style)
+  (send link-snip insert display-text (string-length display-text)) ;(send link-snip get-count))
+  (send text-widget insert link-snip)
+  (send text-widget change-style standard-style)
+)
+
+(define (insert-directory-line text-widget line)
+  (cond
+    [(not (non-empty-string? line))
+     (send text-widget insert "\n")]
+    ;; insert informational lines as plain text
+    [(equal? (string-ref line 0) #\i)
+     (define text (car (string-split (substring line 1) "\t" #:trim? #f)))
+     (send text-widget insert text)
+     (send text-widget insert "\n")]
+    [else
+     (insert-menu-item text-widget line)
+     (send text-widget insert "\n")]))
+
+;; by default the gopher item type is determined from the URL
+(define (goto-url address-url page-text [type #f])
+  (define resp (fetch address-url type))
+  ;; default the item type to directory
+  (define item-type (if (gopher-response-item-type resp)
+                        (gopher-response-item-type resp)
+                        #\1))
+
+  ;; reset gopher-menu? boolean to default
+  (set-field! gopher-menu? page-text #f)
+  
+  (cond
+    [(gopher-response-error? resp)
+     (send page-text erase)
+     (send page-text insert (gopher-response-data resp))]
+    [(equal? item-type #\1) ; directory
+     (send page-text erase)
+     (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
+       (insert-directory-line page-text line))
+     (send page-text init-gopher-menu)]
+    [(equal? (gopher-response-item-type resp) #\0)
+     (send page-text erase)
+     (send page-text insert (bytes->string/utf-8 (gopher-response-data resp)))]
+    [else (void)]))
 
 (define (find-next-menu-snip snip)
   (if (not snip)
@@ -30,7 +110,25 @@
              set-position
              move-position
              get-style-list
-             change-style)
+             change-style
+             find-first-snip)
+
+    (define/public (find-first-menu-snip)
+      (define first-snip (find-first-snip))
+      (if (is-a? first-snip menu-item-snip%)
+          first-snip
+          (find-next-menu-snip first-snip)))
+
+    (define/public (init-gopher-menu)
+      (set! gopher-menu? #t)
+      (set! selection (find-first-menu-snip))
+      (when selection
+        (define new-style (send (get-style-list) find-named-style "Link Highlight"))
+        (define pos (get-snip-position selection))
+        (set-position pos 'same #f #t 'default)
+        (change-style new-style
+                      pos
+                      (+ pos (send selection get-count)))))
     
     (define/private (change-highlight old-sel new-sel)
       (when old-sel
@@ -70,7 +168,9 @@
              (void)]
             [(right)
              (when selection
-               (send selection follow-link))]
+               (goto-url (get-field url selection)
+                         this
+                         (get-field type selection)))]
             [(next prior)
              (eprintf "browser-text on-local-char: got page up/down key~n")
              (move-position (send event get-key-code))]

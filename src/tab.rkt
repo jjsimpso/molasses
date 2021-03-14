@@ -1,7 +1,6 @@
 #lang racket/gui
 
-(require "gopher.rkt"
-         "widgets.rkt")
+(require "widgets.rkt")
 
 (provide init-new-tab
          tab-panel-callback)
@@ -71,6 +70,8 @@
   (init-styles (send page-text get-style-list))
 
   (send page-text set-max-undo-history 0)
+  (send page-text set-styles-sticky #f)
+  
   ;(send page-text hide-caret #t)
   (send* page-canvas
     (set-canvas-background (send the-color-database find-color "black"))
@@ -149,80 +150,3 @@
         (send item append "+")
         (init-new-tab item tab-index))
       (change-tab item event)))
-
-(define (insert-menu-item text-widget line)
-  (define (gopher-menu-type-text type)
-    (case type
-      [(#\0) "(TEXT) "]
-      [(#\1) " (DIR) "]
-      [(#\3) " (ERR) "]
-      [(#\g) " (GIF) "]
-      [(#\I) " (IMG) "]
-      [(#\7) "(SRCH) "]
-      [(#\8) " (TEL) "]
-      [else  " (BIN) "]))
-
-  (define standard-style
-    (send (send text-widget get-style-list) find-named-style "Standard"))
-  (define link-style
-    (send (send text-widget get-style-list) find-named-style "Link"))
-  
-  (define selector (parse-selector line))
-  (define type-snip (new string-snip%))
-  (define link-snip
-    (new menu-item-snip%
-         (type (gopher-selector-item-type selector))
-         (url (string-append "gopher://"
-                             (gopher-selector-host selector) ":"
-                             (gopher-selector-port selector)
-                             (gopher-selector-path selector)))))
-  
-  (define type-text (gopher-menu-type-text (gopher-selector-item-type selector)))
-  (define display-text (gopher-selector-text selector))
-  
-  (send type-snip set-style standard-style)
-  (send type-snip insert type-text (string-length type-text))
-  (send text-widget insert type-snip)
-  (send link-snip set-style link-style)
-  (send link-snip insert display-text (string-length display-text)) ;(send link-snip get-count))
-  (send text-widget insert link-snip)
-  (send text-widget change-style standard-style)
-)
-
-(define (insert-directory-line text-widget line)
-  (cond
-    [(not (non-empty-string? line))
-     (send text-widget insert "\n")]
-    ;; insert informational lines as plain text
-    [(equal? (string-ref line 0) #\i)
-     (define text (car (string-split (substring line 1) "\t" #:trim? #f)))
-     (send text-widget insert text)
-     (send text-widget insert "\n")]
-    [else
-     (insert-menu-item text-widget line)
-     (send text-widget insert "\n")]))
-
-(define (goto-url address-url page-text)
-  (define resp (fetch address-url))
-  ;; default the item type to directory
-  (define item-type (if (gopher-response-item-type resp)
-                        (gopher-response-item-type resp)
-                        #\1))
-
-  ;; reset gopher-menu? boolean to default
-  (set-field! gopher-menu? page-text #f)
-  
-  (cond
-    [(gopher-response-error? resp)
-     (send page-text erase)
-     (send page-text insert (gopher-response-data resp))]
-    [(equal? item-type #\1) ; directory
-     (send page-text erase)
-     (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
-       (insert-directory-line page-text line))
-     (set-field! gopher-menu? page-text #t)
-     (set-field! selection page-text (send page-text find-first-snip))]
-    [(equal? (gopher-response-item-type resp) #\0)
-     (send page-text erase)
-     (send page-text insert (bytes->string/utf-8 (gopher-response-data resp)))]
-    [else (void)]))
