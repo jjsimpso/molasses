@@ -7,6 +7,11 @@
          menu-item-snip%
          goto-url)
 
+(struct browser-url
+  (url
+   type)
+  #:prefab)
+
 (define (insert-menu-item text-widget line)
   (define (gopher-menu-type-text type)
     (case type
@@ -61,6 +66,8 @@
 
 ;; by default the gopher item type is determined from the URL
 (define (goto-url address-url page-text [type #f])
+  (eprintf "goto-url: ~a, ~a~n" address-url type)
+  
   (define resp (fetch address-url type))
   ;; default the item type to directory
   (define item-type (if (gopher-response-item-type resp)
@@ -105,7 +112,9 @@
 (define browser-text%
   (class text% (super-new)
     (init-field [selection #f]
-                [gopher-menu? #f])
+                [gopher-menu? #f]
+                [current-url (browser-url "" #\1)]
+                [history '()]) ; list of browser-url structs
     (inherit get-snip-position
              set-position
              move-position
@@ -133,6 +142,15 @@
                       (+ pos (send selection get-count)))
         (scroll-to-position 0)))
 
+    (define/public (go-back)
+      (unless (empty? history)
+        (define last (car history))
+        (set! current-url (browser-url (browser-url-url last) (browser-url-type last)))
+        (goto-url (browser-url-url last)
+                  this
+                  (browser-url-type last))
+        (set! history (cdr history))))
+
     (define/private (current-selection-visible?)
       (define pos (get-snip-position selection))
       (define start (box 0))
@@ -157,8 +175,7 @@
                     (+ pos (send new-sel get-count))))
     
     (define/override (on-local-char event)
-      (if (not gopher-menu?)
-          (super on-local-char event)
+      (if gopher-menu?
           (case (send event get-key-code)
             [(down)
              (cond
@@ -183,9 +200,12 @@
                (set! selection item)
                (set-position pos 'same #f #t 'default))]
             [(left)
-             (void)]
+             (go-back)]
             [(right)
              (when selection
+               ;; add current page to history
+               (set! history (cons current-url history))
+               (set! current-url (browser-url (get-field url selection) (get-field type selection)))
                (goto-url (get-field url selection)
                          this
                          (get-field type selection)))]
@@ -193,9 +213,16 @@
              (eprintf "browser-text on-local-char: got page up/down key~n")
              (move-position (send event get-key-code))]
             [else
-             (define key-code (send event get-key-code))
-             (eprintf "browser-text on-local-char: unhandled key ~a~n" key-code)
-             (void)])))
+             ;(define key-code (send event get-key-code))
+             ;(eprintf "browser-text on-local-char: unhandled key ~a~n" key-code)
+             (void)])
+          (case (send event get-key-code)
+            [(left)
+             (go-back)]
+            [(right)
+             (void)]
+            [else
+             (super on-local-char event)])))
     ))
 
 (define browser-canvas%
