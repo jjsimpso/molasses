@@ -7,6 +7,7 @@
 
 (provide fetch
          parse-selector
+         url->url-with-type
          (struct-out gopher-response)
          (struct-out gopher-selector))
 
@@ -49,6 +50,31 @@
                    (cadr fields)
                    (caddr fields)
                    (cadddr fields)))
+
+;; untested
+(define (selector->url s)
+  (string-append "gopher://"
+                 (gopher-selector-host s) ":"
+                 (gopher-selector-port s)
+                 "/" (string (gopher-selector-item-type s))
+                 (gopher-selector-path s)))
+
+(define (url->url-with-type url [type #f])
+  (define url-struct (string->url url))
+  (define path-list (url-path url-struct))
+
+  (if (and (not (null? path-list))
+           (gopher-item-type? (path/param-path (car path-list))))
+      ; url has a type, just return it
+      url
+      (string-append (if (url-scheme url-struct) (url-scheme url-struct) "gopher") "://"
+                     (url-host url-struct)
+                     (if (and (url-port url-struct)
+                              (not (= (url-port url-struct) 70)))
+                         (string-append ":" (number->string (url-port url-struct)))
+                         "")
+                     (if type (string-append "/" (string type) "/") "")
+                     (string-join (map path/param-path path-list) "/"))))
 
 (define (url-path->selector pp-list)
   (if (null? pp-list)

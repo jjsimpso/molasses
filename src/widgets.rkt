@@ -64,7 +64,7 @@
      (insert-menu-item text-widget line)
      (send text-widget insert "\n")]))
 
-;; by default the gopher item type is determined from the URL
+;; if type isn't set, the gopher item type is determined from the URL
 (define (goto-url address-url page-text [type #f])
   (eprintf "goto-url: ~a, ~a~n" address-url type)
   
@@ -113,6 +113,7 @@
   (class text% (super-new)
     (init-field [selection #f]
                 [gopher-menu? #f]
+                [address-text-field #f]
                 [current-url (browser-url "" #\1)]
                 [history '()]) ; list of browser-url structs
     (inherit get-snip-position
@@ -146,15 +147,18 @@
       ;; add current page to history
       (set! history (cons current-url history))
       (set! current-url (browser-url url type))
+      ;; set the address field's value string to the new url, adding gopher type if necessary
+      (send address-text-field set-value (url->url-with-type url type))
       (goto-url url this type))
 
     (define/public (go-back)
       (unless (empty? history)
-        (define last (car history))
-        (set! current-url (browser-url (browser-url-url last) (browser-url-type last)))
-        (goto-url (browser-url-url last)
+        (set! current-url (car history))
+        (send address-text-field set-value (url->url-with-type (browser-url-url current-url)
+                                                               (browser-url-type current-url)))
+        (goto-url (browser-url-url current-url)
                   this
-                  (browser-url-type last))
+                  (browser-url-type current-url))
         (set! history (cdr history))))
 
     (define/private (current-selection-visible?)

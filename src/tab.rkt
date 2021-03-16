@@ -59,7 +59,7 @@
               (send page-canvas focus))))))
 
   (define page-text
-    (new browser-text%))
+    (new browser-text% (address-text-field address-field)))
 
   (define page-canvas
     (new browser-canvas% (parent tab-contents)
