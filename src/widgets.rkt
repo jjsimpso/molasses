@@ -142,6 +142,12 @@
                       (+ pos (send selection get-count)))
         (scroll-to-position 0)))
 
+    (define/public (go url type)
+      ;; add current page to history
+      (set! history (cons current-url history))
+      (set! current-url (browser-url url type))
+      (goto-url url this type))
+
     (define/public (go-back)
       (unless (empty? history)
         (define last (car history))
@@ -203,12 +209,7 @@
              (go-back)]
             [(right)
              (when selection
-               ;; add current page to history
-               (set! history (cons current-url history))
-               (set! current-url (browser-url (get-field url selection) (get-field type selection)))
-               (goto-url (get-field url selection)
-                         this
-                         (get-field type selection)))]
+               (go (get-field url selection) (get-field type selection)))]
             [(next prior)
              (eprintf "browser-text on-local-char: got page up/down key~n")
              (move-position (send event get-key-code))]

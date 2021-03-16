@@ -55,7 +55,7 @@
           (lambda (item event)
             (when (equal? (send event get-event-type)
                           'text-field-enter)
-              (goto-url (send item get-value) page-text)
+              (send page-text go (send item get-value) #f)
               (send page-canvas focus))))))
 
   (define page-text
