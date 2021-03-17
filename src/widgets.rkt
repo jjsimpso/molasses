@@ -52,14 +52,23 @@
 )
 
 (define (insert-directory-line text-widget line)
+  (eprintf "insert-directory-line: ~a~n" line)
   (cond
     [(not (non-empty-string? line))
+     (send text-widget insert "\n")]
+    ;; display error line
+    [(equal? (string-ref line 0) #\3)
+     (define text (car (string-split (substring line 1) "\t" #:trim? #f)))
+     (send text-widget insert text)
      (send text-widget insert "\n")]
     ;; insert informational lines as plain text
     [(equal? (string-ref line 0) #\i)
      (define text (car (string-split (substring line 1) "\t" #:trim? #f)))
      (send text-widget insert text)
      (send text-widget insert "\n")]
+    ;; just skip/ignore end of transmission
+    [(equal? (string-ref line 0) #\.)
+     void]
     [else
      (insert-menu-item text-widget line)
      (send text-widget insert "\n")]))
@@ -88,7 +97,10 @@
      (send page-text init-gopher-menu)]
     [(equal? (gopher-response-item-type resp) #\0)
      (send page-text erase)
-     (send page-text insert (bytes->string/utf-8 (gopher-response-data resp)))]
+     ;; insert one line at a time to handle end of line conversion
+     (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
+       (send page-text insert line)
+       (send page-text insert "\n"))]
     [else (void)]))
 
 (define (find-next-menu-snip snip)

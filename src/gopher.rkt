@@ -78,7 +78,7 @@
 
 (define (url-path->selector pp-list)
   (if (null? pp-list)
-      "."
+      "/" ; CRLF may be a better choice but / appears to work for modern servers
       (string-join
        (map path/param-path pp-list)
        "/")))
