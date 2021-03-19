@@ -9,7 +9,8 @@
 
 (struct browser-url
   (url
-   type)
+   type
+   selection)
   #:prefab)
 
 (define (insert-menu-item text-widget line)
@@ -52,7 +53,7 @@
 )
 
 (define (insert-directory-line text-widget line)
-  (eprintf "insert-directory-line: ~a~n" line)
+  ;(eprintf "insert-directory-line: ~a~n" line)
   (cond
     [(not (non-empty-string? line))
      (send text-widget insert "\n")]
@@ -100,7 +101,8 @@
      ;; insert one line at a time to handle end of line conversion
      (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
        (send page-text insert line)
-       (send page-text insert "\n"))]
+       (send page-text insert "\n"))
+     (send page-text set-position 0)]
     [else (void)]))
 
 (define (find-next-menu-snip snip)
@@ -126,12 +128,14 @@
     (init-field [selection #f]
                 [gopher-menu? #f]
                 [address-text-field #f]
-                [current-url (browser-url "" #\1)]
+                [current-url (browser-url "" #\1 #f)]
                 [history '()]) ; list of browser-url structs
     (inherit get-snip-position
              set-position
              move-position
              scroll-to-position
+             line-start-position
+             position-line
              get-visible-position-range
              get-style-list
              change-style
@@ -158,7 +162,7 @@
     (define/public (go url type)
       ;; add current page to history
       (set! history (cons current-url history))
-      (set! current-url (browser-url url type))
+      (set! current-url (browser-url url type #f))
       ;; set the address field's value string to the new url, adding gopher type if necessary
       (send address-text-field set-value (url->url-with-type url type))
       (goto-url url this type))
@@ -209,7 +213,9 @@
                   (define pos (get-snip-position item))
                   (change-highlight selection item)
                   (set! selection item)
-                  (set-position pos 'same #f #t 'default))]
+                  (set-position pos 'same #f #t 'default)
+                  (define end-range (line-start-position (+ (position-line pos) 5)))
+                  (scroll-to-position end-range))]
                [else
                 ;; else scroll to make the current selection visible
                 (scroll-to-position (get-snip-position selection))])]
