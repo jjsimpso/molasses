@@ -137,6 +137,7 @@
              line-start-position
              position-line
              get-visible-position-range
+             get-visible-line-range
              get-style-list
              change-style
              find-first-snip)
@@ -213,9 +214,19 @@
                   (define pos (get-snip-position item))
                   (change-highlight selection item)
                   (set! selection item)
+                  (define start (box 0))
+                  (define end (box 0))
+                  (get-visible-line-range start end #f)
                   (set-position pos 'same #f #t 'default)
-                  (define end-range (line-start-position (+ (position-line pos) 5)))
-                  (scroll-to-position end-range))]
+                  (when (>= (position-line pos) (unbox end))
+                    (define new-start (line-start-position (unbox end)))
+                    (eprintf "scrolling to line ~a-~a~n" (unbox end) (+ (unbox end) (- (unbox end) (unbox start))))
+                    (scroll-to-position new-start
+                                        #f
+                                        (max (position-line pos)
+                                             (line-start-position (sub1 (+ (unbox end)
+                                                                           (- (unbox end) (unbox start))))))
+                                        'end)))]
                [else
                 ;; else scroll to make the current selection visible
                 (scroll-to-position (get-snip-position selection))])]
