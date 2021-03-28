@@ -142,6 +142,36 @@
              change-style
              find-first-snip)
 
+    ;; starting from snip, find the next menu snip in between the the lines start and end
+    ;; if snip is already in the region, just return it
+    (define/private (find-next-menu-snip-in-region snip start end)
+      (define current-line (position-line (get-snip-position snip)))
+      (cond
+        [(> current-line end) snip]
+        [(< current-line start)
+         (define next-snip (find-next-menu-snip snip))
+         (if next-snip
+             (find-next-menu-snip-in-region next-snip start end)
+             snip)]
+        [(and (>= current-line start)
+              (<= current-line end))
+         snip]))
+
+    ;; starting from snip, find the previous menu snip in between the the lines start and end
+    ;; if snip is already in the region, just return it
+    (define/private (find-prev-menu-snip-in-region snip start end)
+      (define current-line (position-line (get-snip-position snip)))
+      (cond
+        [(< current-line start) snip]
+        [(> current-line end)
+         (define prev-snip (find-prev-menu-snip snip))
+         (if prev-snip
+             (find-prev-menu-snip-in-region prev-snip start end)
+             snip)]
+        [(and (>= current-line start)
+              (<= current-line end))
+         snip]))
+    
     (define/public (find-first-menu-snip)
       (define first-snip (find-first-snip))
       (if (is-a? first-snip menu-item-snip%)
@@ -242,7 +272,7 @@
                (define end (box 0))
                (get-visible-line-range start end #f)
                (set-position pos 'same #f #t 'default)
-               (when (<= (position-line pos) (unbox start))
+               (when (< (position-line pos) (unbox start))
                  ;; scroll up to show the previous page
                  (define new-end (line-start-position (sub1 (unbox start))))
                  (eprintf "scrolling to line ~a-~a~n" (max 0 (- (unbox start) (- (unbox end) (unbox start)))) (sub1 (unbox start)))
@@ -258,9 +288,43 @@
             [(right)
              (when selection
                (go (get-field url selection) (get-field type selection)))]
-            [(next prior)
-             (eprintf "browser-text on-local-char: got page up/down key~n")
-             (move-position (send event get-key-code))]
+            [(next)
+             (define start (box 0))
+             (define end (box 0))
+             (get-visible-line-range start end #f)
+             (define new-start (add1 (unbox end)))
+             (define new-end (+ (unbox end)
+                                (- (unbox end) (unbox start))))
+             (scroll-to-position (line-start-position new-start)
+                                 #f
+                                 (line-start-position new-end)
+                                 'end)
+             (when selection
+               (define item (find-next-menu-snip-in-region selection new-start new-end))
+               (when (and item (not (eq? item selection)))
+                 (define pos (get-snip-position item))
+                 (change-highlight selection item)
+                 (set! selection item)
+                 (set-position pos 'same #f #t 'default)))]
+            [(prior)
+             (define start (box 0))
+             (define end (box 0))
+             (get-visible-line-range start end #f)
+             (define new-start (max 0
+                                    (- (unbox start)
+                                       (- (unbox end) (unbox start)))))
+             (define new-end (max 0 (sub1 (unbox start))))
+             (scroll-to-position (line-start-position new-start)
+                                 #f
+                                 (line-start-position new-end)
+                                 'start)
+             (when selection
+               (define item (find-prev-menu-snip-in-region selection new-start new-end))
+               (when (and item (not (eq? item selection)))
+                 (define pos (get-snip-position item))
+                 (change-highlight selection item)
+                 (set! selection item)
+                 (set-position pos 'same #f #t 'default)))]
             [else
              ;(define key-code (send event get-key-code))
              ;(eprintf "browser-text on-local-char: unhandled key ~a~n" key-code)
