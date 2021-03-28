@@ -65,6 +65,7 @@
     ;; insert informational lines as plain text
     [(equal? (string-ref line 0) #\i)
      (define text (car (string-split (substring line 1) "\t" #:trim? #f)))
+     (send text-widget insert "       ")  ; indent information text to line up with menu items
      (send text-widget insert text)
      (send text-widget insert "\n")]
     ;; just skip/ignore end of transmission
