@@ -219,11 +219,12 @@
                   (get-visible-line-range start end #f)
                   (set-position pos 'same #f #t 'default)
                   (when (>= (position-line pos) (unbox end))
+                    ;; scroll down to show the next page
                     (define new-start (line-start-position (unbox end)))
                     (eprintf "scrolling to line ~a-~a~n" (unbox end) (+ (unbox end) (- (unbox end) (unbox start))))
                     (scroll-to-position new-start
                                         #f
-                                        (max (position-line pos)
+                                        (max pos
                                              (line-start-position (sub1 (+ (unbox end)
                                                                            (- (unbox end) (unbox start))))))
                                         'end)))]
@@ -237,7 +238,21 @@
                (define pos (get-snip-position item))
                (change-highlight selection item)
                (set! selection item)
-               (set-position pos 'same #f #t 'default))]
+               (define start (box 0))
+               (define end (box 0))
+               (get-visible-line-range start end #f)
+               (set-position pos 'same #f #t 'default)
+               (when (<= (position-line pos) (unbox start))
+                 ;; scroll up to show the previous page
+                 (define new-end (line-start-position (sub1 (unbox start))))
+                 (eprintf "scrolling to line ~a-~a~n" (max 0 (- (unbox start) (- (unbox end) (unbox start)))) (sub1 (unbox start)))
+                 (scroll-to-position (min pos
+                                          (line-start-position (max 0  ; start position cannot be negative
+                                                                    (- (unbox start)
+                                                                       (- (unbox end) (unbox start))))))
+                                     #f
+                                     new-end
+                                     'start)))]
             [(left)
              (go-back)]
             [(right)
