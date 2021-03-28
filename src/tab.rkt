@@ -1,6 +1,7 @@
 #lang racket/gui
 
 (require "widgets.rkt")
+(require "config.rkt")
 
 (provide init-new-tab
          tab-panel-callback)
@@ -74,7 +75,7 @@
   
   ;(send page-text hide-caret #t)
   (send* page-canvas
-    (set-canvas-background (send the-color-database find-color "black"))
+    (set-canvas-background canvas-bg-color)
     (force-display-focus #t)
     (lazy-refresh #t))
 
@@ -89,8 +90,8 @@
     (set-family 'modern)
     ;(set-face font-name)
     (set-delta 'change-size 12)
-    (set-delta-foreground (send the-color-database find-color "white smoke"))
-    (set-delta-background (send the-color-database find-color "black")))
+    (set-delta-foreground text-fg-color)
+    (set-delta-background canvas-bg-color))
   (send standard set-delta standard-delta)
 
   (define (make-color-style name color)
@@ -102,8 +103,8 @@
                       (copy standard-delta)
                       (set-delta-foreground color))))
 
-  (make-color-style "Link" (send the-color-database find-color "lawn green"))
-  (make-color-style "Link Highlight" (send the-color-database find-color "yellow"))
+  (make-color-style "Link" link-color)
+  (make-color-style "Link Highlight" link-highlight-color)
 )
 
 ;; returns a tab-info struct from the global tab-list or #f
