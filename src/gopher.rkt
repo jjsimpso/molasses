@@ -63,6 +63,12 @@
   (define url-struct (string->url url))
   (define path-list (url-path url-struct))
 
+  ;; if no scheme is specified in the url string, default to gopher
+  ;; string->url doesn't parse correctly without a scheme so re-run it
+  #;(when (not (url-scheme url-struct))
+    (set! url-struct (string->url (string-append "gopher://" url)))
+    (set! path-list (url-path url-struct)))
+      
   (if (and (not (null? path-list))
            (gopher-item-type? (path/param-path (car path-list))))
       ; url has a type, just return it
@@ -92,7 +98,8 @@
 
   (eprintf "fetching: ~a, ~a, ~a, ~a~n" scheme host path port)
   (cond
-    [(equal? scheme "gopher")
+    [(or (equal? scheme "gopher")
+         (not scheme)) ; default to gopher if not specified
      (gopher-fetch host
                    path
                    type

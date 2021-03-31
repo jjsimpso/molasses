@@ -1,5 +1,6 @@
 #lang racket/gui
 
+(require net/url-string)
 (require "gopher.rkt")
 
 (provide browser-text%
@@ -76,8 +77,8 @@
      (send text-widget insert "\n")]))
 
 ;; if type isn't set, the gopher item type is determined from the URL
-(define (goto-url address-url page-text [type #f])
-  (eprintf "goto-url: ~a, ~a~n" address-url type)
+(define (goto-url address-url page-text [type #f] [initial-selection #f])
+  (eprintf "goto-url: ~a, ~a, ~a~n" address-url type initial-selection)
   
   (define resp (fetch address-url type))
   ;; default the item type to directory
@@ -96,7 +97,7 @@
      (send page-text erase)
      (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
        (insert-directory-line page-text line))
-     (send page-text init-gopher-menu)]
+     (send page-text init-gopher-menu initial-selection)]
     [(equal? (gopher-response-item-type resp) #\0)
      (send page-text erase)
      ;; insert one line at a time to handle end of line conversion
@@ -179,9 +180,11 @@
           first-snip
           (find-next-menu-snip first-snip)))
 
-    (define/public (init-gopher-menu)
+    (define/public (init-gopher-menu [initial-selection #f])
       (set! gopher-menu? #t)
-      (set! selection (find-first-menu-snip))
+      (if initial-selection
+          (set! selection initial-selection) 
+          (set! selection (find-first-menu-snip)))
       (when selection
         (define new-style (send (get-style-list) find-named-style "Link Highlight"))
         (define pos (get-snip-position selection))
@@ -192,12 +195,19 @@
         (scroll-to-position 0)))
 
     (define/public (go url type)
+      ;; validate the URL string first and add scheme if missing
+      (define url-struct (string->url url))
+      (define url-string
+        (if (not (url-scheme url-struct))
+            (string-append "gopher://" url)
+            url))
+
       ;; add current page to history
       (set! history (cons current-url history))
-      (set! current-url (browser-url url type #f))
+      (set! current-url (browser-url url-string type #f))
       ;; set the address field's value string to the new url, adding gopher type if necessary
-      (send address-text-field set-value (url->url-with-type url type))
-      (goto-url url this type))
+      (send address-text-field set-value (url->url-with-type url-string type))
+      (goto-url url-string this type))
 
     (define/public (go-back)
       (unless (empty? history)
@@ -206,7 +216,8 @@
                                                                (browser-url-type current-url)))
         (goto-url (browser-url-url current-url)
                   this
-                  (browser-url-type current-url))
+                  (browser-url-type current-url)
+                  (browser-url-selection current-url))
         (set! history (cdr history))))
 
     (define/private (current-selection-visible?)
