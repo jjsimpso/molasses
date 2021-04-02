@@ -118,7 +118,8 @@
 (define (selection-clickback-handler text-widget start end)
   (define menu-snip (send text-widget find-snip start 'after))
   (eprintf "clickback: start=~a, snip=~a~n" start menu-snip)
-  (when menu-snip
+  (when (and menu-snip (is-a? menu-snip menu-item-snip%))
+    (set-field! selection text-widget menu-snip)
     (send text-widget go (get-field url menu-snip) (get-field type menu-snip))))
 
 (define (find-next-menu-snip snip)
