@@ -338,7 +338,7 @@
                                      'start)))]
             [(left)
              (go-back)]
-            [(right)
+            [(right #\return)
              (when selection
                (go (get-field url selection) (get-field type selection)))]
             [(next)
@@ -393,7 +393,7 @@
              (define end (box 0))
              (get-visible-line-range start end #f)
              (define new-line (max 0 (sub1 (unbox start))))
-             (eprintf "range (~a,~a): new line = ~a~n" (unbox start) (unbox end) new-line)
+             ;(eprintf "range (~a,~a): new line = ~a~n" (unbox start) (unbox end) new-line)
              (set-position (line-start-position new-line))]
             [(down)
              ;; scroll the screen one line
@@ -404,7 +404,7 @@
              ;; don't have to actually set the position to the next visible line
              (define new-line (min (position-line (last-position))
                                    (unbox end)))
-             (eprintf "range (~a,~a): new line = ~a~n" (unbox start) (unbox end) new-line)
+             ;(eprintf "range (~a,~a): new line = ~a~n" (unbox start) (unbox end) new-line)
              (set-position (line-start-position new-line))]
             [else
              (super on-local-char event)])))
