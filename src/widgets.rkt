@@ -106,12 +106,26 @@
      (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
        (insert-directory-line page-text line))
      (send page-text init-gopher-menu initial-selection-pos)]
-    [(equal? (gopher-response-item-type resp) #\0)
+    [(equal? item-type #\0) ; text
      (send page-text erase)
      ;; insert one line at a time to handle end of line conversion
      (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
        (send page-text insert line)
        (send page-text insert "\n"))
+     (send page-text set-position 0)]
+    [(equal? item-type #\I) ; image
+     (define img (make-object image-snip%
+                              (open-input-bytes (gopher-response-data resp))
+                              'unknown))
+     (send page-text erase)
+     (send page-text insert img)
+     (send page-text set-position 0)]
+    [(equal? item-type #\g) ; gif
+     (define img (make-object image-snip%
+                              (open-input-bytes (gopher-response-data resp))
+                              'gif))
+     (send page-text erase)
+     (send page-text insert img)
      (send page-text set-position 0)]
     [else (void)]))
 
