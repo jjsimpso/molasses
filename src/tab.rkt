@@ -35,18 +35,22 @@
          (stretchable-height #f)
          (horiz-margin 10)))
 
-  (define back-key
+  (define back-button
     (new button% (parent address-pane)
          (label "\u2190") ; Back arrow
-         (enabled #f)
+         (enabled #t)
          (horiz-margin 0)
-         #;(callback (λ _ (go-back)))))
-  (define forward-key
+         (callback
+          (lambda (item event)
+            (send page-text go-back)))))
+  
+  (define forward-button
     (new button% (parent address-pane)
          (label "\u2192") ; Forward arrow
          (enabled #f)
          (horiz-margin 0)
          #;(callback (λ _ (go-forward)))))
+  
   (define address-field
     (new text-field% (parent address-pane)
          (label "")
