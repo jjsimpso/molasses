@@ -43,14 +43,22 @@
   
   (define type-text (gopher-menu-type-text (gopher-selector-item-type selector)))
   (define display-text (gopher-selector-text selector))
-  
+
+  ;; insert text for type indication
   (send type-snip set-style standard-style)
   (send type-snip insert type-text (string-length type-text))
   (send text-widget insert type-snip)
+  
+  (define link-start-pos (send text-widget last-position))
   (send link-snip set-style link-style)
   (send link-snip insert display-text (string-length display-text)) ;(send link-snip get-count))
   (send text-widget insert link-snip)
   (send text-widget change-style standard-style)
+  ;; add clickback to link region
+  (send text-widget set-clickback
+        link-start-pos
+        (send text-widget last-position)
+        selection-clickback-handler)
 )
 
 (define (insert-directory-line text-widget line)
@@ -106,6 +114,12 @@
        (send page-text insert "\n"))
      (send page-text set-position 0)]
     [else (void)]))
+
+(define (selection-clickback-handler text-widget start end)
+  (define menu-snip (send text-widget find-snip start 'after))
+  (eprintf "clickback: start=~a, snip=~a~n" start menu-snip)
+  (when menu-snip
+    (send text-widget go (get-field url menu-snip) (get-field type menu-snip))))
 
 (define (find-next-menu-snip snip)
   (if (not snip)
@@ -377,7 +391,9 @@
 
     (define/public (follow-link)
       (eprintf "follow-link: ~a~n" url))
-    
-    (define/override (on-event dc x y editorx editory e)
+
+    ;; use clickbacks instead
+    #;(define/override (on-event dc x y editorx editory e)
       (when (send e button-down? 'left)
-        (follow-link)))))
+        (follow-link)))
+    ))
