@@ -163,10 +163,12 @@
                 [history '()]) ; list of browser-url structs
     (inherit get-snip-position
              set-position
+             set-position-bias-scroll
              move-position
              scroll-to-position
              line-start-position
              position-line
+             last-position
              get-visible-position-range
              get-visible-line-range
              get-style-list
@@ -385,6 +387,25 @@
              (go-back)]
             [(right)
              (void)]
+            [(up)
+             ;; scroll the screen up one line
+             (define start (box 0))
+             (define end (box 0))
+             (get-visible-line-range start end #f)
+             (define new-line (max 0 (sub1 (unbox start))))
+             (eprintf "range (~a,~a): new line = ~a~n" (unbox start) (unbox end) new-line)
+             (set-position (line-start-position new-line))]
+            [(down)
+             ;; scroll the screen one line
+             (define start (box 0))
+             (define end (box 0))
+             (get-visible-line-range start end #f)
+             ;; setting the position to the last line will scroll the screen by one
+             ;; don't have to actually set the position to the next visible line
+             (define new-line (min (position-line (last-position))
+                                   (unbox end)))
+             (eprintf "range (~a,~a): new line = ~a~n" (unbox start) (unbox end) new-line)
+             (set-position (line-start-position new-line))]
             [else
              (super on-local-char event)])))
     ))
