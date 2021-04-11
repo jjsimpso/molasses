@@ -20,29 +20,24 @@
       [(#\0) "(TEXT) "]
       [(#\1) " (DIR) "]
       [(#\3) " (ERR) "]
+      [(#\5 #\9) " (BIN) "]
       [(#\g) " (GIF) "]
       [(#\I) " (IMG) "]
       [(#\7) "(SRCH) "]
       [(#\8) " (TEL) "]
-      [else  " (BIN) "]))
+      [else  " (UNKN)"]))
 
   (define standard-style
     (send (send text-widget get-style-list) find-named-style "Standard"))
   (define link-style
     (send (send text-widget get-style-list) find-named-style "Link"))
   
-  (define selector (parse-selector line))
+  (define dir-entity (parse-dir-entity line))
   (define type-snip (new string-snip%))
-  (define link-snip
-    (new menu-item-snip%
-         (type (gopher-selector-item-type selector))
-         (url (string-append "gopher://"
-                             (gopher-selector-host selector) ":"
-                             (gopher-selector-port selector)
-                             (gopher-selector-path selector)))))
+  (define link-snip (new menu-item-snip% (dir-entity dir-entity)))
   
-  (define type-text (gopher-menu-type-text (gopher-selector-item-type selector)))
-  (define display-text (gopher-selector-text selector))
+  (define type-text (gopher-menu-type-text (gopher-dir-entity-type dir-entity)))
+  (define display-text (gopher-dir-entity-user-name dir-entity))
 
   ;; insert text for type indication
   (send type-snip set-style standard-style)
@@ -87,8 +82,16 @@
 ;; if type isn't set, the gopher item type is determined from the URL
 (define (goto-url address-url page-text [type #f] [initial-selection-pos #f])
   (eprintf "goto-url: ~a, ~a, ~a~n" address-url type initial-selection-pos)
+
+  (define resp
+    (cond
+      [(equal? type #\7)
+       ;; prompt user for query string
+       (define query-string (get-text-from-user "Query" "search string"))
+       (fetch (string-append address-url "\t" query-string) type)]
+      [else
+       (fetch address-url type)]))
   
-  (define resp (fetch address-url type))
   ;; default the item type to directory
   (define item-type (if (gopher-response-item-type resp)
                         (gopher-response-item-type resp)
@@ -130,11 +133,12 @@
     [else (void)]))
 
 (define (selection-clickback-handler text-widget start end)
-  (define menu-snip (send text-widget find-snip start 'after))
-  (eprintf "clickback: start=~a, snip=~a~n" start menu-snip)
-  (when (and menu-snip (is-a? menu-snip menu-item-snip%))
-    (set-field! selection text-widget menu-snip)
-    (send text-widget go (get-field url menu-snip) (get-field type menu-snip))))
+  (define snip (send text-widget find-snip start 'after))
+  (eprintf "clickback: start=~a, snip=~a~n" start snip)
+  (when (and snip (is-a? snip menu-item-snip%))
+    (set-field! selection text-widget snip)
+    (define dir-entity (get-field dir-entity snip))
+    (send text-widget go (dir-entity->url dir-entity) (gopher-dir-entity-type dir-entity))))
 
 (define (find-next-menu-snip snip)
   (if (not snip)
@@ -340,7 +344,8 @@
              (go-back)]
             [(right #\return)
              (when selection
-               (go (get-field url selection) (get-field type selection)))]
+               (define dir-entity (get-field dir-entity selection))
+               (go (dir-entity->url dir-entity) (gopher-dir-entity-type dir-entity)))]
             [(next)
              (define start (box 0))
              (define end (box 0))
@@ -418,8 +423,7 @@
 
 (define menu-item-snip%
   (class string-snip%
-    (init-field [url ""]
-                [type #\1])
+    (init-field [dir-entity #f])
     (inherit get-flags set-flags)
     (super-new)
     (set-flags (cons 'handles-all-mouse-events (get-flags)))

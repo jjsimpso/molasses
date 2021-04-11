@@ -6,10 +6,11 @@
 (require net/url-string)
 
 (provide fetch
-         parse-selector
+         parse-dir-entity
+         dir-entity->url
          url->url-with-type
          (struct-out gopher-response)
-         (struct-out gopher-selector))
+         (struct-out gopher-dir-entity))
 
 (struct gopher-response
   (item-type
@@ -17,14 +18,37 @@
    data)
   #:prefab)
 
-(struct gopher-selector
-  (item-type
-   text
-   path
+(struct gopher-dir-entity
+  (type
+   user-name
+   selector
    host
    port)
   #:prefab)
-   
+
+(define (parse-dir-entity s)
+  (define type (string-ref s 0))
+  (define fields (string-split (substring s 1) "\t" #:trim? #f))
+  (gopher-dir-entity type
+                   (car fields)
+                   (cadr fields)
+                   (caddr fields)
+                   (cadddr fields)))
+
+
+(define (dir-entity->url s)
+  (string-append "gopher://"
+                 (gopher-dir-entity-host s) ":"
+                 (gopher-dir-entity-port s)
+                 (gopher-dir-entity-selector s)))
+
+(define (dir-entity->url-with-type s)
+  (string-append "gopher://"
+                 (gopher-dir-entity-host s) ":"
+                 (gopher-dir-entity-port s)
+                 "/" (string (gopher-dir-entity-type s))
+                 (gopher-dir-entity-selector s)))
+
 (define (gopher-item-type? type-string)
   (or (string=? type-string "0")
       (string=? type-string "1")
@@ -41,23 +65,6 @@
       (string=? type-string "I")
       ;; unofficial
       (string=? type-string "h")))
-
-(define (parse-selector s)
-  (define type (string-ref s 0))
-  (define fields (string-split (substring s 1) "\t" #:trim? #f))
-  (gopher-selector type
-                   (car fields)
-                   (cadr fields)
-                   (caddr fields)
-                   (cadddr fields)))
-
-;; untested
-(define (selector->url s)
-  (string-append "gopher://"
-                 (gopher-selector-host s) ":"
-                 (gopher-selector-port s)
-                 "/" (string (gopher-selector-item-type s))
-                 (gopher-selector-path s)))
 
 (define (url->url-with-type url [type #f])
   (define url-struct (string->url url))
