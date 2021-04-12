@@ -2,15 +2,14 @@
 
 (require net/url-string)
 (require "gopher.rkt")
+(require "request.rkt")
 
 (provide browser-text%
          browser-canvas%
-         menu-item-snip%
-         goto-url)
+         menu-item-snip%)
 
 (struct browser-url
-  (url
-   type
+  (req
    selection-pos)  ;; position value or #f
   #:prefab)
 
@@ -80,17 +79,13 @@
      (send text-widget insert "\n")]))
 
 ;; if type isn't set, the gopher item type is determined from the URL
-(define (goto-url address-url page-text [type #f] [initial-selection-pos #f])
-  (eprintf "goto-url: ~a, ~a, ~a~n" address-url type initial-selection-pos)
+(define (goto-gopher req page-text [initial-selection-pos #f])
+  (eprintf "goto-gopher: ~a, ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req) initial-selection-pos)
 
-  (define resp
-    (cond
-      [(equal? type #\7)
-       ;; prompt user for query string
-       (define query-string (get-text-from-user "Query" "search string"))
-       (fetch (string-append address-url "\t" query-string) type)]
-      [else
-       (fetch address-url type)]))
+  (define resp (gopher-fetch (request-host req)
+                             (request-path/selector req)
+                             (request-type req)
+                             (request-port req)))
   
   ;; default the item type to directory
   (define item-type (if (gopher-response-item-type resp)
@@ -138,7 +133,7 @@
   (when (and snip (is-a? snip menu-item-snip%))
     (set-field! selection text-widget snip)
     (define dir-entity (get-field dir-entity snip))
-    (send text-widget go (dir-entity->url dir-entity) (gopher-dir-entity-type dir-entity))))
+    (send text-widget go (dir-entity->request dir-entity))))
 
 (define (find-next-menu-snip snip)
   (if (not snip)
@@ -163,7 +158,7 @@
     (init-field [selection #f]
                 [gopher-menu? #f]
                 [address-text-field #f]
-                [current-url (browser-url "" #\1 #f)]
+                [current-url (browser-url #f #f)]
                 [history '()]) ; list of browser-url structs
     (inherit get-snip-position
              set-position
@@ -234,35 +229,37 @@
             ;; scroll to the beginning
             (scroll-to-position 0))))
 
-    (define/public (go url type)
-      ;; validate the URL string first and add scheme if missing
-      (define url-struct (string->url url))
-      (define url-string
-        (if (not (url-scheme url-struct))
-            (string-append "gopher://" url)
-            url))
-
+    (define/public (go req)
       ;; add current page to history
       (if selection
           ;; also save the position of the selection that we are following so we can return to it
           (set! history (cons (struct-copy browser-url current-url [selection-pos (get-snip-position selection)])
                               history))
           (set! history (cons current-url history)))
-      (set! current-url (browser-url url-string type #f))
+      (set! current-url (browser-url req #f))
 
       ;; set the address field's value string to the new url, adding gopher type if necessary
-      (send address-text-field set-value (url->url-with-type url-string type))
-      (goto-url url-string this type))
+      (send address-text-field set-value (request->url req))
+
+      (cond
+        [(equal? (request-type req) #\7) ; gopher index search
+         ;; prompt user for query string
+         (define query-string (get-text-from-user "Query" "search string"))
+         (goto-gopher (request (request-protocol req)
+                               (request-host req)
+                               (request-port req)
+                               (string-append (request-path/selector req) "\t" query-string)
+                               (request-type #\1)))]
+        [else
+         (goto-gopher req this)]))
 
     (define/public (go-back)
       (unless (empty? history)
         (set! current-url (car history))
-        (send address-text-field set-value (url->url-with-type (browser-url-url current-url)
-                                                               (browser-url-type current-url)))
-        (goto-url (browser-url-url current-url)
-                  this
-                  (browser-url-type current-url)
-                  (browser-url-selection-pos current-url))
+        (send address-text-field set-value (request->url (browser-url-req current-url)))
+        (goto-gopher (browser-url-req current-url)
+                     this
+                     (browser-url-selection-pos current-url))
         (set! history (cdr history))))
 
     (define/private (current-selection-visible?)
@@ -345,7 +342,7 @@
             [(right #\return)
              (when selection
                (define dir-entity (get-field dir-entity selection))
-               (go (dir-entity->url dir-entity) (gopher-dir-entity-type dir-entity)))]
+               (go (dir-entity->request dir-entity)))]
             [(next)
              (define start (box 0))
              (define end (box 0))

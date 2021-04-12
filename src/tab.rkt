@@ -2,6 +2,7 @@
 
 (require "widgets.rkt")
 (require "config.rkt")
+(require "request.rkt")
 
 (provide init-new-tab
          tab-panel-callback)
@@ -60,7 +61,7 @@
           (lambda (item event)
             (when (equal? (send event get-event-type)
                           'text-field-enter)
-              (send page-text go (send item get-value) #f)
+              (send page-text go (url->request (send item get-value)))
               (send page-canvas focus))))))
 
   (define page-text

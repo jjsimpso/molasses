@@ -5,7 +5,7 @@
 (require racket/tcp)
 (require net/url-string)
 
-(provide fetch
+(provide gopher-fetch
          parse-dir-entity
          dir-entity->url
          url->url-with-type
@@ -19,11 +19,11 @@
   #:prefab)
 
 (struct gopher-dir-entity
-  (type
-   user-name
-   selector
-   host
-   port)
+  (type        ; character
+   user-name   ; string
+   selector    ; string
+   host        ; string
+   port)       ; string
   #:prefab)
 
 (define (parse-dir-entity s)
@@ -96,7 +96,7 @@
        (map path/param-path pp-list)
        "/")))
 
-(define (fetch url-string [type #f])
+#;(define (fetch/from-url url-string [type #f])
   (define url-struct (string->url url-string))
   (define scheme (url-scheme url-struct))
   (define host (url-host url-struct))
@@ -107,13 +107,14 @@
   (cond
     [(or (equal? scheme "gopher")
          (not scheme)) ; default to gopher if not specified
-     (gopher-fetch host
-                   path
-                   type
-                   (or port 70))]
+     (gopher-fetch/from-url host
+                            path
+                            type
+                            (or port 70))]
     [else #f]))
 
-(define (gopher-fetch host path-list type port)
+;; this version of gopher-fetch takes a path/param list as the selector
+#;(define (gopher-fetch/from-url host path-list type port)
   (define item-type-from-url
     (if (and (not type)
              (not (null? path-list))
@@ -131,6 +132,10 @@
   (gopher-response (or type item-type-from-url)
             error?
             data))
+
+(define (gopher-fetch host selector type port)
+  (define-values (data error?) (gopher-fetch-data host selector port))
+  (gopher-response type error? data))
 
 (define (gopher-fetch-data host selector port)
   (define (send-selector sel-string out)
