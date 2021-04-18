@@ -24,7 +24,7 @@
       [(#\I) " (IMG) "]
       [(#\7) "(SRCH) "]
       [(#\8) " (TEL) "]
-      [else  " (UNKN)"]))
+      [else  "(UNKN) "]))
 
   (define standard-style
     (send (send text-widget get-style-list) find-named-style "Standard"))
@@ -78,6 +78,13 @@
      (insert-menu-item text-widget line)
      (send text-widget insert "\n")]))
 
+(define (request-updates-page? req)
+  (cond
+    [(equal? (request-type req) #\5) #f]
+    [(equal? (request-type req) #\9) #f]
+    [(equal? (request-type req) #\7) #f]
+    [else #t]))
+
 ;; if type isn't set, the gopher item type is determined from the URL
 (define (goto-gopher req page-text [initial-selection-pos #f])
   (eprintf "goto-gopher: ~a, ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req) initial-selection-pos)
@@ -92,8 +99,9 @@
                         (gopher-response-item-type resp)
                         #\1))
 
-  ;; reset gopher-menu? boolean to default
-  (set-field! gopher-menu? page-text #f)
+  ;; reset gopher-menu? boolean to default when loading a new page
+  (when (request-updates-page? req)
+    (set-field! gopher-menu? page-text #f))
   
   (cond
     [(gopher-response-error? resp)
@@ -125,6 +133,11 @@
      (send page-text erase)
      (send page-text insert img)
      (send page-text set-position 0)]
+    [(or (equal? item-type #\5) (equal? item-type #\9)) ; binary
+     (define path (put-file "Save file as..."))
+     (eprintf "saving binary file to ~a~n" path)
+     (with-output-to-file path
+       (lambda () (write-bytes (gopher-response-data resp))))]
     [else (void)]))
 
 (define (selection-clickback-handler text-widget start end)
@@ -230,26 +243,35 @@
             (scroll-to-position 0))))
 
     (define/public (go req)
-      ;; add current page to history
-      (if selection
-          ;; also save the position of the selection that we are following so we can return to it
-          (set! history (cons (struct-copy browser-url current-url [selection-pos (get-snip-position selection)])
-                              history))
-          (set! history (cons current-url history)))
-      (set! current-url (browser-url req #f))
+      (when (request-updates-page? req)
+        ;; add current page to history
+        (if selection
+            ;; also save the position of the selection that we are following so we can return to it
+            (set! history (cons (struct-copy browser-url current-url [selection-pos (get-snip-position selection)])
+                                history))
+            (set! history (cons current-url history)))
+        (set! current-url (browser-url req #f))
 
-      ;; set the address field's value string to the new url, adding gopher type if necessary
-      (send address-text-field set-value (request->url req))
-
+        ;; set the address field's value string to the new url, adding gopher type if necessary
+        (send address-text-field set-value (request->url req)))
+      
       (cond
         [(equal? (request-type req) #\7) ; gopher index search
          ;; prompt user for query string
          (define query-string (get-text-from-user "Query" "search string"))
-         (goto-gopher (request (request-protocol req)
-                               (request-host req)
-                               (request-port req)
-                               (string-append (request-path/selector req) "\t" query-string)
-                               (request-type #\1)))]
+         (define query-request (request (request-protocol req)
+                                        (request-host req)
+                                        (request-port req)
+                                        (string-append (request-path/selector req) "\t" query-string)
+                                        #\1))
+         (if selection
+             ;; also save the position of the selection that we are following so we can return to it
+             (set! history (cons (struct-copy browser-url current-url [selection-pos (get-snip-position selection)])
+                                 history))
+             (set! history (cons current-url history)))
+         (set! current-url (browser-url query-request #f))
+         (send address-text-field set-value (request->url query-request))
+         (goto-gopher query-request this)]
         [else
          (goto-gopher req this)]))
 
