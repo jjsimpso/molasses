@@ -13,7 +13,7 @@
 (struct gopher-response
   (item-type
    error?
-   data)
+   data-port)
   #:prefab)
 
 (struct gopher-dir-entity
@@ -84,9 +84,5 @@
                              #t))])
     (define-values (in out) (tcp-connect host port))
     (send-selector selector out)
-    (define data (port->bytes in))
-    (eprintf "closing ports~n")
-    (close-output-port out)
-    (close-input-port in)
-    ;; return data read from port
-    (values data #f)))
+    (tcp-abandon-port out)
+    (values in #f)))

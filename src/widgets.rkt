@@ -106,38 +106,52 @@
   (cond
     [(gopher-response-error? resp)
      (send page-text erase)
-     (send page-text insert (gopher-response-data resp))]
+     (send page-text insert (port->string (gopher-response-data-port resp) #:close? #t))]
     [(equal? item-type #\1) ; directory
      (send page-text erase)
-     (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
+     (for ([line (in-lines (gopher-response-data-port resp))])
        (insert-directory-line page-text line))
+     (close-input-port (gopher-response-data-port resp))
      (send page-text init-gopher-menu initial-selection-pos)]
     [(equal? item-type #\0) ; text
      (send page-text erase)
      ;; insert one line at a time to handle end of line conversion
-     (for ([line (in-lines (open-input-bytes (gopher-response-data resp)))])
+     #;(for ([line (in-lines (gopher-response-data-port resp))])
        (send page-text insert line)
        (send page-text insert "\n"))
+     ;; this isn't ideal but is still a lot faster than inserting one line at a time
+     ;; (text% treats #\return as a newline so DOS formatted files have extra newlines)
+     (send page-text insert (string-replace
+                             (port->string (gopher-response-data-port resp))
+                             "\r\n"
+                             "\n"))
+     (close-input-port (gopher-response-data-port resp))
      (send page-text set-position 0)]
     [(equal? item-type #\I) ; image
      (define img (make-object image-snip%
-                              (open-input-bytes (gopher-response-data resp))
+                              (gopher-response-data-port resp)
                               'unknown))
+     (close-input-port (gopher-response-data-port resp))
      (send page-text erase)
      (send page-text insert img)
      (send page-text set-position 0)]
     [(equal? item-type #\g) ; gif
      (define img (make-object image-snip%
-                              (open-input-bytes (gopher-response-data resp))
+                              (gopher-response-data-port resp)
                               'gif))
+     (close-input-port (gopher-response-data-port resp))
      (send page-text erase)
      (send page-text insert img)
      (send page-text set-position 0)]
     [(or (equal? item-type #\5) (equal? item-type #\9)) ; binary
+     ;; this works around an issue in my server that I need to fix. it is automatically
+     ;; closing sockets after ten seconds, causing the socket to timeout before the read can
+     ;; complete due to the save file dialog. change this once I fix that.
+     (define data (port->bytes (gopher-response-data-port resp) #:close? #t))
      (define path (put-file "Save file as..."))
      (eprintf "saving binary file to ~a~n" path)
      (with-output-to-file path
-       (lambda () (write-bytes (gopher-response-data resp))))]
+       (lambda () (write-bytes data)))]
     [else (void)]))
 
 (define (selection-clickback-handler text-widget start end)
