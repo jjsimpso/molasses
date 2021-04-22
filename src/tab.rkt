@@ -5,7 +5,8 @@
 (require "request.rkt")
 
 (provide init-new-tab
-         tab-panel-callback)
+         tab-panel-callback
+         goto-home-page)
 
 ;; holds the ui component and data for a tab
 (struct tab-info
@@ -55,7 +56,7 @@
   (define address-field
     (new text-field% (parent address-pane)
          (label "")
-         (init-value "gopher://gopher.endangeredsoft.org")
+         (init-value "")
          (style '(single))
          (callback
           (lambda (item event)
@@ -87,6 +88,12 @@
   (set! tab-list
         (cons (tab-info index tab-contents (send address-field get-value))
               tab-list)))
+
+(define (goto-home-page)
+  (define page-canvas (find-tab-canvas 0))
+  (define page-text (send page-canvas get-editor))
+  (send page-text go (url->request home-page-url))
+  (send page-canvas focus))
 
 (define (init-styles style-list)
   (define standard (send style-list find-named-style "Standard"))

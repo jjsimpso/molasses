@@ -87,3 +87,4 @@
 ; Show the frame by calling its show method
 (send frame show #t)
 
+(goto-home-page)
