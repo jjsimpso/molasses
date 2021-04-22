@@ -85,7 +85,10 @@
     [(equal? (request-type req) #\7) #f]
     [else #t]))
 
-;; if type isn't set, the gopher item type is determined from the URL
+(define (download-only-type? type)
+  (or (equal? type #\5)
+      (equal? type #\9)))
+
 (define (goto-gopher req page-text [initial-selection-pos #f])
   (eprintf "goto-gopher: ~a, ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req) initial-selection-pos)
 
@@ -94,9 +97,9 @@
                              (request-type req)
                              (request-port req)))
   
-  ;; default the item type to directory
-  (define item-type (if (gopher-response-item-type resp)
-                        (gopher-response-item-type resp)
+  ;; default the item type to directory if not specified in request
+  (define item-type (if (request-type req)
+                        (request-type req)
                         #\1))
 
   ;; reset gopher-menu? boolean to default when loading a new page
@@ -143,7 +146,7 @@
      (send page-text erase)
      (send page-text insert img)
      (send page-text set-position 0)]
-    [(or (equal? item-type #\5) (equal? item-type #\9)) ; binary
+    [(download-only-type? item-type) ; binary
      ;; this works around an issue in my server that I need to fix. it is automatically
      ;; closing sockets after ten seconds, causing the socket to timeout before the read can
      ;; complete due to the save file dialog. change this once I fix that.
@@ -153,6 +156,20 @@
      (with-output-to-file path
        (lambda () (write-bytes data)))]
     [else (void)]))
+
+(define (save-gopher-to-file req)
+  (eprintf "save-gopher-to-file: ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req))
+  ;; get path from user
+  (define path (put-file "Save file as..."))
+  (eprintf "saving binary file to ~a~n" path)
+
+  (when path
+    (define resp (gopher-fetch (request-host req)
+                               (request-path/selector req)
+                               (request-type req)
+                               (request-port req)))
+    (with-output-to-file path
+      (lambda () (copy-port (gopher-response-data-port resp) (current-output-port))))))
 
 (define (selection-clickback-handler text-widget start end)
   (define snip (send text-widget find-snip start 'after))
@@ -265,11 +282,13 @@
                                 history))
             (set! history (cons current-url history)))
         (set! current-url (browser-url req #f))
-
+        
         ;; set the address field's value string to the new url, adding gopher type if necessary
         (send address-text-field set-value (request->url req)))
       
       (cond
+        [(download-only-type? (request-type req)) ; open save file dialog
+         (save-gopher-to-file req)]
         [(equal? (request-type req) #\7) ; gopher index search
          ;; prompt user for query string
          (define query-string (get-text-from-user "Query" "search string"))
