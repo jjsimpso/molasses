@@ -7,6 +7,7 @@
 (provide gopher-fetch
          parse-dir-entity
          dir-entity->url
+         menu-line-split
          (struct-out gopher-response)
          (struct-out gopher-dir-entity))
 
@@ -25,8 +26,9 @@
   #:prefab)
 
 (define (parse-dir-entity s)
+  ;(eprintf "parse-dir-entity ~a~n" s)
   (define type (string-ref s 0))
-  (define fields (string-split (substring s 1) "\t" #:trim? #f))
+  (define fields (menu-line-split s))
   (gopher-dir-entity type
                    (car fields)
                    (cadr fields)
@@ -46,6 +48,18 @@
                  (gopher-dir-entity-port s)
                  "/" (string (gopher-dir-entity-type s))
                  (gopher-dir-entity-selector s)))
+
+(define (menu-line-split s)
+  (define len (string-length s))
+  (let loop-mls ([cursor 1]
+                 [end 1])
+    (cond
+      [(>= end len)
+       (list (substring s cursor end))]
+      [(eq? (string-ref s end) #\tab)
+       (cons (substring s cursor end)
+             (loop-mls (add1 end) (add1 end)))]
+      [else (loop-mls cursor (add1 end))])))
 
 (define (gopher-item-type? type-string)
   (or (string=? type-string "0")
