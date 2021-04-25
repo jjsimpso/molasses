@@ -105,7 +105,8 @@
   ;; reset gopher-menu? boolean to default when loading a new page
   (when (request-updates-page? req)
     (set-field! gopher-menu? page-text #f))
-  
+
+  (send page-text begin-edit-sequence)
   (cond
     [(gopher-response-error? resp)
      (send page-text erase)
@@ -155,7 +156,8 @@
      (eprintf "saving binary file to ~a~n" path)
      (with-output-to-file path
        (lambda () (write-bytes data)))]
-    [else (void)]))
+    [else (void)])
+    (send page-text end-edit-sequence))
 
 (define (save-gopher-to-file req)
   (eprintf "save-gopher-to-file: ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req))
@@ -202,6 +204,7 @@
     (init-field [selection #f]
                 [gopher-menu? #f]
                 [address-text-field #f]
+                [thread-custodian #f]
                 [current-url (browser-url #f #f)]
                 [history '()]) ; list of browser-url structs
     (inherit get-snip-position
@@ -217,7 +220,9 @@
              get-style-list
              change-style
              find-first-snip
-             find-snip)
+             find-snip
+             in-edit-sequence?
+             end-edit-sequence)
 
     ;; starting from snip, find the next menu snip in between the the lines start and end
     ;; if snip is already in the region, just return it
@@ -273,6 +278,21 @@
             ;; scroll to the beginning
             (scroll-to-position 0))))
 
+    (define/private (load-page req [initial-selection-pos #f])
+      ;; this will shutdown the previous custodian on every page load.
+      ;; seems wasteful not to re-use the custodian if we aren't actually interrupting
+      ;; the previous thread's work.
+      (when (custodian? thread-custodian)
+        (custodian-shutdown-all thread-custodian)
+        ;; without this the editor gets stuck in no refresh mode
+        (when (in-edit-sequence?)
+          (end-edit-sequence)))
+      
+      (set! thread-custodian (make-custodian))
+      (parameterize ([current-custodian thread-custodian])
+        (thread (thunk
+                 (goto-gopher req this initial-selection-pos)))))
+
     (define/public (go req)
       (when (request-updates-page? req)
         ;; add current page to history
@@ -304,17 +324,16 @@
              (set! history (cons current-url history)))
          (set! current-url (browser-url query-request #f))
          (send address-text-field set-value (request->url query-request))
-         (goto-gopher query-request this)]
+         (load-page query-request)]
         [else
-         (goto-gopher req this)]))
+         (load-page req)]))
 
     (define/public (go-back)
       (unless (empty? history)
         (set! current-url (car history))
         (send address-text-field set-value (request->url (browser-url-req current-url)))
-        (goto-gopher (browser-url-req current-url)
-                     this
-                     (browser-url-selection-pos current-url))
+        (load-page (browser-url-req current-url)
+                   (browser-url-selection-pos current-url))
         (set! history (cdr history))))
 
     (define/private (current-selection-visible?)
