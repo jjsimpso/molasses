@@ -74,6 +74,12 @@
        (choices (list "Home"
                       "+"))))
 
+(define status-bar
+  (new message%
+       (parent frame)
+       (label "Ready")
+       (stretchable-width #t)))
+
 (send tab-panel set-selection 0)
 (init-new-tab tab-panel 0)
 

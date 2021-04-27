@@ -66,7 +66,9 @@
               (send page-canvas focus))))))
 
   (define page-text
-    (new browser-text% (address-text-field address-field)))
+    (new browser-text%
+         (address-text-field address-field)
+         (status-bar (get-status-bar tp))))
 
   (define page-canvas
     (new browser-canvas% (parent tab-contents)
@@ -85,6 +87,9 @@
     (force-display-focus #t)
     (lazy-refresh #t))
 
+  ;; set focus to address field when creating a new tab
+  (send address-field focus)
+  
   (set! tab-list
         (cons (tab-info index tab-contents (send address-field get-value))
               tab-list)))
@@ -118,6 +123,16 @@
   (make-color-style "Link" link-color)
   (make-color-style "Link Highlight" link-highlight-color)
 )
+
+(define (get-status-bar widget)
+  (define frame (send widget get-top-level-window))
+
+  ;; only message% widget in the frame is the status bar
+  (when frame
+    (define children (send frame get-children))
+    (for/first ([child (in-list children)]
+                #:when (is-a? child message%))
+      child)))
 
 ;; returns a tab-info struct from the global tab-list or #f
 (define (find-tab-at-index index)

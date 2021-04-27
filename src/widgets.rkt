@@ -204,6 +204,7 @@
     (init-field [selection #f]
                 [gopher-menu? #f]
                 [address-text-field #f]
+                [status-bar #f]
                 [thread-custodian #f]
                 [current-url (browser-url #f #f)]
                 [history '()]) ; list of browser-url structs
@@ -304,11 +305,13 @@
         (set! current-url (browser-url req #f))
         
         ;; set the address field's value string to the new url, adding gopher type if necessary
-        (send address-text-field set-value (request->url req)))
+        (when address-text-field
+          (send address-text-field set-value (request->url req))))
       
       (cond
         [(download-only-type? (request-type req)) ; open save file dialog
-         (save-gopher-to-file req)]
+         (thread (thunk
+                  (save-gopher-to-file req)))]
         [(equal? (request-type req) #\7) ; gopher index search
          ;; prompt user for query string
          (define query-string (get-text-from-user "Query" "search string"))
@@ -323,7 +326,8 @@
                                  history))
              (set! history (cons current-url history)))
          (set! current-url (browser-url query-request #f))
-         (send address-text-field set-value (request->url query-request))
+         (when address-text-field
+           (send address-text-field set-value (request->url query-request)))
          (load-page query-request)]
         [else
          (load-page req)]))
@@ -331,7 +335,8 @@
     (define/public (go-back)
       (unless (empty? history)
         (set! current-url (car history))
-        (send address-text-field set-value (request->url (browser-url-req current-url)))
+        (when address-text-field
+          (send address-text-field set-value (request->url (browser-url-req current-url))))
         (load-page (browser-url-req current-url)
                    (browser-url-selection-pos current-url))
         (set! history (cdr history))))
