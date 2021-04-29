@@ -13,7 +13,7 @@
    selection-pos)  ;; position value or #f
   #:prefab)
 
-(define (insert-menu-item text-widget line)
+(define (insert-menu-item text-widget dir-entity)
   (define (gopher-menu-type-text type)
     (case type
       [(#\0) "(TEXT) "]
@@ -31,7 +31,6 @@
   (define link-style
     (send (send text-widget get-style-list) find-named-style "Link"))
   
-  (define dir-entity (parse-dir-entity line))
   (define type-snip (new string-snip%))
   (define link-snip (new menu-item-snip% (dir-entity dir-entity)))
   
@@ -57,25 +56,27 @@
 
 (define (insert-directory-line text-widget line)
   ;(eprintf "insert-directory-line: ~a~n" line)
+
+  (define dir-entity (parse-dir-entity line))
+
   (cond
+    ;; be permissive of blank lines
     [(not (non-empty-string? line))
-     (send text-widget insert "\n")]
-    ;; display error line
-    [(equal? (string-ref line 0) #\3)
-     (define text (car (string-split (substring line 1) "\t" #:trim? #f)))
-     (send text-widget insert text)
-     (send text-widget insert "\n")]
-    ;; insert informational lines as plain text
-    [(equal? (string-ref line 0) #\i)
-     (define text (car (string-split (substring line 1) "\t" #:trim? #f)))
-     (send text-widget insert "       ")  ; indent information text to line up with menu items
-     (send text-widget insert text)
      (send text-widget insert "\n")]
     ;; just skip/ignore end of transmission
     [(equal? (string-ref line 0) #\.)
      void]
+    ;; display error line
+    [(equal? (gopher-dir-entity-type dir-entity) #\3)
+     (send text-widget insert (gopher-dir-entity-user-name dir-entity))
+     (send text-widget insert "\n")]
+    ;; insert informational lines as plain text
+    [(equal? (gopher-dir-entity-type dir-entity) #\i)
+     (send text-widget insert "       ")  ; indent information text to line up with menu items
+     (send text-widget insert (gopher-dir-entity-user-name dir-entity))
+     (send text-widget insert "\n")]
     [else
-     (insert-menu-item text-widget line)
+     (insert-menu-item text-widget dir-entity)
      (send text-widget insert "\n")]))
 
 (define (request-updates-page? req)

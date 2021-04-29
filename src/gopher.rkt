@@ -29,12 +29,17 @@
   ;(eprintf "parse-dir-entity ~a~n" s)
   (define type (string-ref s 0))
   (define fields (menu-line-split s))
-  (gopher-dir-entity type
-                   (car fields)
-                   (cadr fields)
-                   (caddr fields)
-                   (cadddr fields)))
-
+  (if (= (length fields) 4)
+      (gopher-dir-entity type
+                         (car fields)
+                         (cadr fields)
+                         (caddr fields)
+                         (cadddr fields))
+      (gopher-dir-entity #\3
+                         "malformed dir entity"
+                         ""
+                         "error.host"
+                         1)))
 
 (define (dir-entity->url s)
   (string-append "gopher://"
@@ -79,8 +84,8 @@
       (string=? type-string "h")))
 
 (define (gopher-fetch host selector type port)
-  (define-values (data error?) (gopher-fetch-data host selector port))
-  (gopher-response type error? data))
+  (define-values (data-port error?) (gopher-fetch-data host selector port))
+  (gopher-response type error? data-port))
 
 (define (gopher-fetch-data host selector port)
   (define (send-selector sel-string out)
@@ -94,7 +99,7 @@
 
   (with-handlers ([exn:fail:network?
                    (lambda (exn)
-                     (values (format "error: ~a" (exn-message exn))
+                     (values (open-input-string (format "error: ~a" (exn-message exn)))
                              #t))])
     (define-values (in out) (tcp-connect host port))
     (send-selector selector out)
