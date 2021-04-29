@@ -207,7 +207,7 @@
                 [address-text-field #f]
                 [status-bar #f]
                 [thread-custodian #f]
-                [current-url (browser-url #f #f)]
+                [current-url #f]
                 [history '()]) ; list of browser-url structs
     (inherit get-snip-position
              set-position
@@ -226,6 +226,16 @@
              in-edit-sequence?
              end-edit-sequence)
 
+    (define/private (push-history url)
+      (set! history (cons url history)))
+
+    (define/private (pop-history)
+      (if (not (empty? history))
+        (let ([top (car history)])
+          (set! history (cdr history))
+          top)
+        '()))
+    
     ;; starting from snip, find the next menu snip in between the the lines start and end
     ;; if snip is already in the region, just return it
     (define/private (find-next-menu-snip-in-region snip start end)
@@ -298,11 +308,11 @@
     (define/public (go req)
       (when (request-updates-page? req)
         ;; add current page to history
-        (if selection
-            ;; also save the position of the selection that we are following so we can return to it
-            (set! history (cons (struct-copy browser-url current-url [selection-pos (get-snip-position selection)])
-                                history))
-            (set! history (cons current-url history)))
+        (when current-url
+          (if selection
+              ;; also save the position of the selection that we are following so we can return to it
+              (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
+              (push-history current-url)))
         (set! current-url (browser-url req #f))
         
         ;; set the address field's value string to the new url, adding gopher type if necessary
@@ -321,11 +331,11 @@
                                         (request-port req)
                                         (string-append (request-path/selector req) "\t" query-string)
                                         #\1))
-         (if selection
-             ;; also save the position of the selection that we are following so we can return to it
-             (set! history (cons (struct-copy browser-url current-url [selection-pos (get-snip-position selection)])
-                                 history))
-             (set! history (cons current-url history)))
+         (when current-url
+           (if selection
+               ;; also save the position of the selection that we are following so we can return to it
+               (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
+               (push-history current-url history)))
          (set! current-url (browser-url query-request #f))
          (when address-text-field
            (send address-text-field set-value (request->url query-request)))
@@ -335,12 +345,11 @@
 
     (define/public (go-back)
       (unless (empty? history)
-        (set! current-url (car history))
+        (set! current-url (pop-history))
         (when address-text-field
           (send address-text-field set-value (request->url (browser-url-req current-url))))
         (load-page (browser-url-req current-url)
-                   (browser-url-selection-pos current-url))
-        (set! history (cdr history))))
+                   (browser-url-selection-pos current-url))))
 
     (define/private (current-selection-visible?)
       (define pos (get-snip-position selection))
