@@ -224,8 +224,20 @@
              find-first-snip
              find-snip
              in-edit-sequence?
-             end-edit-sequence)
+             end-edit-sequence
+             get-start-position get-end-position hide-caret)
 
+    ;; copied from Framework's text:hide-caret/selection-mixin
+    (define/augment (after-set-position)
+      (hide-caret (= (get-start-position) (get-end-position)))
+      (inner (void) after-set-position))
+
+    (define/override (can-do-edit-operation? op [recursive? #t])
+      (cond
+        [(eq? op 'paste) #f]
+        [else
+         (super can-do-edit-operation? op recursive?)]))
+    
     (define/private (push-history url)
       (set! history (cons url history)))
 

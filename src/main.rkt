@@ -40,6 +40,23 @@
    [width 1200]
    [height 800]))
 
+(define (find-item-editor item)
+  (let ([o (let loop ([i item])
+             (let ([p (send i get-parent)])
+               (cond
+                 [(not p) #f]
+                 [(is-a? p popup-menu%)
+                  (let ([p (send p get-popup-target)])
+                    (if (is-a? p window<%>)
+                        (let ([f (send p get-top-level-window)])
+                          (and f (send f get-edit-target-object)))
+                        p))]
+                 [(is-a? p menu%) (loop p)]
+                 [else (let ([f (send p get-frame)])
+                         (and f (send f get-edit-target-object)))])))])
+    (and (is-a? o editor<%>)
+         o)))
+
 (define menu-bar (new menu-bar% (parent frame)))
 (define file-menu 
   (new menu%
@@ -58,13 +75,45 @@
        (label "&Help")
        (parent menu-bar)))
 
-;(append-editor-font-menu-items font-menu)
+(new menu-item%
+     (label "Copy")
+     (parent edit-menu)
+     (callback 
+      (lambda (item event)
+        (define o (find-item-editor item))
+        (when o
+          (send o do-edit-operation 'copy)))))
+
+(new (class menu-item% (super-new)
+       (inherit enable)
+       ;; disable the paste menu item if browser-text% has focus
+       (define/override (on-demand)
+         (let ([o (find-item-editor this)])
+           (enable (and o (send o can-do-edit-operation? 'paste))))))
+     (label "Paste")
+     (parent edit-menu)
+     (callback 
+      (lambda (item event)
+        (define o (find-item-editor item))
+        (when o
+          (send o do-edit-operation 'paste)))))
+
+(new menu-item%
+     (label "Select All")
+     (parent edit-menu)
+     (callback 
+      (lambda (item event)
+        (define o (find-item-editor item))
+        (when o
+          (send o do-edit-operation 'select-all)))))
 
 (new menu-item%
      (label "Exit")
      (parent file-menu)
      (callback 
       (lambda (item event) (send frame on-exit))))
+
+;(append-editor-font-menu-items font-menu)
 
 (define tab-panel 
   (new tab-panel%

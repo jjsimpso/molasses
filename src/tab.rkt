@@ -81,7 +81,6 @@
   (send page-text set-max-undo-history 0)
   (send page-text set-styles-sticky #f)
   
-  (send page-text hide-caret #t)
   (send* page-canvas
     (set-canvas-background canvas-bg-color)
     (force-display-focus #t)
