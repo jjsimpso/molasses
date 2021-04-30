@@ -206,6 +206,7 @@
                 [gopher-menu? #f]
                 [address-text-field #f]
                 [status-bar #f]
+                [tabpanel #f]
                 [thread-custodian #f]
                 [current-url #f]
                 [history '()]) ; list of browser-url structs
@@ -247,6 +248,11 @@
           (set! history (cdr history))
           top)
         '()))
+
+    (define/private (set-tab-label label-text)
+      (when tabpanel
+        (define index (send tabpanel get-selection))
+        (send tabpanel set-item-label index label-text)))
     
     ;; starting from snip, find the next menu snip in between the the lines start and end
     ;; if snip is already in the region, just return it
@@ -326,6 +332,8 @@
               (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
               (push-history current-url)))
         (set! current-url (browser-url req #f))
+
+        (set-tab-label (string-append (request-host req) (request-path/selector req)))
         
         ;; set the address field's value string to the new url, adding gopher type if necessary
         (when address-text-field
@@ -349,6 +357,7 @@
                (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
                (push-history current-url history)))
          (set! current-url (browser-url query-request #f))
+         (set-tab-label (string-append (request-host query-request) (request-path/selector query-request)))
          (when address-text-field
            (send address-text-field set-value (request->url query-request)))
          (load-page query-request)]
@@ -358,10 +367,11 @@
     (define/public (go-back)
       (unless (empty? history)
         (set! current-url (pop-history))
+        (define req (browser-url-req current-url))
+        (set-tab-label (string-append (request-host req) (request-path/selector req)))
         (when address-text-field
-          (send address-text-field set-value (request->url (browser-url-req current-url))))
-        (load-page (browser-url-req current-url)
-                   (browser-url-selection-pos current-url))))
+          (send address-text-field set-value (request->url req)))
+        (load-page req (browser-url-selection-pos current-url))))
 
     (define/private (current-selection-visible?)
       (define pos (get-snip-position selection))

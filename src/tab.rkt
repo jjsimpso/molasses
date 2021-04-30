@@ -68,7 +68,8 @@
   (define page-text
     (new browser-text%
          (address-text-field address-field)
-         (status-bar (get-status-bar tp))))
+         (status-bar (get-status-bar tp))
+         (tabpanel tp)))
 
   (define page-canvas
     (new browser-canvas% (parent tab-contents)

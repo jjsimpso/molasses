@@ -118,7 +118,7 @@
 (define tab-panel 
   (new tab-panel%
        (parent frame)
-       ;(style '(hscroll))
+       ;(style '(can-close))
        (callback tab-panel-callback)
        (choices (list "Home"
                       "+"))))
