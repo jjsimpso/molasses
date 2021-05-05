@@ -94,7 +94,10 @@
   (string-append (protocol->string (request-protocol req))
                  (request-host req)
                  (port-number->string (request-port req) (request-protocol req))
+                 ;; follow the convention of displaying the type in the URL. if selector is null add a '/' after the type
                  (if (request-type req)
-                     (format "/~a" (request-type req))
+                     (if (and (request-path/selector req) (not (equal? (request-path/selector req) "")))
+                         (format "/~a" (request-type req))
+                         (format "/~a/" (request-type req)))
                      "")
                  (request-path/selector req)))
