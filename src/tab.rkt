@@ -13,7 +13,8 @@
   (index
    contents
    address-text)
-  #:prefab)
+  #:prefab
+  #:mutable)
 
 ;; list of tab-info structs
 (define tab-list '())
@@ -64,6 +65,15 @@
                           'text-field-enter)
               (send page-text go (url->request (send item get-value)))
               (send page-canvas focus))))))
+
+  (define delete-tab-button
+    (new button% (parent address-pane)
+         (label "Delete Tab") ; Forward arrow
+         (enabled #t)
+         (horiz-margin 0)
+         (callback
+          (lambda (item event)
+            (delete-tab tp)))))
 
   (define page-text
     (new browser-text%
@@ -150,15 +160,12 @@
                 #:when (is-a? child browser-canvas%))
       child)))
 
-(define (change-tab tp event)
-  (when (eq? (send event get-event-type) 'tab-panel)
-    (define tab-index (send tp get-selection))
-    (define tab-label (send tp get-item-label tab-index))
-    (printf "changing to tab ~a~n" tab-label)
-    (fill-tab-content tp)
-    (define tab-canvas (find-tab-canvas tab-index))
-    (when tab-canvas
-      (send tab-canvas focus))))
+(define (change-tab tp tab-index)
+  (eprintf "changing to tab ~a~n" tab-index)
+  (fill-tab-content tp)
+  (define tab-canvas (find-tab-canvas tab-index))
+  (when tab-canvas
+      (send tab-canvas focus)))
 
 (define (fill-tab-content tp)
   (define current-tab-index (send tp get-selection))
@@ -177,4 +184,32 @@
         (send item delete tab-index)
         (send item append "+")
         (init-new-tab item tab-index))
-      (change-tab item event)))
+      (change-tab item tab-index)))
+
+(define (delete-tab tp)
+  (define tab-index (send tp get-selection))
+  (define num-tabs  (send tp get-number))
+  ;; can't delete the only tab (not counting +)
+  (unless (= num-tabs 2)
+    ;; remove the deleted tab from our global list of tabs
+    (set! tab-list
+          (remove (tab-info tab-index null null)
+                  tab-list
+                  (lambda (a b)
+                    (= (tab-info-index a)
+                       (tab-info-index b)))))
+    ;; for every tab with an index > than the removed tab, reduce its index by one
+    (for ([tab (in-list tab-list)])
+      (when (> (tab-info-index tab) tab-index)
+        (set-tab-info-index! tab (sub1 (tab-info-index tab)))))
+    ;; delete the tab from the panel
+    (send tp delete tab-index)
+    ;; change to the new tab in the same location unless the new tab is +
+    (if (equal? (send tp get-item-label tab-index) "+")
+        (begin
+          (send tp set-selection (sub1 tab-index))
+          (change-tab tp (sub1 tab-index)))
+        (begin
+          (send tp set-selection tab-index)
+          (change-tab tp tab-index)))))
+
