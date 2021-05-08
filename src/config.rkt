@@ -2,6 +2,9 @@
 
 (provide (all-defined-out))
 
+(define pref-file (build-path (find-system-path 'pref-dir) "molasses" "config.rktd"))
+(define tabs-file (build-path (find-system-path 'pref-dir) "molasses" "saved-tabs.rktd"))
+
 (define home-page-url "gopher://gopher.endangeredsoft.org")
 
 (define canvas-bg-color (make-color 33 33 33))

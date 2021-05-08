@@ -1,12 +1,16 @@
 #lang racket/gui
 
+(require racket/serialize)
+
 (require "widgets.rkt")
 (require "config.rkt")
 (require "request.rkt")
 
 (provide init-new-tab
          tab-panel-callback
-         goto-home-page)
+         goto-home-page
+         save-tabs
+         load-tabs)
 
 ;; holds the ui component and data for a tab
 (struct tab-info
@@ -155,7 +159,7 @@
   (define tab (find-tab-at-index index))
   (when tab
     (define children (send (tab-info-contents tab) get-children))
-    (eprintf "tab children: ~a~n" children)
+    ;(eprintf "tab children: ~a~n" children)
     (for/first ([child (in-list children)]
                 #:when (is-a? child browser-canvas%))
       child)))
@@ -213,3 +217,42 @@
           (send tp set-selection tab-index)
           (change-tab tp tab-index)))))
 
+(define (tab-info->save-data tab)
+  (define index (tab-info-index tab))
+  (define canvas (find-tab-canvas index))
+  (eprintf "Saving tab ~a: ~a~n" index (send canvas get-restore-data))
+  (serialize (send canvas get-restore-data)))
+
+(define (save-tabs tp)
+  (define num-tabs (sub1 (send tp get-number))) ; subtract one because + tab doesn't count
+  (define tabs
+    (let loop ([index (sub1 num-tabs)]
+               [tabs '()])
+      (cond
+        [(< index 0)
+         tabs]
+        [else
+         (loop (sub1 index)
+               (cons (tab-info->save-data (find-tab-at-index index))
+                     tabs))])))
+  (put-preferences '(tabs) (list tabs) #f tabs-file))
+
+(define (load-tabs tp)
+  (define tabs-pref
+    (get-preference 'tabs
+                    (lambda () #f)
+                    'timestamp
+                    tabs-file))
+  (printf "tab pref: ~a~n" tabs-pref)
+  (if tabs-pref
+      (let ([num-tabs (length tabs-pref)])
+        (printf "Restoring ~a tabs~n" num-tabs)
+        (for ([tab (in-list tabs-pref)]
+              [index (in-naturals)])
+          (printf "Restoring tab ~a: ~a~n" index (deserialize tab))
+          (send tp append "New")
+          (send tp set-selection index)
+          (init-new-tab tp index)
+          (define canvas (find-tab-canvas index))
+          (send canvas load-restore-data (deserialize tab))))
+      #f))

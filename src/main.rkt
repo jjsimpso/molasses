@@ -30,6 +30,10 @@
            ;; canvas or the text).
            (else
             #f))))
+
+     (define/augment (on-close)
+       (save-tabs tab-panel))
+
      (define/override (on-subwindow-char receiver event)
        (or (handle-keycombo event)
            (send this on-menu-char event)
@@ -120,8 +124,7 @@
        (parent frame)
        ;(style '(can-close))
        (callback tab-panel-callback)
-       (choices (list "Home"
-                      "+"))))
+       (choices '())))
 
 (define status-bar
   (new message%
@@ -129,8 +132,16 @@
        (label "Ready")
        (stretchable-width #t)))
 
-(send tab-panel set-selection 0)
-(init-new-tab tab-panel 0)
+;; load any saved tabs, else initialize one new tab
+(unless (load-tabs tab-panel)
+  (send tab-panel append "New")        
+  (init-new-tab tab-panel 0)
+  (goto-home-page))
+
+;; this tab is actually just used as a button
+(send tab-panel append "+")
+
+;(send tab-panel set-selection 0)
 
 ;; Select means copy for X11.
 (editor-set-x-selection-mode #t)
@@ -142,4 +153,3 @@
 ; Show the frame by calling its show method
 (send frame show #t)
 
-(goto-home-page)

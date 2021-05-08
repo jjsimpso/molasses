@@ -395,7 +395,18 @@
       (change-style new-style
                     pos
                     (+ pos (send new-sel get-count))))
+
+    (define/public (load-restore-data list-of-data)
+      (when (and (list? list-of-data)
+                 (= (length list-of-data) 2))
+        (set! history (cadr list-of-data))
+        (when (browser-url? (car list-of-data))
+          (go (browser-url-req (car list-of-data))))))
     
+    ;; returns data necessary to restore this widget's state
+    (define/public (get-restore-data)
+      (list current-url history))
+
     (define/override (on-local-char event)
       (if gopher-menu?
           (case (send event get-key-code)
@@ -527,7 +538,18 @@
   (class editor-canvas% (super-new)
     (init-field [selection #f])
     (inherit get-editor)
-    ))
+
+    (define/public (load-restore-data list-of-data)
+      (define editor (get-editor))
+      (when editor
+        (send editor load-restore-data list-of-data)))
+    
+    ;; eventually this may need to handle multiple types of editors, but for now assume browser-text%
+    (define/public (get-restore-data)
+      (define editor (get-editor))
+      (if editor
+          (send editor get-restore-data)
+          '()))))
 
 (define menu-item-snip%
   (class string-snip%
