@@ -24,3 +24,6 @@ Gopher menu navigation is based on Lynx and consists of the following commands:
 * In text files, as opposed to Gopher menus, Up and Down arrows scroll the page line-by-line.
 
 Tabs are saved by default and restored in the next session.
+
+## Screenshots
+![](https://github.com/jjsimpso/molasses/blob/main/doc/molasses-ss1.png)
