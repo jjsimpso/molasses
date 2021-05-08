@@ -53,7 +53,7 @@
         (string-ref path 1)
         #\1))  ; default to menu type
   
-  (define url-components (regexp-match #px"^(\\w+://)?([a-zA-Z0-9\\.]+)(:\\d+)?(/.*)?$" url))
+  (define url-components (regexp-match #px"^(\\w+://)?([a-zA-Z0-9\\-\\.]+)(:\\d+)?(/.*)?$" url))
 
   (if url-components
       (let ([protocol (string->protocol (second url-components))]
