@@ -29,7 +29,7 @@
   ;(eprintf "parse-dir-entity ~a~n" s)
   (define type (string-ref s 0))
   (define fields (menu-line-split s))
-  (if (= (length fields) 4)
+  (if (>= (length fields) 4)
       (gopher-dir-entity type
                          (car fields)
                          (cadr fields)
