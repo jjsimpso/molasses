@@ -321,7 +321,8 @@
       (set! thread-custodian (make-custodian))
       (parameterize ([current-custodian thread-custodian])
         (thread (thunk
-                 (goto-gopher req this initial-selection-pos)))))
+                 (goto-gopher req this initial-selection-pos)
+                 (set! current-url (browser-url req initial-selection-pos))))))
 
     (define/public (go req)
       (when (request-updates-page? req)
@@ -331,7 +332,8 @@
               ;; also save the position of the selection that we are following so we can return to it
               (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
               (push-history current-url)))
-        (set! current-url (browser-url req #f))
+        ;; set current-url to false while loading
+        (set! current-url #f)
 
         (set-tab-label (string-append (request-host req) (request-path/selector req)))
         
@@ -356,7 +358,7 @@
                ;; also save the position of the selection that we are following so we can return to it
                (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
                (push-history current-url history)))
-         (set! current-url (browser-url query-request #f))
+         (set! current-url #f)
          (set-tab-label (string-append (request-host query-request) (request-path/selector query-request)))
          (when address-text-field
            (send address-text-field set-value (request->url query-request)))
@@ -366,12 +368,13 @@
 
     (define/public (go-back)
       (unless (empty? history)
-        (set! current-url (pop-history))
-        (define req (browser-url-req current-url))
+        (define prev-url (pop-history))
+        (set! current-url #f)
+        (define req (browser-url-req prev-url))
         (set-tab-label (string-append (request-host req) (request-path/selector req)))
         (when address-text-field
           (send address-text-field set-value (request->url req)))
-        (load-page req (browser-url-selection-pos current-url))))
+        (load-page req (browser-url-selection-pos prev-url))))
 
     (define/private (current-selection-visible?)
       (define pos (get-snip-position selection))
