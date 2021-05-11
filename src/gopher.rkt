@@ -29,17 +29,28 @@
   ;(eprintf "parse-dir-entity ~a~n" s)
   (define type (string-ref s 0))
   (define fields (menu-line-split s))
-  (if (>= (length fields) 4)
-      (gopher-dir-entity type
-                         (car fields)
-                         (cadr fields)
-                         (caddr fields)
-                         (cadddr fields))
-      (gopher-dir-entity #\3
-                         "malformed dir entity"
-                         ""
-                         "error.host"
-                         1)))
+  (cond
+    [(>= (length fields) 4)
+     (gopher-dir-entity type
+                        (car fields)
+                        (cadr fields)
+                        (caddr fields)
+                        (cadddr fields))]
+    [(or (equal? type #\i)
+         (equal? type #\3))
+     ;; be lenient with info and error types that are missing fields since only the user-name
+     ;; is actually needed
+     (gopher-dir-entity type
+                        (car fields)
+                        ""
+                        ""
+                        "")]
+    [else
+     (gopher-dir-entity #\3
+                        "malformed dir entity"
+                        ""
+                        "error.host"
+                        1)]))
 
 (define (dir-entity->url s)
   (string-append "gopher://"
