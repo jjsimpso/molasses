@@ -9,6 +9,9 @@
 (provide init-new-tab
          tab-panel-callback
          goto-home-page
+         next-tab
+         prev-tab
+         find-tp-address-field
          save-tabs
          load-tabs)
 
@@ -114,6 +117,20 @@
   (send page-text go (url->request home-page-url))
   (send page-canvas focus))
 
+(define (next-tab tp)
+  (define num-tabs (sub1 (send tp get-number))) ; don't count + tab
+  (define new-tab (add1 (send tp get-selection)))
+  (unless (>= new-tab num-tabs)
+    (send tp set-selection new-tab)
+    (change-tab tp new-tab)))
+
+(define (prev-tab tp)
+  (define num-tabs (sub1 (send tp get-number))) ; don't count + tab
+  (define new-tab (sub1 (send tp get-selection)))
+  (unless (< new-tab 0)
+    (send tp set-selection new-tab)
+    (change-tab tp new-tab)))
+
 (define (init-styles style-list)
   (define standard (send style-list find-named-style "Standard"))
   (define standard-delta (make-object style-delta%))
@@ -147,6 +164,17 @@
     (for/first ([child (in-list children)]
                 #:when (is-a? child message%))
       child)))
+
+(define (find-tp-address-field tp)
+  (define tab (find-tab-at-index (send tp get-selection)))
+  (when tab
+    (define children (send (tab-info-contents tab) get-children))
+    ;(eprintf "tab children: ~a~n" children)
+    (for/first ([child (in-list children)]
+                #:when (is-a? child horizontal-pane%))
+      (for/first ([grandchild (in-list (send child get-children))]
+                  #:when (is-a? grandchild text-field%))
+        grandchild))))
 
 ;; returns a tab-info struct from the global tab-list or #f
 (define (find-tab-at-index index)

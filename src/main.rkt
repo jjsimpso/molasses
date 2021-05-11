@@ -6,25 +6,24 @@
   (new
    (class frame% (super-new)
      (define (handle-keycombo key)
-       (let ((ctrl? (send key get-control-down))
-             (meta? (send key get-meta-down))
-             (key-code (send key get-key-code)))
+       (let ([ctrl? (send key get-control-down)]
+             [meta? (send key get-meta-down)]
+             [key-code (send key get-key-code)])
          (cond
            #;((eq? key-code 'f5)
             (refresh))
            #;((eq? key-code 'escape)
             (send search-panel show #f))
-           #;((and meta? (eq? key-code 'left))
-            (go-back))
-           #;((and meta? (eq? key-code 'right))
-            (go-forward))
            #;((and meta? (eq? key-code 'home))
-            (go-home))
-           #;((and ctrl? (eq? key-code #\l))
+              (go-home))
+           [(and ctrl? (eq? key-code 'prior))
+            (prev-tab tab-panel)]
+           [(and ctrl? (eq? key-code 'next))
+            (next-tab tab-panel)]
+           [(and ctrl? (eq? key-code #\l))
+            (define address-field (find-tp-address-field tab-panel))
             (send address-field focus)
-            (send (send address-field get-editor) select-all))
-           #;((and ctrl? (eq? key-code #\f))
-            (show-search-field))
+            (send (send address-field get-editor) select-all)]
            ;; Return #f if we don't recognise this key code so that it can be
            ;; delegated to lower levels in on-subwindow-char (such as the
            ;; canvas or the text).
