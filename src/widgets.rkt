@@ -1,6 +1,6 @@
 #lang racket/gui
 
-(require net/url-string)
+(require net/sendurl)
 (require "gopher.rkt")
 (require "request.rkt")
 
@@ -24,6 +24,7 @@
       [(#\I) " (IMG) "]
       [(#\7) "(SRCH) "]
       [(#\8) " (TEL) "]
+      [(#\h) "(HTML) "]
       [else  "(UNKN) "]))
 
   (define standard-style
@@ -84,6 +85,7 @@
     [(equal? (request-type req) #\5) #f]
     [(equal? (request-type req) #\9) #f]
     [(equal? (request-type req) #\7) #f]
+    [(equal? (request-type req) #\h) #f]
     [else #t]))
 
 (define (download-only-type? type)
@@ -158,7 +160,7 @@
      (with-output-to-file path
        (lambda () (write-bytes data)))]
     [else (void)])
-    (send page-text end-edit-sequence))
+  (send page-text end-edit-sequence))
 
 (define (save-gopher-to-file req)
   (eprintf "save-gopher-to-file: ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req))
@@ -363,6 +365,10 @@
          (when address-text-field
            (send address-text-field set-value (request->url query-request)))
          (load-page query-request)]
+        [(equal? (request-type req) #\h)
+         ; html, open in external browser
+         (eprintf "opening ~a in browser~n" (gopher-url-request->url req))
+         (send-url (gopher-url-request->url req) #t)]
         [else
          (load-page req)]))
 
@@ -561,9 +567,6 @@
     (super-new)
     (set-flags (cons 'handles-all-mouse-events (get-flags)))
     ;(set-flags (cons 'handles-events (get-flags)))
-
-    (define/public (follow-link)
-      (eprintf "follow-link: ~a~n" url))
 
     ;; use clickbacks instead
     #;(define/override (on-event dc x y editorx editory e)

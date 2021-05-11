@@ -5,6 +5,7 @@
 (provide url->request
          request->url
          dir-entity->request
+         gopher-url-request->url
          (struct-out request))
 
 (struct request
@@ -101,3 +102,16 @@
                          (format "/~a/" (request-type req)))
                      "")
                  (request-path/selector req)))
+
+;; there are two common ways to encode a URL into a gopher selector:
+;; prefix with 'URL:' or use 'GET /' as the selector.
+(define (gopher-url-request->url req)
+  (define selector (request-path/selector req))
+  
+  (cond
+    [(string-prefix? selector "URL:")
+     (string-trim selector "URL:" #:right? #f)]
+    [(string=? selector "GET /")
+     (string-append "http://" (request-host req) ":" (number->string (request-port req)))]
+    [else
+     selector]))
