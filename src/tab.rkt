@@ -83,14 +83,14 @@
             (delete-tab tp)))))
 
   (define page-text
-    (new browser-text%
-         (address-text-field address-field)
-         (status-bar (get-status-bar tp))
-         (tabpanel tp)))
+    (new browser-text%))
 
   (define page-canvas
     (new browser-canvas% (parent tab-contents)
          (editor page-text)
+         (address-text-field address-field)
+         (status-bar (get-status-bar tp))
+         (tabpanel tp)
          (style '(auto-hscroll auto-vscroll))
          (wheel-step 3)))
 

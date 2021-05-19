@@ -206,9 +206,6 @@
   (class text% (super-new)
     (init-field [selection #f]
                 [gopher-menu? #f]
-                [address-text-field #f]
-                [status-bar #f]
-                [tabpanel #f]
                 [thread-custodian #f]
                 [current-url #f]
                 [history '()]) ; list of browser-url structs
@@ -223,6 +220,7 @@
              get-visible-position-range
              get-visible-line-range
              get-style-list
+             get-canvas
              change-style
              find-first-snip
              find-snip
@@ -251,11 +249,6 @@
           top)
         '()))
 
-    (define/private (set-tab-label label-text)
-      (when tabpanel
-        (define index (send tabpanel get-selection))
-        (send tabpanel set-item-label index label-text)))
-    
     ;; starting from snip, find the next menu snip in between the the lines start and end
     ;; if snip is already in the region, just return it
     (define/private (find-next-menu-snip-in-region snip start end)
@@ -335,13 +328,9 @@
               (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
               (push-history current-url)))
         ;; set current-url to false while loading
-        (set! current-url #f)
-
-        (set-tab-label (string-append (request-host req) (request-path/selector req)))
-        
-        ;; set the address field's value string to the new url, adding gopher type if necessary
-        (when address-text-field
-          (send address-text-field set-value (request->url req))))
+        (set! current-url #f)        
+        (send (get-canvas) update-address req))
+      
       
       (cond
         [(download-only-type? (request-type req)) ; open save file dialog
@@ -361,9 +350,7 @@
                (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
                (push-history current-url history)))
          (set! current-url #f)
-         (set-tab-label (string-append (request-host query-request) (request-path/selector query-request)))
-         (when address-text-field
-           (send address-text-field set-value (request->url query-request)))
+         (send (get-canvas) update-address query-request)
          (load-page query-request)]
         [(equal? (request-type req) #\h)
          ; html, open in external browser
@@ -377,9 +364,7 @@
         (define prev-url (pop-history))
         (set! current-url #f)
         (define req (browser-url-req prev-url))
-        (set-tab-label (string-append (request-host req) (request-path/selector req)))
-        (when address-text-field
-          (send address-text-field set-value (request->url req)))
+        (send (get-canvas) update-address req)
         (load-page req (browser-url-selection-pos prev-url))))
 
     (define/private (current-selection-visible?)
@@ -545,9 +530,25 @@
 
 (define browser-canvas%
   (class editor-canvas% (super-new)
-    (init-field [selection #f])
+    (init-field [address-text-field #f]
+                [status-bar #f]
+                [tabpanel #f])
     (inherit get-editor)
 
+    (define/private (set-tab-label label-text)
+      (when tabpanel
+        (define index (send tabpanel get-selection))
+        (send tabpanel set-item-label index label-text)))
+
+    (define/private (set-address-field address-text)
+      (when address-text-field
+        (send address-text-field set-value address-text)))
+
+    ;; takes a request struct and updates UI elements
+    (define/public (update-address req)
+      (set-tab-label (string-append (request-host req) (request-path/selector req)))
+      (set-address-field (request->url req)))
+    
     (define/public (load-restore-data list-of-data)
       (define editor (get-editor))
       (when editor
@@ -558,7 +559,8 @@
       (define editor (get-editor))
       (if editor
           (send editor get-restore-data)
-          '()))))
+          '()))
+    ))
 
 (define menu-item-snip%
   (class string-snip%
