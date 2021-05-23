@@ -3,6 +3,7 @@
 (require net/sendurl)
 (require "gopher.rkt")
 (require "request.rkt")
+(require "download.rkt")
 
 (provide browser-text%
          browser-canvas%
@@ -173,8 +174,11 @@
                                (request-path/selector req)
                                (request-type req)
                                (request-port req)))
+    (track-download (current-thread) path)
     (with-output-to-file path
-      (lambda () (copy-port (gopher-response-data-port resp) (current-output-port))))))
+      (lambda ()
+        (copy-port (gopher-response-data-port resp) (current-output-port))
+        (mark-download-complete (current-thread))))))
 
 (define (selection-clickback-handler text-widget start end)
   (define snip (send text-widget find-snip start 'after))

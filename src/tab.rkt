@@ -248,7 +248,7 @@
 (define (tab-info->save-data tab)
   (define index (tab-info-index tab))
   (define canvas (find-tab-canvas index))
-  (eprintf "Saving tab ~a: ~a~n" index (send canvas get-restore-data))
+  ;(eprintf "Saving tab ~a: ~a~n" index (send canvas get-restore-data))
   (serialize (send canvas get-restore-data)))
 
 (define (save-tabs tp)
@@ -271,13 +271,13 @@
                     (lambda () #f)
                     'timestamp
                     tabs-file))
-  (printf "tab pref: ~a~n" tabs-pref)
+  ;(printf "tab pref: ~a~n" tabs-pref)
   (if tabs-pref
       (let ([num-tabs (length tabs-pref)])
-        (printf "Restoring ~a tabs~n" num-tabs)
+        ;(eprintf "Restoring ~a tabs~n" num-tabs)
         (for ([tab (in-list tabs-pref)]
               [index (in-naturals)])
-          (printf "Restoring tab ~a: ~a~n" index (deserialize tab))
+          ;(eprintf "Restoring tab ~a: ~a~n" index (deserialize tab))
           (send tp append "New")
           (send tp set-selection index)
           (init-new-tab tp index)

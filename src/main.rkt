@@ -1,6 +1,7 @@
 #lang racket/gui
 
-(require "tab.rkt")
+(require "tab.rkt"
+         "download.rkt")
 
 (define frame 
   (new
@@ -126,10 +127,28 @@
        (choices '())))
 
 (define status-bar
-  (new message%
+  (new horizontal-pane%
        (parent frame)
+       (stretchable-height #f)))
+
+(define status-msg
+  (new message%
+       (parent status-bar)
        (label "Ready")
        (stretchable-width #t)))
+
+(define download-status
+  (new download-panel%
+       (parent status-bar)
+       (border 2)
+       (stretchable-width #f)
+       (stretchable-height #f)))
+
+(define download-text
+  (new message%
+       (parent download-status)
+       (label "Downloads")
+       (stretchable-width #f)))
 
 ;; load any saved tabs, else initialize one new tab
 (unless (load-tabs tab-panel)
@@ -151,4 +170,3 @@
 
 ; Show the frame by calling its show method
 (send frame show #t)
-
