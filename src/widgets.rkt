@@ -174,8 +174,8 @@
                                (request-path/selector req)
                                (request-type req)
                                (request-port req)))
-    (track-download (current-thread) path)
-    (with-output-to-file path
+    (track-download (current-thread) (gopher-response-data-port resp) path)
+    (with-output-to-file path #:exists 'truncate
       (lambda ()
         (copy-port (gopher-response-data-port resp) (current-output-port))
         (mark-download-complete (current-thread))))))
