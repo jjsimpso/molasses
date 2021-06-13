@@ -116,15 +116,15 @@
      (parent edit-menu)
      (demand-callback
       (lambda (item)
-        (define o (find-item-editor item))
-        (when o
-          (eprintf "word wrap demand callback, autowrap=~a~n" (send o auto-wrap))
-          (send item check (send o auto-wrap)))))
+        (define ed (send (active-page-canvas tab-panel) get-editor))
+        (when ed
+          ;(eprintf "word wrap demand callback, autowrap=~a~n" (send ed auto-wrap))
+          (send item check (send ed auto-wrap)))))
      (callback 
       (lambda (item event)
-        (define o (find-item-editor item))
-        (when o
-          (send o auto-wrap (send item is-checked?))))))
+        (define ed (send (active-page-canvas tab-panel) get-editor))
+        (when ed
+          (send ed auto-wrap (send item is-checked?))))))
 
 (new menu-item%
      (label "Exit")

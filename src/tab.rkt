@@ -7,6 +7,7 @@
 (require "request.rkt")
 
 (provide init-new-tab
+         active-page-canvas
          tab-panel-callback
          goto-home-page
          next-tab
@@ -110,6 +111,9 @@
   (set! tab-list
         (cons (tab-info index tab-contents (send address-field get-value))
               tab-list)))
+
+(define (active-page-canvas tp)
+  (find-tab-canvas (send tp get-selection)))
 
 (define (goto-home-page)
   (define page-canvas (find-tab-canvas 0))
