@@ -25,35 +25,6 @@
 
 ;; (regexp-match #px"^(\\w+://)?([a-zA-Z0-9\\.]+)(:\\d+)?(/.*)?" "gopher://abc6.def.com:70/a/b/c.txt")
 (define (url->request url)
-  (define (string->protocol s)
-    (cond
-      [(false? s) 'gopher] ;; default to gopher
-      [(equal? s "gopher://") 'gopher]
-      [else 'unsupported]))
-
-  (define (default-port p)
-    (cond
-      [(equal? p 'gopher) 70]
-      [(equal? p 'gemini) 1965]
-      [(equal? p 'http) 80]
-      [else 70]))
-
-  (define (strip-type-from-path path protocol)
-    (if (and (equal? protocol 'gopher)
-             (> (string-length path) 2)
-             (and (equal? (string-ref path 0) #\/)
-                  (equal? (string-ref path 2) #\/)))
-        (substring path 2)
-        path))
-
-  (define (get-type-from-path path protocol)
-    (if (and (equal? protocol 'gopher)
-             (> (string-length path) 2)
-             (and (equal? (string-ref path 0) #\/)
-                  (equal? (string-ref path 2) #\/)))
-        (string-ref path 1)
-        #\1))  ; default to menu type
-  
   (define url-components (regexp-match #px"^(\\w+://)?([a-zA-Z0-9\\-\\.]+)(:\\d+)?(/.*)?$" url))
 
   (if url-components
@@ -61,12 +32,15 @@
             [host (third url-components)]
             [port (fourth url-components)]
             [path/selector (or (fifth url-components) "")])
-        (request protocol
-                 host
-                 (or (and (string? port) (string->number (substring port 1)))
-                     (default-port protocol))
-                 (strip-type-from-path path/selector protocol)
-                 (get-type-from-path path/selector protocol)))
+        (if (eq? protocol 'gemini)
+            (make-gemini-request protocol
+                                 host
+                                 port
+                                 path/selector)            
+            (make-gopher-request protocol
+                                 host
+                                 port
+                                 path/selector)))
       #f))
 
 (define (request->url req)
@@ -115,3 +89,51 @@
      (string-append "http://" (request-host req) ":" (number->string (request-port req)))]
     [else
      selector]))
+
+
+;; Helper functions
+(define (string->protocol s)
+  (cond
+    [(false? s) 'gopher] ;; default to gopher
+    [(equal? s "gopher://") 'gopher]
+    [(equal? s "gemini://") 'gemini]
+    [else 'unsupported]))
+
+(define (default-port p)
+  (cond
+    [(equal? p 'gopher) 70]
+    [(equal? p 'gemini) 1965]
+    [(equal? p 'http) 80]
+    [else 70]))
+
+(define (strip-type-from-path path protocol)
+  (if (and (equal? protocol 'gopher)
+           (> (string-length path) 2)
+           (and (equal? (string-ref path 0) #\/)
+                (equal? (string-ref path 2) #\/)))
+      (substring path 2)
+      path))
+
+(define (get-type-from-path path protocol)
+  (if (and (equal? protocol 'gopher)
+           (> (string-length path) 2)
+           (and (equal? (string-ref path 0) #\/)
+                (equal? (string-ref path 2) #\/)))
+      (string-ref path 1)
+      #\1))  ; default to menu type
+
+(define (make-gopher-request protocol host port path/selector)
+  (request protocol
+           host
+           (or (and (string? port) (string->number (substring port 1)))
+               (default-port protocol))
+           (strip-type-from-path path/selector protocol)
+           (get-type-from-path path/selector protocol)))
+
+(define (make-gemini-request protocol host port path-plus-query)
+  (request protocol
+           host
+           (or (and (string? port) (string->number (substring port 1)))
+               (default-port protocol))
+           path-plus-query
+           #f))
