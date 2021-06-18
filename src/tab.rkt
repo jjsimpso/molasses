@@ -63,7 +63,7 @@
          #;(callback (λ _ (go-forward)))))
   
   (define address-field
-    (new text-field% (parent address-pane)
+    (new address-field% (parent address-pane)
          (label "")
          (init-value "")
          (style '(single))
@@ -197,7 +197,7 @@
       child)))
 
 (define (change-tab tp tab-index)
-  (eprintf "changing to tab ~a~n" tab-index)
+  ;(eprintf "changing to tab ~a~n" tab-index)
   (fill-tab-content tp)
   (define tab-canvas (find-tab-canvas tab-index))
   (when tab-canvas
@@ -256,6 +256,7 @@
   (serialize (send canvas get-restore-data)))
 
 (define (save-tabs tp)
+  ;(eprintf "Saving tabs~n")
   (define num-tabs (sub1 (send tp get-number))) ; subtract one because + tab doesn't count
   (define tabs
     (let loop ([index (sub1 num-tabs)]

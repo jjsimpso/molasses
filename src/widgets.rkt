@@ -7,7 +7,8 @@
 
 (provide browser-text%
          browser-canvas%
-         menu-item-snip%)
+         menu-item-snip%
+         address-field%)
 
 (struct browser-url
   (req
@@ -579,3 +580,27 @@
       (when (send e button-down? 'left)
         (follow-link)))
     ))
+
+(define address-field%
+  (class text-field%
+    (super-new)
+    (inherit get-editor
+             has-focus?
+             focus)
+    ;; can return to this when https://github.com/racket/racket/issues/3883 is released
+    #;(define/override (on-focus on?)
+      (eprintf "on-focus ~a -> ~a~n" (has-focus?) on?))
+    
+    #;(define/override (on-subwindow-event recv event)
+      (if (send event button-down? 'left)
+          (if (has-focus?)
+              (begin
+                (eprintf "already has focus~n")
+                (super on-subwindow-event recv event))
+              (begin
+                (eprintf "selecting all~n")
+                (super on-subwindow-event recv event)
+                (focus)
+                (send (get-editor) select-all)
+                #t))
+          (super on-subwindow-event recv event)))))
