@@ -1,8 +1,9 @@
 #lang racket/gui
 
 (require net/sendurl)
-(require "gopher.rkt")
 (require "request.rkt")
+(require "gopher.rkt")
+(require "gemini.rkt")
 (require "download.rkt")
 
 (provide browser-text%
@@ -140,10 +141,10 @@
      (define img (make-object image-snip%
                               (gopher-response-data-port resp)
                               'unknown))
-     (close-input-port (gopher-response-data-port resp))
      (send page-text erase)
      (send page-text insert img)
-     (send page-text set-position 0)]
+     (send page-text set-position 0)
+     (close-input-port (gopher-response-data-port resp))]
     [(equal? item-type #\g) ; gif
      (define img (make-object image-snip%
                               (gopher-response-data-port resp)
@@ -206,6 +207,119 @@
         (if (is-a? prev-snip menu-item-snip%)
             prev-snip
             (find-prev-menu-snip prev-snip)))))
+
+; Links take the form "=>[<whitespace>]<URL>[<whitespace><USER-FRIENDLY LINK NAME>]<CR><LF>"
+(define gemini-link-re #px"^=>\\s*(\\S*)\\s*(.*)")
+
+; Headers start with "#", "##", or "###".
+(define gemini-header-re #px"^#{1,3}.*")
+
+(define (insert-gemini-text text-widget data-port base-url)
+  (define standard-style
+    (send (send text-widget get-style-list) find-named-style "Standard"))
+  (define link-style
+    (send (send text-widget get-style-list) find-named-style "Link"))
+  (define header-style
+    (send (send text-widget get-style-list) find-named-style "Header"))
+  
+  ; We'll just display them as bold text
+  (define (line->header line)  
+    (define text-snip (new string-snip%))
+    (send text-snip set-style header-style)
+    (send text-snip insert line (string-length line))
+    text-snip)
+  
+  ; Plain text lines are anything else
+  (define (line->text text)
+    (define text-snip (new string-snip%))
+    (send text-snip set-style standard-style)
+    (send text-snip insert text (string-length text))
+    text-snip)
+
+  (define (make-link text)
+    (define link-snip (new string-snip%))
+    (send link-snip set-style link-style)
+    (send link-snip insert text (string-length text))
+    link-snip)
+
+  (for ([line (in-lines data-port)])
+    (match line
+      [(regexp gemini-link-re)
+       (define link-start-pos (send text-widget last-position))
+       (define link-parts (string-split line))
+       (define link-url (second link-parts))
+       (eprintf "link parts = ~a~n" link-parts)
+       (send text-widget insert
+             (make-link (if (> (length link-parts) 2)
+                            (string-join (cddr link-parts))
+                            link-url)))
+       ;; add clickback to link region
+       (send text-widget set-clickback
+             link-start-pos
+             (send text-widget last-position)
+             (lambda (text-widget start end)
+               (eprintf "following gemini link: ~a~n" link-url)
+               (send text-widget go
+                     (url->request (if (string-prefix? link-url "gemini://")
+                                       link-url
+                                       (string-append base-url link-url))))))]
+      [(regexp gemini-header-re)
+       (send text-widget insert (line->header line))]
+      [_ (send text-widget insert (line->text line))])
+    (send text-widget insert "\n")))
+
+(define (goto-gemini req page-text)
+  (eprintf "goto-gemini: ~a, ~a~n" (request-host req) (request-path/selector req))
+
+  (define (show-gemini-error msg)
+    (send page-text erase)
+    (send page-text insert msg))
+    
+  (define resp (gemini-fetch (request-host req)
+                             (request-path/selector req)
+                             (request-port req)))
+
+  (send page-text begin-edit-sequence)
+  (case (gemini-response-status resp)
+    [(10) (void)]
+    [(20 21)
+     (let ([data-port (gemini-response-data-port resp)]
+           [mimetype (gemini-response-meta resp)]
+           [from-url (gemini-response-from-url resp)])
+       (cond
+         [(string=? mimetype "text/gemini")
+          (send page-text erase)
+          (insert-gemini-text page-text data-port from-url)
+          (send page-text set-position 0)]
+         [(string-prefix? mimetype "text/")
+          (send page-text erase)
+          ;; this isn't ideal but is still a lot faster than inserting one line at a time
+          ;; (text% treats #\return as a newline so DOS formatted files have extra newlines)
+          (send page-text insert (string-replace
+                                  (port->string data-port)
+                                  "\r\n"
+                                  "\n"))
+          (send page-text set-position 0)]
+         [else
+          (void)]))]
+    [(30 31)
+     (void)]
+    
+    [(40) (show-gemini-error "Temporary failure")]
+    [(41) (show-gemini-error "Server unavailable")]
+    [(42) (show-gemini-error "CGI error")]
+    [(43) (show-gemini-error "Proxy error")]
+    [(44) (show-gemini-error (string-join "Slow down, wait for " (gemini-response-meta resp) "seconds"))]
+
+    [(50) (show-gemini-error "Permanent failure")]
+    [(51) (show-gemini-error "Not found")]
+    [(52) (show-gemini-error "Gone")]
+    [(53) (show-gemini-error "Proxy request refused")]
+    [(54) (show-gemini-error "Bad request")]
+    
+    [else (show-gemini-error "Unknown status code returned from server")])
+  (send page-text end-edit-sequence)
+  (close-input-port (gemini-response-data-port resp)))
 
 (define browser-text%
   (class text% (super-new)
@@ -320,12 +434,22 @@
       
       (set! thread-custodian (make-custodian))
       (parameterize ([current-custodian thread-custodian])
-        (thread (thunk
-                 (goto-gopher req this initial-selection-pos)
-                 (set! current-url (browser-url req initial-selection-pos))))))
-
+        (cond
+          [(equal? (request-protocol req) 'gopher)
+           (thread (thunk
+                    (goto-gopher req this initial-selection-pos)
+                    (set! current-url (browser-url req initial-selection-pos))))]
+          [(equal? (request-protocol req) 'gemini)
+           (thread (thunk
+                    (goto-gemini req this)
+                    (set! current-url (browser-url req initial-selection-pos))))]
+          [else
+           ;; TODO display error to user?
+           (eprintf "Invalid request protocol!~n")])))
+    
     (define/public (go req)
-      (when (request-updates-page? req)
+      (when (or (equal? (request-protocol req) 'gemini)
+                (request-updates-page? req))
         ;; add current page to history
         (when current-url
           (if selection
@@ -333,11 +457,17 @@
               (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
               (push-history current-url)))
         ;; set current-url to false while loading
-        (set! current-url #f)        
+        (set! current-url #f)
         (send (get-canvas) update-address req))
       
       
       (cond
+        [(equal? (request-protocol req) 'gemini)
+         ;; gemini complicates matters because we must send our request before we know the type of request
+         ;; and what we need to do with it. We have to handle this in the request thread instead of before
+         ;; creating the thread as we do with gopher.
+         (load-page req)]
+        ;; Below here is for gopher
         [(download-only-type? (request-type req)) ; open save file dialog
          (thread (thunk
                   (save-gopher-to-file req)))]

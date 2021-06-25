@@ -146,6 +146,17 @@
     (set-delta-background canvas-bg-color))
   (send standard set-delta standard-delta)
 
+  (define header (send style-list new-named-style "Header" standard))
+  (define header-delta (make-object style-delta%))
+  (send* header-delta
+    (set-family 'modern)
+    ;(set-face font-name)
+    (set-delta 'change-size 12)
+    (set-delta 'change-weight 'bold)
+    (set-delta-foreground text-fg-color)
+    (set-delta-background canvas-bg-color))
+  (send header set-delta header-delta)
+  
   (define (make-color-style name color)
     ;; Each style created with this procedure copies "Standard" style
     ;; and creates a new style by name 'name' and with the foreground
