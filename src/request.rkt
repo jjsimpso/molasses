@@ -135,5 +135,5 @@
            host
            (or (and (string? port) (string->number (substring port 1)))
                (default-port protocol))
-           path-plus-query
+           (if (non-empty-string? path-plus-query) path-plus-query "/")
            #f))
