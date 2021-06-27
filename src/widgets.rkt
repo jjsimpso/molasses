@@ -88,7 +88,7 @@
     [(equal? (request-type req) #\5) #f]
     [(equal? (request-type req) #\9) #f]
     [(equal? (request-type req) #\7) #f]
-    [(equal? (request-type req) #\h) #f]
+    [(gopher-url-request? req) #f]
     [else #t]))
 
 (define (download-only-type? type)
@@ -123,7 +123,7 @@
        (insert-directory-line page-text line))
      (close-input-port (gopher-response-data-port resp))
      (send page-text init-gopher-menu initial-selection-pos)]
-    [(equal? item-type #\0) ; text
+    [(or (equal? item-type #\0) (equal? item-type #\h)) ; text or html(just display raw html for now)
      (send page-text erase)
      ;; insert one line at a time to handle end of line conversion
      #;(for ([line (in-lines (gopher-response-data-port resp))])
@@ -162,7 +162,10 @@
      (eprintf "saving binary file to ~a~n" path)
      (with-output-to-file path
        (lambda () (write-bytes data)))]
-    [else (void)])
+    [else
+     (send page-text erase)
+     (send page-text insert (format "Unsupported type ~a" item-type))
+     (close-input-port (gopher-response-data-port resp))])
   (send page-text end-edit-sequence))
 
 (define (save-gopher-to-file req)
@@ -503,8 +506,8 @@
          (set! current-url #f)
          (send (get-canvas) update-address query-request)
          (load-page query-request)]
-        [(equal? (request-type req) #\h)
-         ; html, open in external browser
+        [(gopher-url-request? req)
+         ; URL, probably http, open in external browser
          (eprintf "opening ~a in browser~n" (gopher-url-request->url req))
          (send-url (gopher-url-request->url req) #t)]
         [else
