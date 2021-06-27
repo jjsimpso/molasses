@@ -212,21 +212,37 @@
 (define gemini-link-re #px"^=>\\s*(\\S*)\\s*(.*)")
 
 ; Headers start with "#", "##", or "###".
-(define gemini-header-re #px"^#{1,3}.*")
+(define gemini-header-re #px"^#{1,3} .*")
 
 (define (insert-gemini-text text-widget data-port base-url)
   (define standard-style
     (send (send text-widget get-style-list) find-named-style "Standard"))
   (define link-style
     (send (send text-widget get-style-list) find-named-style "Link"))
-  (define header-style
-    (send (send text-widget get-style-list) find-named-style "Header"))
+  (define header1-style
+    (send (send text-widget get-style-list) find-named-style "Header1"))
+  (define header2-style
+    (send (send text-widget get-style-list) find-named-style "Header2"))
+  (define header3-style
+    (send (send text-widget get-style-list) find-named-style "Header3"))
   
   ; We'll just display them as bold text
   (define (line->header line)  
+    (define octothorpe-count
+      (if (equal? (string-ref line 1) #\#)
+          (if (equal? (string-ref line 2) #\#)
+              3
+              2)
+          1))
     (define text-snip (new string-snip%))
-    (send text-snip set-style header-style)
-    (send text-snip insert line (string-length line))
+    (send text-snip set-style
+          (case octothorpe-count
+            [(1) header1-style]
+            [(2) header2-style]
+            [(3) header3-style]))
+    ;; skip the mandatory space character after the last '#'
+    (define header-string (substring line (add1 octothorpe-count)))
+    (send text-snip insert header-string (string-length header-string))
     text-snip)
   
   ; Plain text lines are anything else

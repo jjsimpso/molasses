@@ -146,17 +146,6 @@
     (set-delta-background canvas-bg-color))
   (send standard set-delta standard-delta)
 
-  (define header (send style-list new-named-style "Header" standard))
-  (define header-delta (make-object style-delta%))
-  (send* header-delta
-    (set-family 'modern)
-    ;(set-face font-name)
-    (set-delta 'change-size 12)
-    (set-delta 'change-weight 'bold)
-    (set-delta-foreground text-fg-color)
-    (set-delta-background canvas-bg-color))
-  (send header set-delta header-delta)
-  
   (define (make-color-style name color)
     ;; Each style created with this procedure copies "Standard" style
     ;; and creates a new style by name 'name' and with the foreground
@@ -166,8 +155,20 @@
                       (copy standard-delta)
                       (set-delta-foreground color))))
 
+  (define (make-header-style name size)
+    ;; Each style created with this procedure copies "Standard" style
+    ;; and creates a new style by name 'name' and with the size 'size'.
+    (send (send style-list new-named-style name standard)
+          set-delta (send* (make-object style-delta%)
+                      (copy standard-delta)
+                      (set-delta 'change-weight 'bold)
+                      (set-delta 'change-size size))))
+  
   (make-color-style "Link" link-color)
   (make-color-style "Link Highlight" link-highlight-color)
+  (make-header-style "Header1" 24)
+  (make-header-style "Header2" 18)
+  (make-header-style "Header3" 14)
 )
 
 (define (get-status-bar widget)
