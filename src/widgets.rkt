@@ -284,6 +284,15 @@
                                        (string-append base-url link-url))))))]
       [(regexp gemini-header-re)
        (send text-widget insert (line->header line))]
+      ["```"
+       ;; read preformatted text until we read another "```". technically should create
+       ;; a style for this that has a fixed width font, but our default font already
+       ;; is fixed width.
+       (let loop ([line (read-line data-port)])
+         (unless (or (equal? line "```") (equal? line eof))
+           (send text-widget insert (line->text line))
+           (send text-widget insert "\n")
+           (loop (read-line data-port))))]
       [_ (send text-widget insert (line->text line))])
     (send text-widget insert "\n")))
 
