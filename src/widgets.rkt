@@ -302,17 +302,24 @@
   (eprintf "goto-gemini: ~a, ~a~n" (request-host req) (request-path/selector req))
 
   (define (show-gemini-error msg)
+    (send page-text begin-edit-sequence)
     (send page-text erase)
-    (send page-text insert msg))
-    
+    (send page-text insert msg)
+    (send page-text end-edit-sequence))
+  
   (define resp (gemini-fetch (request-host req)
                              (request-path/selector req)
                              (request-port req)))
 
-  (send page-text begin-edit-sequence)
+  (eprintf "goto-gemini: status=~a, from-url=~a~n" (gemini-response-status resp) (gemini-response-from-url resp))
+  
   (case (gemini-response-status resp)
-    [(10) (void)]
+    [(10)
+     (define query-string (get-text-from-user "Input required" (gemini-response-meta resp)))
+     (goto-gemini (url->request (string-append (gemini-response-from-url resp) "?" query-string))
+                  page-text)]
     [(20 21)
+     (send page-text begin-edit-sequence)
      (let ([data-port (gemini-response-data-port resp)]
            [mimetype (gemini-response-meta resp)]
            [from-url (gemini-response-from-url resp)])
@@ -331,7 +338,8 @@
                                   "\n"))
           (send page-text set-position 0)]
          [else
-          (void)]))]
+          (void)]))
+     (send page-text end-edit-sequence)]
     [(30 31)
      (void)]
     
@@ -348,7 +356,6 @@
     [(54) (show-gemini-error "Bad request")]
     
     [else (show-gemini-error "Unknown status code returned from server")])
-  (send page-text end-edit-sequence)
   (close-input-port (gemini-response-data-port resp)))
 
 (define browser-text%
