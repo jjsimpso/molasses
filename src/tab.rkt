@@ -41,7 +41,7 @@
     
   (define address-pane
     (new horizontal-pane% (parent tab-contents)
-         (alignment '(left top))
+         (alignment '(left center))
          (stretchable-width #t)
          (stretchable-height #f)
          (horiz-margin 10)))
