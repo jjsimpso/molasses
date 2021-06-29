@@ -217,6 +217,8 @@
 ; Headers start with "#", "##", or "###".
 (define gemini-header-re #px"^#{1,3} .*")
 
+(define gemini-pre-re #px"^```.*")
+
 (define (insert-gemini-text text-widget data-port base-url)
   (define standard-style
     (send (send text-widget get-style-list) find-named-style "Standard"))
@@ -284,7 +286,7 @@
                                        (string-append base-url link-url))))))]
       [(regexp gemini-header-re)
        (send text-widget insert (line->header line))]
-      ["```"
+      [(regexp gemini-pre-re)
        ;; read preformatted text until we read another "```". technically should create
        ;; a style for this that has a fixed width font, but our default font already
        ;; is fixed width.
