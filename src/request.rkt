@@ -137,9 +137,16 @@
            (get-type-from-path path/selector protocol)))
 
 (define (make-gemini-request protocol host port path-plus-query)
+  ;; prevent double slash at begining of path, can happen when url ending in slash is concatenated
+  ;; with a path starting with a slash
+  (define sanitized-path
+    (if (string-prefix? path-plus-query "//")
+        (substring path-plus-query 1)
+        path-plus-query))
+  
   (request protocol
            host
            (or (and (string? port) (string->number (substring port 1)))
                (default-port protocol))
-           (if (non-empty-string? path-plus-query) path-plus-query "/")
+           (if (non-empty-string? sanitized-path) sanitized-path "/")
            #f))
