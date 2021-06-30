@@ -163,6 +163,19 @@
         (copy-port (gopher-response-data-port resp) (current-output-port))
         (mark-download-complete (current-thread))))))
 
+(define (save-gemini-to-file data-port)
+  (eprintf "save-gemini-to-file~n")
+  ;; get path from user
+  (define path (put-file "Save file as..."))
+  (eprintf "saving binary file to ~a~n" path)
+
+  (when path
+    (track-download (current-thread) data-port path)
+    (with-output-to-file path #:exists 'truncate
+      (lambda ()
+        (copy-port data-port (current-output-port))
+        (mark-download-complete (current-thread))))))
+
 (define (selection-clickback-handler text-widget start end)
   (define snip (send text-widget find-snip start 'after))
   (eprintf "clickback: start=~a, snip=~a~n" start snip)
@@ -276,6 +289,9 @@
       [_ (send text-widget insert (line->text line))])
     (send text-widget insert "\n")))
 
+;; unlike goto-gopher, goto-gemini returns a request
+;; the initial request can be forwaded to a new request for queries
+;; 
 (define (goto-gemini req page-text)
   (eprintf "goto-gemini: ~a, ~a~n" (request-host req) (request-path/selector req))
 
@@ -283,19 +299,22 @@
     (send page-text begin-edit-sequence)
     (send page-text erase)
     (send page-text insert msg)
-    (send page-text end-edit-sequence))
+    (send page-text end-edit-sequence)
+    (close-input-port (gemini-response-data-port resp)))
   
   (define resp (gemini-fetch (request-host req)
                              (request-path/selector req)
                              (request-port req)))
 
   (eprintf "goto-gemini: status=~a, from-url=~a~n" (gemini-response-status resp) (gemini-response-from-url resp))
-  
+
+  ;; the case needs to be in tail position so that it returns the correct value to load-page
   (case (gemini-response-status resp)
     [(10)
      (define query-string (get-text-from-user "Input required" (gemini-response-meta resp)))
-     (goto-gemini (url->request (string-append (gemini-response-from-url resp) "?" query-string))
-                  page-text)]
+     (define query-request (url->request (string-append (gemini-response-from-url resp) "?" query-string)))
+     (close-input-port (gemini-response-data-port resp))
+     (goto-gemini query-request page-text)]
     [(20 21)
      (send page-text begin-edit-sequence)
      (let ([data-port (gemini-response-data-port resp)]
@@ -317,9 +336,14 @@
           (send page-text set-position 0)]
          [else
           (void)]))
-     (send page-text end-edit-sequence)]
+     (send page-text end-edit-sequence)
+     (close-input-port (gemini-response-data-port resp))
+     req]
     [(30 31)
-     (void)]
+     ;; initiate a file download
+     ;; not an error, but use to display some text to the page instead
+     (show-gemini-error (format "Initiated download of ~a~n" (request-path/selector req)))
+     (save-gemini-to-file (gemini-response-data-port resp))]
     
     [(40) (show-gemini-error "Temporary failure")]
     [(41) (show-gemini-error "Server unavailable")]
@@ -333,8 +357,7 @@
     [(53) (show-gemini-error "Proxy request refused")]
     [(54) (show-gemini-error "Bad request")]
     
-    [else (show-gemini-error "Unknown status code returned from server")])
-  (close-input-port (gemini-response-data-port resp)))
+    [else (show-gemini-error "Unknown status code returned from server")]))
 
 (define browser-text%
   (class text% (super-new)
@@ -466,8 +489,10 @@
                     (set! current-url (browser-url req initial-selection-pos))))]
           [(equal? (request-protocol req) 'gemini)
            (thread (thunk
-                    (goto-gemini req this)
-                    (set! current-url (browser-url req initial-selection-pos))))]
+                    (define terminal-request (goto-gemini req this))
+                    (unless (void? terminal-request)
+                      (send (get-canvas) update-address terminal-request)
+                      (set! current-url (browser-url terminal-request #f)))))]
           [else
            ;; TODO display error to user?
            (eprintf "Invalid request protocol!~n")])))
