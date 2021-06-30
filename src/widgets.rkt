@@ -83,18 +83,6 @@
      (insert-menu-item text-widget dir-entity)
      (send text-widget insert "\n")]))
 
-(define (request-updates-page? req)
-  (cond
-    [(equal? (request-type req) #\5) #f]
-    [(equal? (request-type req) #\9) #f]
-    [(equal? (request-type req) #\7) #f]
-    [(gopher-url-request? req) #f]
-    [else #t]))
-
-(define (download-only-type? type)
-  (or (equal? type #\5)
-      (equal? type #\9)))
-
 (define (goto-gopher req page-text [initial-selection-pos #f])
   (eprintf "goto-gopher: ~a, ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req) initial-selection-pos)
 
@@ -109,8 +97,7 @@
                         #\1))
 
   ;; reset gopher-menu? boolean to default when loading a new page
-  (when (request-updates-page? req)
-    (set-field! gopher-menu? page-text #f))
+  (set-field! gopher-menu? page-text #f)
 
   (send page-text begin-edit-sequence)
   (cond
@@ -153,15 +140,6 @@
      (send page-text erase)
      (send page-text insert img)
      (send page-text set-position 0)]
-    [(download-only-type? item-type) ; binary
-     ;; this works around an issue in my server that I need to fix. it is automatically
-     ;; closing sockets after ten seconds, causing the socket to timeout before the read can
-     ;; complete due to the save file dialog. change this once I fix that.
-     (define data (port->bytes (gopher-response-data-port resp) #:close? #t))
-     (define path (put-file "Save file as..."))
-     (eprintf "saving binary file to ~a~n" path)
-     (with-output-to-file path
-       (lambda () (write-bytes data)))]
     [else
      (send page-text erase)
      (send page-text insert (format "Unsupported type ~a" item-type))
@@ -460,6 +438,16 @@
             (scroll-to-position 0))))
 
     (define/private (load-page req [initial-selection-pos #f])
+      ;; add current page to history
+      (when current-url
+        (if selection
+            ;; also save the position of the selection that we are following so we can return to it
+            (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
+            (push-history current-url)))
+      ;; set current-url to false while loading
+      (set! current-url #f)
+      (send (get-canvas) update-address req)
+      
       ;; this will shutdown the previous custodian on every page load.
       ;; seems wasteful not to re-use the custodian if we aren't actually interrupting
       ;; the previous thread's work.
@@ -485,18 +473,9 @@
            (eprintf "Invalid request protocol!~n")])))
     
     (define/public (go req)
-      (when (or (equal? (request-protocol req) 'gemini)
-                (request-updates-page? req))
-        ;; add current page to history
-        (when current-url
-          (if selection
-              ;; also save the position of the selection that we are following so we can return to it
-              (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
-              (push-history current-url)))
-        ;; set current-url to false while loading
-        (set! current-url #f)
-        (send (get-canvas) update-address req))
-      
+      (define (download-only-type? type)
+        (or (equal? type #\5)
+            (equal? type #\9)))
       
       (cond
         [(equal? (request-protocol req) 'gemini)
@@ -516,13 +495,6 @@
                                         (request-port req)
                                         (string-append (request-path/selector req) "\t" query-string)
                                         #\1))
-         (when current-url
-           (if selection
-               ;; also save the position of the selection that we are following so we can return to it
-               (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
-               (push-history current-url history)))
-         (set! current-url #f)
-         (send (get-canvas) update-address query-request)
          (load-page query-request)]
         [(gopher-url-request? req)
          ; URL, probably http, open in external browser
