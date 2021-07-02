@@ -16,8 +16,10 @@
 
 (define (parse-header header)
   (let ([parts (string-split header)])
-     (values (string->number (car parts))
-             (cadr parts))))
+     (values (or (string->number (car parts)) 40)
+             (if (> (length parts) 1)
+                 (cadr parts)
+                 ""))))
 
 (define (make-url-and-query host path-plus-query port)
   (if (string-contains? path-plus-query "?")

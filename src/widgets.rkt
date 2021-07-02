@@ -254,6 +254,9 @@
     (send link-snip insert text (string-length text))
     link-snip)
 
+  (define (replace-final-path-element path relative-path)
+    (string-append (path->string (path-only path)) relative-path))
+  
   (for ([line (in-lines data-port)])
     (match line
       [(regexp gemini-link-re)
@@ -271,10 +274,18 @@
              (send text-widget last-position)
              (lambda (text-widget start end)
                (eprintf "following gemini link: ~a~n" link-url)
-               (send text-widget go
-                     (url->request (if (string-prefix? link-url "gemini://")
-                                       link-url
-                                       (string-append base-url link-url))))))]
+               (if (regexp-match #px"^(\\w+://).*" link-url)
+                   (send text-widget go (url->request link-url))
+                   ;; handle partial URLs
+                   (let ([base-req (url->request base-url)])
+                     (send text-widget go
+                           (struct-copy request
+                                        base-req
+                                        [path/selector
+                                         (if (equal? (string-ref link-url 0) #\/)
+                                             link-url
+                                             (replace-final-path-element (request-path/selector base-req) link-url))]))))))]
+
       [(regexp gemini-header-re)
        (send text-widget insert (line->header line))]
       [(regexp gemini-pre-re)
@@ -306,7 +317,8 @@
                              (request-path/selector req)
                              (request-port req)))
 
-  (eprintf "goto-gemini: status=~a, from-url=~a~n" (gemini-response-status resp) (gemini-response-from-url resp))
+  (eprintf "goto-gemini: status=~a, meta=~a, from-url=~a~n" (gemini-response-status resp) (gemini-response-meta resp)
+           (gemini-response-from-url resp))
 
   ;; the case needs to be in tail position so that it returns the correct value to load-page
   (case (gemini-response-status resp)
