@@ -25,14 +25,15 @@
            (gopher-dir-entity-type dir-entity)))
 
 ;; (regexp-match #px"^(\\w+://)?([a-zA-Z0-9\\.]+)(:\\d+)?(/.*)?" "gopher://abc6.def.com:70/a/b/c.txt")
-(define (url->request url)
+(define (url->request url #:default-scheme [default-scheme 'gopher])
   (define url-components (regexp-match #px"^(\\w+://)?([a-zA-Z0-9\\-\\.]+)(:\\d+)?(/.*)?$" url))
 
   (if url-components
-      (let ([protocol (string->protocol (second url-components))]
+      (let ([protocol (string->protocol (second url-components) default-scheme)]
             [host (third url-components)]
             [port (fourth url-components)]
             [path/selector (or (fifth url-components) "")])
+        (eprintf "url->request: ~a,~a,~a,~a~n" protocol host port path/selector)
         (if (eq? protocol 'gemini)
             (make-gemini-request protocol
                                  host
@@ -98,9 +99,9 @@
 
 
 ;; Helper functions
-(define (string->protocol s)
+(define (string->protocol s [default 'gopher])
   (cond
-    [(false? s) 'gopher] ;; default to gopher
+    [(false? s) default]
     [(equal? s "gopher://") 'gopher]
     [(equal? s "gemini://") 'gemini]
     [else 'unsupported]))
