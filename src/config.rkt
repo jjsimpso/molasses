@@ -4,6 +4,7 @@
 
 (define pref-file (build-path (find-system-path 'pref-dir) "molasses" "config.rktd"))
 (define tabs-file (build-path (find-system-path 'pref-dir) "molasses" "saved-tabs.rktd"))
+(define bookmarks-file (build-path (find-system-path 'pref-dir) "molasses" "bookmarks.rktd"))
 
 (define home-page-url "gopher://gopher.endangeredsoft.org")
 

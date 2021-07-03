@@ -263,7 +263,7 @@
        (define link-start-pos (send text-widget last-position))
        (define link-parts (string-split line))
        (define link-url (second link-parts))
-       (eprintf "link parts = ~a~n" link-parts)
+       ;(eprintf "link parts = ~a~n" link-parts)
        (send text-widget insert
              (make-link (if (> (length link-parts) 2)
                             (string-join (cddr link-parts))
@@ -721,6 +721,10 @@
         (define index (send tabpanel get-selection))
         (send tabpanel set-item-label index label-text)))
 
+    (define/public (get-address-field)
+      (when address-text-field
+        (send address-text-field get-value)))
+    
     (define/private (set-address-field address-text)
       (when address-text-field
         (send address-text-field set-value address-text)))

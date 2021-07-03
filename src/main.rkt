@@ -1,7 +1,9 @@
 #lang racket/gui
 
 (require "tab.rkt"
-         "download.rkt")
+         "request.rkt"
+         "download.rkt"
+         "bookmark.rkt")
 
 (define frame 
   (new
@@ -74,6 +76,10 @@
   (new menu%
        [label "Font"]
        [parent menu-bar]))
+(define bookmark-menu
+  (new menu%
+       (label "&Bookmarks")
+       (parent menu-bar)))
 (define help-menu
   (new menu%
        (label "&Help")
@@ -126,13 +132,47 @@
         (when ed
           (send ed auto-wrap (send item is-checked?))))))
 
+;(append-editor-font-menu-items font-menu)
+
 (new menu-item%
      (label "Exit")
      (parent file-menu)
      (callback 
       (lambda (item event) (send frame on-exit))))
 
-;(append-editor-font-menu-items font-menu)
+;; callback function for bookmark menu items
+(define (goto-bookmark url)
+  (eprintf "opening bookmark to ~a~n" url)
+  (define page-canvas (active-page-canvas tab-panel))
+  (define page-text (send page-canvas get-editor))
+  (send page-text go (url->request url))
+  (send page-canvas focus))
+
+(new menu-item%
+     (label "Bookmark Page")
+     (parent bookmark-menu)
+     (callback
+      (lambda (item event)
+        (define browser-canvas (active-page-canvas tab-panel))
+        (when browser-canvas
+          (define url (send browser-canvas get-address-field))
+          (define label (get-text-from-user "Add Bookmark"
+                                            "Label:"
+                                            frame
+                                            url))
+          (when label
+            (add-bookmark url label bookmark-menu goto-bookmark))))))
+
+(new separator-menu-item%
+     (parent bookmark-menu))
+
+;; Add bookmarks to the Bookmark menu
+
+(load-bookmarks)
+
+(populate-bookmark-menu bookmark-menu goto-bookmark)
+
+;; Create Tab Panel and status bars
 
 (define tab-panel 
   (new tab-panel%
