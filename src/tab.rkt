@@ -18,20 +18,49 @@
 
 ;; holds the ui component and data for a tab
 (struct tab-info
-  (index
-   contents
-   address-text)
+  (id
+   index
+   contents)
   #:prefab
   #:mutable)
 
 ;; list of tab-info structs
 (define tab-list '())
 
+(define tab-id-counter 0)
+(define (new-tab-id)
+  (set! tab-id-counter (add1 tab-id-counter))
+  tab-id-counter)
+
+;; returns a tab-info struct from the global tab-list or #f
+(define (find-tab-at-index index)
+  (for/first ([tab (in-list tab-list)]
+              #:when (= index (tab-info-index tab)))
+    tab))
+
+;; returns a tab-info struct from the global tab-list or #f
+(define (find-tab-with-id id)
+  (for/first ([tab (in-list tab-list)]
+              #:when (= id (tab-info-id tab)))
+    tab))
+
 (define (init-new-tab tp index)
   (printf "Init tab selection ~a~n" index)
   (send tp change-children
         (lambda (c*) '()))
 
+  ;; callback called when the browser-canvas loads a new page
+  ;; update the tab label for the canvas's tab and update the address text field in the tab
+  (define (update-address id req)
+    (define tab (find-tab-with-id id))
+    ;; set the label for the tab
+    (send tp set-item-label (tab-info-index tab) (string-append (request-host req) (request-path/selector req)))
+    ;; set the address text field
+    (send address-field set-value (request->url req)))
+
+  ;; generate unique ID for the tab
+  (define tab-id (new-tab-id))
+  
   (define tab-contents
     (new vertical-panel% (parent tp)
          (alignment '(left top))
@@ -89,9 +118,9 @@
   (define page-canvas
     (new browser-canvas% (parent tab-contents)
          (editor page-text)
-         (address-text-field address-field)
          (status-bar (get-status-bar tp))
-         (tabpanel tp)
+         (tab-id tab-id)
+         (update-address-cb update-address)
          (style '(auto-hscroll auto-vscroll))
          (wheel-step 3)))
 
@@ -109,7 +138,7 @@
   (send address-field focus)
   
   (set! tab-list
-        (cons (tab-info index tab-contents (send address-field get-value))
+        (cons (tab-info tab-id index tab-contents)
               tab-list)))
 
 (define (active-page-canvas tp)
@@ -192,12 +221,6 @@
                   #:when (is-a? grandchild text-field%))
         grandchild))))
 
-;; returns a tab-info struct from the global tab-list or #f
-(define (find-tab-at-index index)
-  (for/first ([tab (in-list tab-list)]
-              #:when (= index (tab-info-index tab)))
-    tab))
-
 ;; returns the tab at index's canvas widget or #f
 (define (find-tab-canvas index)
   (define tab (find-tab-at-index index))
@@ -241,7 +264,7 @@
   (unless (= num-tabs 2)
     ;; remove the deleted tab from our global list of tabs
     (set! tab-list
-          (remove (tab-info tab-index null null)
+          (remove (tab-info null tab-index null)
                   tab-list
                   (lambda (a b)
                     (= (tab-info-index a)

@@ -153,9 +153,9 @@
      (parent bookmark-menu)
      (callback
       (lambda (item event)
-        (define browser-canvas (active-page-canvas tab-panel))
-        (when browser-canvas
-          (define url (send browser-canvas get-address-field))
+        (define address-field (find-tp-address-field tab-panel))
+        (when address-field
+          (define url (send address-field get-value))
           (define label (get-text-from-user "Add Bookmark"
                                             "Label:"
                                             frame

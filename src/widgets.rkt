@@ -711,28 +711,15 @@
 
 (define browser-canvas%
   (class editor-canvas% (super-new)
-    (init-field [address-text-field #f]
-                [status-bar #f]
-                [tabpanel #f])
+    (init-field [status-bar #f]
+                [tab-id 0]
+                [update-address-cb #f])
     (inherit get-editor)
 
-    (define/private (set-tab-label label-text)
-      (when tabpanel
-        (define index (send tabpanel get-selection))
-        (send tabpanel set-item-label index label-text)))
-
-    (define/public (get-address-field)
-      (when address-text-field
-        (send address-text-field get-value)))
-    
-    (define/private (set-address-field address-text)
-      (when address-text-field
-        (send address-text-field set-value address-text)))
-
-    ;; takes a request struct and updates UI elements
+    ;; takes a request struct and updates UI elements using the provided callback
     (define/public (update-address req)
-      (set-tab-label (string-append (request-host req) (request-path/selector req)))
-      (set-address-field (request->url req)))
+      (when update-address-cb
+        (update-address-cb tab-id req)))
     
     (define/public (load-restore-data list-of-data)
       (define editor (get-editor))
