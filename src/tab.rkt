@@ -58,6 +58,26 @@
     ;; set the address text field
     (send address-field set-value (request->url req)))
 
+  ;; callback called when the browser-canvas needs to update a status message
+  ;; update the text of the message% widget on the status bar. we only have
+  ;; one global status bar, so the tab id parameter isn't used
+  (define (update-status id text)
+    (send status-msg set-label text))
+
+  ;; gotta replace this at some point
+  ;; gets the status-msg message% widget from status-bar
+  (define status-msg
+    (let ([frame (send tp get-top-level-window)])
+      ;; only message% widget in the frame is the status-msg in the status bar
+      (when frame
+        (define children (send frame get-children))
+        (for/first ([child (in-list children)]
+                    #:when (is-a? child horizontal-pane%))
+          (define grandchildren (send child get-children))
+          (for/first ([grandchild (in-list grandchildren)]
+                      #:when (is-a? grandchild message%))
+            grandchild)))))
+  
   ;; generate unique ID for the tab
   (define tab-id (new-tab-id))
   
@@ -118,8 +138,8 @@
   (define page-canvas
     (new browser-canvas% (parent tab-contents)
          (editor page-text)
-         (status-bar (get-status-bar tp))
          (tab-id tab-id)
+         (update-status-cb update-status)
          (update-address-cb update-address)
          (style '(auto-hscroll auto-vscroll))
          (wheel-step 3)))
@@ -200,16 +220,6 @@
   (make-header-style "Header3" 14)
 )
 
-(define (get-status-bar widget)
-  (define frame (send widget get-top-level-window))
-
-  ;; only message% widget in the frame is the status bar
-  (when frame
-    (define children (send frame get-children))
-    (for/first ([child (in-list children)]
-                #:when (is-a? child message%))
-      child)))
-
 (define (find-tp-address-field tp)
   (define tab (find-tab-at-index (send tp get-selection)))
   (when tab
@@ -236,7 +246,9 @@
   (fill-tab-content tp)
   (define tab-canvas (find-tab-canvas tab-index))
   (when tab-canvas
-      (send tab-canvas focus)))
+    ; this will set the status bar's message to the current status of the new tab
+    (send tab-canvas update-status)
+    (send tab-canvas focus)))
 
 (define (fill-tab-content tp)
   (define current-tab-index (send tp get-selection))

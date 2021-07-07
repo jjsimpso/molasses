@@ -482,6 +482,7 @@
       ;; set current-url to false while loading
       (set! current-url #f)
       (send (get-canvas) update-address req)
+      (send (get-canvas) update-status "Loading...")
       
       ;; this will shutdown the previous custodian on every page load.
       ;; seems wasteful not to re-use the custodian if we aren't actually interrupting
@@ -498,12 +499,14 @@
           [(equal? (request-protocol req) 'gopher)
            (thread (thunk
                     (goto-gopher req this initial-selection-pos)
+                    (send (get-canvas) update-status "Ready")
                     (set! current-url (browser-url req initial-selection-pos))))]
           [(equal? (request-protocol req) 'gemini)
            (thread (thunk
                     (define terminal-request (goto-gemini req this))
                     (unless (void? terminal-request)
                       (send (get-canvas) update-address terminal-request)
+                      (send (get-canvas) update-status "Ready")
                       (set! current-url (browser-url terminal-request #f)))))]
           [else
            ;; TODO display error to user?
@@ -711,11 +714,21 @@
 
 (define browser-canvas%
   (class editor-canvas% (super-new)
-    (init-field [status-bar #f]
-                [tab-id 0]
+    (init-field [tab-id 0]
+                [update-status-cb #f]
                 [update-address-cb #f])
     (inherit get-editor)
 
+    (define status-text "Ready")
+    
+    (define/public (update-status [text #f])
+      (when update-status-cb
+        (if text
+            (begin
+              (set! status-text text)
+              (update-status-cb tab-id text))
+            (update-status-cb tab-id status-text))))
+    
     ;; takes a request struct and updates UI elements using the provided callback
     (define/public (update-address req)
       (when update-address-cb
