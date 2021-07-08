@@ -6,8 +6,9 @@ Molasses is a multi-tabbed browser for the "slow" internet, including Gopher and
 * **Done** View images within the application(JPEG, PNG, and GIF are supported).
 * **Done** Download binary files not viewable within Molasses.
 * **Done** Separate browsing history for each tab and back button.
+* **Done** Bookmarks
 * Allow optional TLS connections for Gopher.
-* Gemini protocol support.
+* **Partial** Gemini protocol support.
 * Simple inline HTML viewing without using an external application.
 
 ## Platform
