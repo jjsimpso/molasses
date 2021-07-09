@@ -333,7 +333,7 @@
            [mimetype (gemini-response-meta resp)]
            [from-url (gemini-response-from-url resp)])
        (cond
-         [(string=? mimetype "text/gemini")
+         [(string-prefix? mimetype "text/gemini")
           (send page-text erase)
           (insert-gemini-text page-text data-port from-url)
           (send page-text set-position 0)]
