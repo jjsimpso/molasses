@@ -346,7 +346,13 @@
                                   "\r\n"
                                   "\n"))
           (send page-text set-position 0)]
+         [(string-prefix? mimetype "image/")
+          (define img (make-object image-snip% data-port 'unknown))
+          (send page-text erase)
+          (send page-text insert img)
+          (send page-text set-position 0)]
          [else
+          (show-gemini-error (format "unknown mimetype: ~a~n" mimetype))
           (void)]))
      (send page-text end-edit-sequence)
      (close-input-port (gemini-response-data-port resp))
