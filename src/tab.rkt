@@ -56,7 +56,11 @@
     ;; set the label for the tab
     (send tp set-item-label (tab-info-index tab) (string-append (request-host req) (request-path/selector req)))
     ;; set the address text field
-    (send address-field set-value (request->url req)))
+    (send address-field set-value (request->url req))
+    ;; disable/enable the back button based on existence of history
+    (if (empty? (send page-canvas get-history))
+        (send back-button enable #f)
+        (send back-button enable #t)))
 
   ;; callback called when the browser-canvas needs to update a status message
   ;; update the text of the message% widget on the status bar. we only have
@@ -98,13 +102,13 @@
   (define back-button
     (new button% (parent address-pane)
          (label "\u2190") ; Back arrow
-         (enabled #t)
+         (enabled #f)
          (horiz-margin 0)
          (callback
           (lambda (item event)
             (send page-text go-back)))))
   
-  (define forward-button
+  #;(define forward-button
     (new button% (parent address-pane)
          (label "\u2192") ; Forward arrow
          (enabled #f)

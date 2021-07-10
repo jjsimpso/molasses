@@ -585,6 +585,11 @@
     (define/public (get-restore-data)
       (list current-url history))
 
+    ;; return a list of requests since browser-url is a private struct
+    (define/public (get-history)
+      (for/list ([item (in-list history)])
+        (browser-url-req item)))
+      
     (define/override (on-local-char event)
       (if gopher-menu?
           (case (send event get-key-code)
@@ -744,6 +749,12 @@
       (define editor (get-editor))
       (if editor
           (send editor get-restore-data)
+          '()))
+
+    (define/public (get-history)
+      (define editor (get-editor))
+      (if editor
+          (send editor get-history)
           '()))
     ))
 
