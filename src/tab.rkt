@@ -106,7 +106,9 @@
          (horiz-margin 0)
          (callback
           (lambda (item event)
-            (send page-text go-back)))))
+            (send page-text go-back)
+            ;; set the focus back to the canvas
+            (send page-canvas focus)))))
   
   #;(define forward-button
     (new button% (parent address-pane)
@@ -114,7 +116,18 @@
          (enabled #f)
          (horiz-margin 0)
          #;(callback (λ _ (go-forward)))))
-  
+
+  (define cancel-button
+    (new button% (parent address-pane)
+         (label "\u2715") ; cross mark
+         (enabled #t)
+         (horiz-margin 0)
+         (callback
+          (lambda (item event)
+            (send page-text cancel-request)
+            ;; set the focus back to the canvas
+            (send page-canvas focus)))))
+
   (define address-field
     (new address-field% (parent address-pane)
          (label "")
@@ -129,7 +142,7 @@
 
   (define delete-tab-button
     (new button% (parent address-pane)
-         (label "Delete Tab") ; Forward arrow
+         (label "Delete Tab")
          (enabled #t)
          (horiz-margin 0)
          (callback

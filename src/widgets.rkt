@@ -415,7 +415,13 @@
          (super can-do-edit-operation? op recursive?)]))
     
     (define/private (push-history url)
-      (set! history (cons url history)))
+      ;; prevent sequence of duplicate URLs. replace top element of history if it
+      ;; refers to the same URL/Request. essentially this only updates the current
+      ;; selection position.
+      (if (and (not (empty? history))
+               (equal? (browser-url-req url) (browser-url-req (car history))))
+          (set! history (cons url (cdr history)))
+          (set! history (cons url history))))
 
     (define/private (pop-history)
       (if (not (empty? history))
@@ -423,6 +429,11 @@
           (set! history (cdr history))
           top)
         '()))
+
+    (define/private (previous-history)
+      (if (not (empty? history))
+          (car history)
+          #f))
 
     ;; starting from snip, find the next menu snip in between the the lines start and end
     ;; if snip is already in the region, just return it
@@ -478,42 +489,60 @@
             ;; scroll to the beginning
             (scroll-to-position 0))))
 
-    (define/private (load-page req [initial-selection-pos #f])
-      ;; add current page to history
-      (when current-url
-        (if selection
-            ;; also save the position of the selection that we are following so we can return to it
-            (push-history (struct-copy browser-url current-url [selection-pos (get-snip-position selection)]))
-            (push-history current-url)))
-      ;; set current-url to false while loading
-      (set! current-url #f)
-      (send (get-canvas) update-address req)
-      (send (get-canvas) update-status "Loading...")
-      
-      ;; this will shutdown the previous custodian on every page load.
-      ;; seems wasteful not to re-use the custodian if we aren't actually interrupting
-      ;; the previous thread's work.
+    (define/public (cancel-request)
       (when (custodian? thread-custodian)
         (custodian-shutdown-all thread-custodian)
         ;; without this the editor gets stuck in no refresh mode
         (when (in-edit-sequence?)
-          (end-edit-sequence)))
+          (end-edit-sequence))
+        (set! thread-custodian #f)
+        ;; update status message
+        (send (get-canvas) update-status "Ready")))
       
+    (define/private (load-page req [initial-selection-pos #f] #:back? [back? #f])
+      (define (make-history-updater old-url old-position)
+        (if back?
+            (lambda () (pop-history))
+            (lambda ()
+              ;; add previous page to history
+              (when old-url
+                (when old-position (eprintf "update-history: selection pos ~a~n" old-position))
+                (if old-position
+                    ;; also save the position of the selection that we are following so we can return to it
+                    (push-history (struct-copy browser-url old-url [selection-pos old-position]))
+                    (push-history old-url))))))
+      
+      ;; this will shutdown the previous custodian on every page load.
+      ;; seems wasteful not to re-use the custodian if we aren't actually interrupting
+      ;; the previous thread's work.
+      (cancel-request)
       (set! thread-custodian (make-custodian))
+
+      (when selection
+        (eprintf "load-page: current-selection pos ~a~n" (get-snip-position selection)))
+      (define update-history (make-history-updater current-url
+                                                   (if selection
+                                                       (get-snip-position selection)
+                                                       #f)))
+      (send (get-canvas) update-address req)
+      (send (get-canvas) update-status "Loading...")
+      
       (parameterize ([current-custodian thread-custodian])
         (cond
           [(equal? (request-protocol req) 'gopher)
            (thread (thunk
                     (goto-gopher req this initial-selection-pos)
-                    (send (get-canvas) update-status "Ready")
-                    (set! current-url (browser-url req initial-selection-pos))))]
+                    (update-history)
+                    (set! current-url (browser-url req initial-selection-pos))
+                    (send (get-canvas) update-status "Ready")))]
           [(equal? (request-protocol req) 'gemini)
            (thread (thunk
                     (define terminal-request (goto-gemini req this))
                     (unless (void? terminal-request)
+                      (update-history)
+                      (set! current-url (browser-url terminal-request #f))
                       (send (get-canvas) update-address terminal-request)
-                      (send (get-canvas) update-status "Ready")
-                      (set! current-url (browser-url terminal-request #f)))))]
+                      (send (get-canvas) update-status "Ready"))))]
           [else
            ;; TODO display error to user?
            (eprintf "Invalid request protocol!~n")])))
@@ -551,11 +580,10 @@
 
     (define/public (go-back)
       (unless (empty? history)
-        (define prev-url (pop-history))
-        (set! current-url #f)
+        (define prev-url (previous-history))
         (define req (browser-url-req prev-url))
         (send (get-canvas) update-address req)
-        (load-page req (browser-url-selection-pos prev-url))))
+        (load-page req (browser-url-selection-pos prev-url) #:back? #t)))
 
     (define/private (current-selection-visible?)
       (define pos (get-snip-position selection))
