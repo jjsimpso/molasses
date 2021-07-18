@@ -1,6 +1,7 @@
 #lang racket/gui
 
-(require "tab.rkt"
+(require "const.rkt"
+         "tab.rkt"
          "request.rkt"
          "download.rkt"
          "bookmark.rkt")
@@ -139,6 +140,29 @@
      (parent file-menu)
      (callback 
       (lambda (item event) (send frame on-exit))))
+
+(new menu-item%
+     (label "About")
+     (parent help-menu)
+     (callback
+      (lambda (item event)
+        (define dialog
+          (new dialog% (parent frame)
+               (label "About Molasses")
+               (spacing 10)
+               (border 10)))
+        (define panel
+          (new horizontal-panel% (parent dialog)
+               (alignment '(center center))
+               (spacing 10)))
+        #;(new message% (parent panel)
+             (label about-icon))
+        (new message% (parent panel)
+             (label about-version-string))
+        (new button% (parent dialog)
+             (label "OK")
+             (callback (lambda _ (send dialog show #f))))
+        (send dialog show #t))))
 
 ;; callback function for bookmark menu items
 (define (goto-bookmark url)
