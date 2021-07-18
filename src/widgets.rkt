@@ -275,7 +275,14 @@
              (lambda (text-widget start end)
                (eprintf "following gemini link: ~a~n" link-url)
                (if (regexp-match #px"^(\\w+://).*" link-url)
-                   (send text-widget go (url->request link-url))
+                   (cond
+                     [(string-prefix? link-url "gemini://")
+                      (send text-widget go (url->request link-url))]
+                     [(string-prefix? link-url "gopher://")
+                      (send text-widget go (url->request link-url))]
+                     [(or (string-prefix? link-url "http://")
+                          (string-prefix? link-url "https://"))
+                      (send-url link-url #t)])
                    ;; handle partial URLs
                    (let ([base-req (url->request base-url)])
                      (send text-widget go
@@ -506,7 +513,6 @@
             (lambda ()
               ;; add previous page to history
               (when old-url
-                (when old-position (eprintf "update-history: selection pos ~a~n" old-position))
                 (if old-position
                     ;; also save the position of the selection that we are following so we can return to it
                     (push-history (struct-copy browser-url old-url [selection-pos old-position]))
@@ -518,8 +524,6 @@
       (cancel-request)
       (set! thread-custodian (make-custodian))
 
-      (when selection
-        (eprintf "load-page: current-selection pos ~a~n" (get-snip-position selection)))
       (define update-history (make-history-updater current-url
                                                    (if selection
                                                        (get-snip-position selection)
