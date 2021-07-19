@@ -528,7 +528,6 @@
                                                    (if selection
                                                        (get-snip-position selection)
                                                        #f)))
-      (send (get-canvas) update-address req)
       (send (get-canvas) update-status "Loading...")
       
       (parameterize ([current-custodian thread-custodian])
@@ -538,6 +537,7 @@
                     (goto-gopher req this initial-selection-pos)
                     (update-history)
                     (set! current-url (browser-url req initial-selection-pos))
+                    (send (get-canvas) update-address req)
                     (send (get-canvas) update-status "Ready")))]
           [(equal? (request-protocol req) 'gemini)
            (thread (thunk
@@ -586,7 +586,6 @@
       (unless (empty? history)
         (define prev-url (previous-history))
         (define req (browser-url-req prev-url))
-        (send (get-canvas) update-address req)
         (load-page req (browser-url-selection-pos prev-url) #:back? #t)))
 
     (define/private (current-selection-visible?)
