@@ -200,10 +200,10 @@ simpler time. Currently Molasses supports two protocols: Gopher and
 Gemini.  Gopher is an authentically old protocol while Gemini is a new
 protocol with an old soul.
 
-Molasses is a tabbed browser, so open as many as you want! When
-exiting open tabs are saved, so your tabs will still be there when
-you next run the program. Molasses doesn't currently support
-rearranging tabs, but you can close them with the Delete Tabs button.
+Molasses is a tabbed browser, so open as many tabs as you want! When
+exiting, any open tabs are saved and will be restored the next time
+you open the application.  Molasses doesn't currently support
+rearranging tabs, but you can close them with the Delete Tab button.
 
 
 GOPHER
