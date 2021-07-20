@@ -10,6 +10,7 @@
          active-page-canvas
          tab-panel-callback
          goto-home-page
+         goto-help-page
          next-tab
          prev-tab
          find-tp-address-field
@@ -181,10 +182,65 @@
 (define (active-page-canvas tp)
   (find-tab-canvas (send tp get-selection)))
 
-(define (goto-home-page)
-  (define page-canvas (find-tab-canvas 0))
+(define (goto-home-page tp)
+  (define page-canvas (active-page-canvas tp))
   (define page-text (send page-canvas get-editor))
   (send page-text go (url->request home-page-url))
+  (send page-canvas focus))
+
+(define (goto-help-page tp)
+  (define page-canvas (active-page-canvas tp))
+  (define page-text (send page-canvas get-editor))
+  (send page-text erase)
+  (send page-text insert #<<END
+This is Molasses, your browser for the slow Internet. If you think of
+the Internet as the information super highway, then think of the slow
+Internet as a country road. You can use Molasses to return to a
+simpler time. Currently Molasses supports two protocols: Gopher and
+Gemini.  Gopher is an authentically old protocol while Gemini is a new
+protocol with an old soul.
+
+Molasses is a tabbed browser, so open as many as you want! When
+exiting open tabs are saved, so your tabs will still be there when
+you next run the program. Molasses doesn't currently support
+rearranging tabs, but you can close them with the Delete Tabs button.
+
+
+GOPHER
+------
+
+Gopher is Molasses's default protocol. If an address is entered
+without a protocol then it is assumed to be a Gopher address. 
+
+Gopher menu navigation is based on Lynx and consists of the following
+commands:
+
+ * Up and Down arrows move the selection between menu items.
+ * Right Arrow or Return follows the currently selected menu item 
+   link. Left mouse click also follows links/menu items.
+ * Left Arrow goes back to the previous page.There is also a back
+   button on the Toolbar.
+ * Page Up/Down scrolls the page without changing the selection, as
+   does the mouse scroll wheel.
+ * In text files, as opposed to Gopher menus, Up and Down arrows 
+   scroll the page line-by-line.
+
+
+GEMINI
+------
+
+Gemini navigation is entirely mouse-based. So using it is pretty much
+the same as using a typical web browser.
+
+
+GLOBAL SHORTCUT KEYS
+--------------------
+CTRL+L     : Select address text
+CTRL+PGUP  : Next Tab
+CTRL+PGDWN : Next Tab
+END
+        )
+  (send page-text set-position 0)
   (send page-canvas focus))
 
 (define (next-tab tp)

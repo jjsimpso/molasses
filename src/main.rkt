@@ -142,7 +142,7 @@
       (lambda (item event) (send frame on-exit))))
 
 (new menu-item%
-     (label "About")
+     (label "About Molasses")
      (parent help-menu)
      (callback
       (lambda (item event)
@@ -233,7 +233,7 @@
 (unless (load-tabs tab-panel)
   (send tab-panel append "New")        
   (init-new-tab tab-panel 0)
-  (goto-home-page))
+  (goto-help-page tab-panel))
 
 ;; this tab is actually just used as a button
 (send tab-panel append "+")

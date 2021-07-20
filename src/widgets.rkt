@@ -635,7 +635,7 @@
                [(or (not selection) (current-selection-visible?))
                 ;; change selection to the next menu snip
                 (define item (find-next-menu-snip selection))
-                (eprintf "browser-text on-local-char down: new selection = ~a~n" item)
+                ;(eprintf "browser-text on-local-char down: new selection = ~a~n" item)
                 (when item
                   (define pos (get-snip-position item))
                   (change-highlight selection item)
@@ -659,7 +659,7 @@
                 (scroll-to-position (get-snip-position selection))])]
             [(up)
              (define item (find-prev-menu-snip selection))
-             (eprintf "browser-text on-local-char up: new selection = ~a~n" item)
+             ;(eprintf "browser-text on-local-char up: new selection = ~a~n" item)
              (when item
                (define pos (get-snip-position item))
                (change-highlight selection item)
