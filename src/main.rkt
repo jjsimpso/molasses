@@ -142,6 +142,13 @@
       (lambda (item event) (send frame on-exit))))
 
 (new menu-item%
+     (label "Introduction")
+     (parent help-menu)
+     (callback
+      (lambda (item event)
+        (open-help-tab tab-panel))))
+
+(new menu-item%
      (label "About Molasses")
      (parent help-menu)
      (callback
@@ -231,7 +238,7 @@
 
 ;; load any saved tabs, else initialize one new tab
 (unless (load-tabs tab-panel)
-  (send tab-panel append "New")        
+  (send tab-panel append "New")
   (init-new-tab tab-panel 0)
   (goto-help-page tab-panel))
 

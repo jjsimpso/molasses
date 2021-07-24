@@ -13,6 +13,7 @@
          goto-help-page
          next-tab
          prev-tab
+         open-help-tab
          find-tp-address-field
          save-tabs
          load-tabs)
@@ -256,6 +257,17 @@ END
   (unless (< new-tab 0)
     (send tp set-selection new-tab)
     (change-tab tp new-tab)))
+
+(define (open-help-tab tp)
+  ;; get current index of the 'plus' tab. will be our new 'help' tab
+  (define plus-tab-index (sub1 (send tp get-number)))
+  (send tp append "Introduction")
+  (send tp delete plus-tab-index)
+  (send tp append "+")
+  (send tp set-selection plus-tab-index)
+  (init-new-tab tp plus-tab-index)
+  (change-tab tp plus-tab-index)
+  (goto-help-page tp))
 
 (define (init-styles style-list)
   (define standard (send style-list find-named-style "Standard"))
