@@ -254,20 +254,52 @@
     (send link-snip insert text (string-length text))
     link-snip)
 
+  ;; returns 2 values: the url and user-friendly name, which could be equal
+  (define (parse-link line)
+    (define line-len (string-length line))
+    ;; start parsing after the '=>'
+    (let loop ([start-pos 2])
+      (if (char-blank? (string-ref line start-pos))
+          (loop (add1 start-pos))
+          ;; found start of url
+          (let loop2 ([index start-pos]
+                      [url-pos start-pos])
+            (cond
+              [(= index line-len)
+               ;; end of string, no user-friendly name
+               (define url (substring line url-pos))
+               (values url url)]
+              [(char-blank? (string-ref line index))
+               ;; start looking for start of user-friendly name
+               (let loop3 ([index (add1 index)]
+                           [url (substring line url-pos index)]
+                           [name-pos (add1 index)])
+                 (cond
+                   [(= index line-len)
+                    ;; end of string, end of user-friendly name
+                    (values url (substring line name-pos))]
+                   [(and (char-blank? (string-ref line index))
+                         (= index name-pos))
+                    ;; skip initial whitespace
+                    (loop3 (add1 index) url (add1 index))]
+                   [(char-blank? (string-ref line index))
+                    ;; whitespace within the user-friendly name
+                    (loop3 (add1 index) url name-pos)]
+                   [else
+                    (loop3 (add1 index) url name-pos)]))]
+              [else
+               (loop2 (add1 index) url-pos)])))))
+    
   (define (replace-final-path-element path relative-path)
     (string-append (path->string (path-only path)) relative-path))
   
   (for ([line (in-lines data-port)])
     (match line
       [(regexp gemini-link-re)
+       (define-values (link-url link-name) (parse-link line))
        (define link-start-pos (send text-widget last-position))
-       (define link-parts (string-split line))
-       (define link-url (second link-parts))
-       ;(eprintf "link parts = ~a~n" link-parts)
-       (send text-widget insert
-             (make-link (if (> (length link-parts) 2)
-                            (string-join (cddr link-parts))
-                            link-url)))
+       (eprintf "link url=~a, name=~a~n" link-url link-name)
+       (send text-widget insert (make-link link-name))
        ;; add clickback to link region
        (send text-widget set-clickback
              link-start-pos
