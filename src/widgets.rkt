@@ -166,8 +166,8 @@
 (define (save-gemini-to-file data-port remote-path)
   (eprintf "save-gemini-to-file~n")
   ;; get path from user
-  (define path (put-file "Save file as..."))
-  (eprintf "saving binary file to ~a~n" path #f #f (file-name-from-path (string->path remote-path)))
+  (define path (put-file "Save file as..." #f #f (file-name-from-path (string->path remote-path))))
+  (eprintf "saving binary file to ~a~n" path)
 
   (when path
     (track-download (current-thread) data-port path)
@@ -367,16 +367,18 @@
      (close-input-port (gemini-response-data-port resp))
      (goto-gemini query-request page-text)]
     [(20 21)
-     (send page-text begin-edit-sequence)
      (let ([data-port (gemini-response-data-port resp)]
            [mimetype (gemini-response-meta resp)]
            [from-url (gemini-response-from-url resp)])
        (cond
          [(string-prefix? mimetype "text/gemini")
+          (send page-text begin-edit-sequence)
           (send page-text erase)
           (insert-gemini-text page-text data-port from-url)
-          (send page-text set-position 0)]
+          (send page-text set-position 0)
+          (send page-text end-edit-sequence)]
          [(string-prefix? mimetype "text/")
+          (send page-text begin-edit-sequence)
           (send page-text erase)
           ;; this isn't ideal but is still a lot faster than inserting one line at a time
           ;; (text% treats #\return as a newline so DOS formatted files have extra newlines)
@@ -384,22 +386,30 @@
                                   (port->string data-port)
                                   "\r\n"
                                   "\n"))
-          (send page-text set-position 0)]
+          (send page-text set-position 0)
+          (send page-text end-edit-sequence)]
          [(string-prefix? mimetype "image/")
           (define img (make-object image-snip% data-port 'unknown))
+          (send page-text begin-edit-sequence)
           (send page-text erase)
           (send page-text insert img)
-          (send page-text set-position 0)]
+          (send page-text set-position 0)
+          (send page-text end-edit-sequence)]
          [else
-          (show-gemini-error (format "unknown mimetype: ~a~n" mimetype))
-          (void)]))
-     (send page-text end-edit-sequence)
+          (send page-text begin-edit-sequence)
+          (send page-text erase)
+          (send page-text insert (format "unknown mimetype: ~a~n" mimetype))
+          (send page-text insert (format "Initiating download of ~a~n" (request-path/selector req)))
+          (send page-text end-edit-sequence)
+          (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]))
      (close-input-port (gemini-response-data-port resp))
      req]
     [(30 31)
      ;; initiate a file download
-     ;; not an error, but use to display some text to the page instead
-     (show-gemini-error (format "Initiated download of ~a~n" (request-path/selector req)))
+     (send page-text begin-edit-sequence)
+     (send page-text erase)
+     (send page-text insert (format "Initiating download of ~a~n" (request-path/selector req)))
+     (send page-text end-edit-sequence)
      (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]
     
     [(40) (show-gemini-error "Temporary failure")]
