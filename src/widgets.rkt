@@ -149,7 +149,7 @@
 (define (save-gopher-to-file req)
   (eprintf "save-gopher-to-file: ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req))
   ;; get path from user
-  (define path (put-file "Save file as..."))
+  (define path (put-file "Save file as..." #f #f (file-name-from-path (string->path (request-path/selector req)))))
   (eprintf "saving binary file to ~a~n" path)
 
   (when path
@@ -163,11 +163,11 @@
         (copy-port (gopher-response-data-port resp) (current-output-port))
         (mark-download-complete (current-thread))))))
 
-(define (save-gemini-to-file data-port)
+(define (save-gemini-to-file data-port remote-path)
   (eprintf "save-gemini-to-file~n")
   ;; get path from user
   (define path (put-file "Save file as..."))
-  (eprintf "saving binary file to ~a~n" path)
+  (eprintf "saving binary file to ~a~n" path #f #f (file-name-from-path (string->path remote-path)))
 
   (when path
     (track-download (current-thread) data-port path)
@@ -368,7 +368,7 @@
      ;; initiate a file download
      ;; not an error, but use to display some text to the page instead
      (show-gemini-error (format "Initiated download of ~a~n" (request-path/selector req)))
-     (save-gemini-to-file (gemini-response-data-port resp))]
+     (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]
     
     [(40) (show-gemini-error "Temporary failure")]
     [(41) (show-gemini-error "Server unavailable")]
