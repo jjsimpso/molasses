@@ -248,8 +248,8 @@
     (send text-snip insert text (string-length text))
     text-snip)
 
-  (define (make-link text)
-    (define link-snip (new string-snip%))
+  (define (make-link text url)
+    (define link-snip (new gemini-link-snip% (url url)))
     (send link-snip set-style link-style)
     (send link-snip insert text (string-length text))
     link-snip)
@@ -299,7 +299,7 @@
        (define-values (link-url link-name) (parse-link line))
        (define link-start-pos (send text-widget last-position))
        (eprintf "link url=~a, name=~a~n" link-url link-name)
-       (send text-widget insert (make-link link-name))
+       (send text-widget insert (make-link link-name link-url))
        ;; add clickback to link region
        (send text-widget set-clickback
              link-start-pos
@@ -850,6 +850,28 @@
       (when (send e button-down? 'left)
         (follow-link)))
     ))
+
+(define gemini-link-snip%
+  (class string-snip%
+    (init-field [url ""])
+    (inherit get-flags set-flags get-admin)
+    (super-new)
+    (set-flags (cons 'handles-all-mouse-events (get-flags)))
+    (set-flags (cons 'handles-between-events (get-flags)))
+
+    (define status-text (string-append "=> " url))
+    
+    (define/override (on-event dc x y editorx editory event)
+      (when (send event moving?)
+        (define canvas (send (send (get-admin) get-editor) get-canvas))
+        ;(eprintf "mouse motion event~n")
+        (send canvas update-status status-text))
+      (super on-event dc x y editorx editory event))
+
+    (define/override (on-goodbye-event dc x y editorx editory event)
+      (define canvas (send (send (get-admin) get-editor) get-canvas))
+      ;(eprintf "goodbye event~n")
+      (send canvas update-status "Ready"))))
 
 (define address-field%
   (class text-field%
