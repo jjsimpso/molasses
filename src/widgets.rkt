@@ -332,7 +332,7 @@
        ;; a style for this that has a fixed width font, but our default font already
        ;; is fixed width.
        (let loop ([line (read-line data-port)])
-         (unless (or (equal? line "```") (equal? line eof))
+         (unless (or (regexp-match gemini-pre-re line) (equal? line eof))
            (send text-widget insert (line->text line))
            (send text-widget insert "\n")
            (loop (read-line data-port))))]
@@ -862,6 +862,7 @@
     (define status-text (string-append "=> " url))
     
     (define/override (on-event dc x y editorx editory event)
+      ;(eprintf "mouse event ~a~n" (send event get-event-type))
       (when (send event moving?)
         (define canvas (send (send (get-admin) get-editor) get-canvas))
         ;(eprintf "mouse motion event~n")
