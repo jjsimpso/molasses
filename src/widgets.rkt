@@ -513,7 +513,13 @@
         [(and (>= current-line start)
               (<= current-line end))
          snip]))
-    
+
+    (define/private (get-visible-line-count)
+      (define start (box 0))
+      (define end (box 0))
+      (get-visible-line-range start end #f)
+      (- (unbox end) (unbox start)))
+
     (define/public (find-first-menu-snip)
       (define first-snip (find-first-snip))
       (if (is-a? first-snip menu-item-snip%)
@@ -533,8 +539,14 @@
                       pos
                       (+ pos (send selection get-count)))
         (if initial-selection-pos
-            ;; make the selection visible
-            (scroll-to-position initial-selection-pos)
+            ;; make the selection visible but don't adjust the screen so the selection isn't at
+            ;; the very bottom if the enter page won't fit
+            (scroll-to-position 0
+                                #f
+                                (line-start-position
+                                 (+ (position-line initial-selection-pos) 
+                                    (floor (/ (get-visible-line-count) 4))))
+                                'end)
             ;; scroll to the beginning
             (scroll-to-position 0))))
 
