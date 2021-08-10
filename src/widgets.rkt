@@ -697,16 +697,16 @@
                   (define start (box 0))
                   (define end (box 0))
                   (get-visible-line-range start end #f)
+                  (define visible-lines (- (unbox end) (unbox start)))
+                  (define scroll-amount (truncate (* (/ visible-lines 4) 3)))
                   (set-position pos 'same #f #t 'default)
                   (when (>= (position-line pos) (unbox end))
                     ;; scroll down to show the next page
-                    (define new-start (line-start-position (unbox end)))
-                    (eprintf "scrolling to line ~a-~a~n" (unbox end) (+ (unbox end) (- (unbox end) (unbox start))))
-                    (scroll-to-position new-start
+                    (define new-start (+ (unbox start) scroll-amount))
+                    (eprintf "scrolling to line ~a-~a~n" new-start (+ new-start visible-lines))
+                    (scroll-to-position (line-start-position new-start)
                                         #f
-                                        (max pos
-                                             (line-start-position (sub1 (+ (unbox end)
-                                                                           (- (unbox end) (unbox start))))))
+                                        (line-start-position (+ new-start visible-lines))
                                         'end)))]
                [else
                 ;; else scroll to make the current selection visible
@@ -721,17 +721,16 @@
                (define start (box 0))
                (define end (box 0))
                (get-visible-line-range start end #f)
+               (define visible-lines (- (unbox end) (unbox start)))
+               (define scroll-amount (ceiling (* (/ visible-lines 4) 3)))
                (set-position pos 'same #f #t 'default)
                (when (< (position-line pos) (unbox start))
                  ;; scroll up to show the previous page
-                 (define new-end (line-start-position (sub1 (unbox start))))
-                 (eprintf "scrolling to line ~a-~a~n" (max 0 (- (unbox start) (- (unbox end) (unbox start)))) (sub1 (unbox start)))
-                 (scroll-to-position (min pos
-                                          (line-start-position (max 0  ; start position cannot be negative
-                                                                    (- (unbox start)
-                                                                       (- (unbox end) (unbox start))))))
+                 (define new-start (max 0 (- (unbox start) scroll-amount))) ; start position cannot be negative
+                 (eprintf "scrolling to line ~a-~a~n" new-start (+ new-start visible-lines))
+                 (scroll-to-position (line-start-position new-start)
                                      #f
-                                     new-end
+                                     (line-start-position (+ new-start visible-lines))
                                      'start)))]
             [(left)
              (go-back)]
