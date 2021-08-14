@@ -419,5 +419,6 @@ END
           (send tp set-selection index)
           (init-new-tab tp index)
           (define canvas (find-tab-canvas index))
-          (send canvas load-restore-data (deserialize tab))))
+          (send canvas load-restore-data (deserialize tab))
+          (send canvas focus)))
       #f))
