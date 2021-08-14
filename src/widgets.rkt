@@ -142,7 +142,10 @@
      (send page-text set-position 0)]
     [else
      (send page-text erase)
-     (send page-text insert (format "Unsupported type ~a" item-type))
+     (send page-text insert (format "Unsupported type ~a~n~n" item-type))
+     (insert-menu-item page-text
+                       (gopher-dir-entity #\9 "Download file" (request-path/selector req) (request-host req) (~a (request-port req))))
+     (send page-text init-gopher-menu #f)
      (close-input-port (gopher-response-data-port resp))])
   (send page-text end-edit-sequence))
 
