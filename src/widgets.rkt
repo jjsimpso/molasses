@@ -28,6 +28,9 @@
       [(#\7) "(SRCH) "]
       [(#\8) " (TEL) "]
       [(#\h) "(HTML) "]
+      [(#\d) "(DOCU) "]
+      [(#\P) " (PDF) "]
+      [(#\>) " (EXT) "] ;; special type created for internal use. indicates an option to the user to open a file externally.
       [else  "(UNKN) "]))
 
   (define standard-style
@@ -140,6 +143,17 @@
      (send page-text erase)
      (send page-text insert img)
      (send page-text set-position 0)]
+    [(or (equal? item-type #\d) ; document (PDF, Word, etc.)
+         (equal? item-type #\P))
+     (send page-text erase)
+     (send page-text insert (format "How would you like to handle document ~a ?~n~n" (request-path/selector req)))
+     (insert-menu-item page-text
+                       (gopher-dir-entity #\> "Open file in external application" (request-path/selector req) (request-host req) (~a (request-port req))))
+     (send page-text insert "\n")
+     (insert-menu-item page-text
+                       (gopher-dir-entity #\9 "Download file" (request-path/selector req) (request-host req) (~a (request-port req))))
+     (send page-text init-gopher-menu #f)
+     (close-input-port (gopher-response-data-port resp))]
     [else
      (send page-text erase)
      (send page-text insert (format "Unsupported type ~a~n~n" item-type))
@@ -148,6 +162,39 @@
      (send page-text init-gopher-menu #f)
      (close-input-port (gopher-response-data-port resp))])
   (send page-text end-edit-sequence))
+
+;; download gopher selector to a temp file and open it with an external application
+;; set plumber to clean up file when molasses exits
+;; on linux, use 'xdg-open' to find the correct application
+;; on mac osx, use 'open'
+;; on windows, use shell-execute
+(define (open-with-app req)
+  (define tmp-file (make-temporary-file "molasses-doc-tmp-~a"))
+  (when tmp-file
+    (define resp (gopher-fetch (request-host req)
+                               (request-path/selector req)
+                               (request-type req)
+                               (request-port req)))
+    ;; download to temp file
+    (with-output-to-file tmp-file #:exists 'truncate
+      (lambda ()
+        (eprintf "open-with-app: saving tmp file: ~a" tmp-file)
+        (copy-port (gopher-response-data-port resp) (current-output-port))))
+    (close-input-port (gopher-response-data-port resp))
+    ;; delete the temp file when molasses exits
+    (plumber-add-flush! (current-plumber)
+                        (lambda (plumber) (delete-file tmp-file)))
+    ;; open the file in a system dependent way
+    (define platform (system-type))
+    (cond 
+      [(eq? platform 'windows)
+       (shell-execute "open" (path->string tmp-file) "" (current-directory) 'sw_shownormal)]
+      [(eq? platform 'unix)
+        (define exec-path (find-executable-path "xdg-open"))
+        (when exec-path (system* exec-path tmp-file))]
+      [(eq? platform 'macosx)
+        (define exec-path (find-executable-path "open"))
+        (when exec-path (system* exec-path tmp-file))])))
 
 (define (save-gopher-to-file req)
   (eprintf "save-gopher-to-file: ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req))
@@ -164,7 +211,8 @@
     (with-output-to-file path #:exists 'truncate
       (lambda ()
         (copy-port (gopher-response-data-port resp) (current-output-port))
-        (mark-download-complete (current-thread))))))
+        (mark-download-complete (current-thread))))
+    (close-input-port (gopher-response-data-port resp))))
 
 (define (save-gemini-to-file data-port remote-path)
   (eprintf "save-gemini-to-file~n")
@@ -612,7 +660,7 @@
       (define (download-only-type? type)
         (or (equal? type #\5)
             (equal? type #\9)))
-      
+
       (cond
         [(equal? (request-protocol req) 'gemini)
          ;; gemini complicates matters because we must send our request before we know the type of request
@@ -623,6 +671,9 @@
         [(download-only-type? (request-type req)) ; open save file dialog
          (thread (thunk
                   (save-gopher-to-file req)))]
+        [(equal? (request-type req) #\>) ; open file in external application
+         (thread (thunk
+                  (open-with-app req)))]
         [(equal? (request-type req) #\7) ; gopher index search
          ;; prompt user for query string
          (define query-string (get-text-from-user "Query" "search string"))
