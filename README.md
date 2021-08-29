@@ -7,9 +7,11 @@ Molasses is a multi-tabbed browser for the "slow" internet, including Gopher and
 * **Done** Download binary files not viewable within Molasses.
 * **Done** Separate browsing history for each tab and back button.
 * **Done** Bookmarks
+* **Done** Open HTTP URLs(in Gopher, selectors starting with "GET /" or "URL:") in external browser.
 * Allow optional TLS connections for Gopher.
-* **Partial** Gemini protocol support.
+* **Done** Gemini protocol support.
 * Simple inline HTML viewing without using an external application.
+* **Done** Give option to open 'd' and 'P' item types in external application.
 
 ## Platform
 Molasses is a Racket GUI application, which means it will run on Windows, MacOS X, and Linux. If Racket is already installed on a system, Molasses can be launched from the source with the command 'racket main.rkt'. Binary executables which include the Racket runtime will be made available here in the future.
