@@ -1,5 +1,5 @@
 # Molasses
-Molasses is a multi-tabbed browser for the "slow" internet, including Gopher and eventually Gemini. The name comes from an expression in American English, "Slow as molasses!" Molasses's design goals are:
+Molasses is a multi-tabbed browser for the "slow" internet, including Gopher and Gemini. The name comes from an expression in American English, "Slow as molasses!" Molasses's design goals are:
 
 * **Done** Support easy keyboard navigation of Gopher menus similar to Lynx.
 * **Done** Support multiple tabs similar to modern web browsers.
