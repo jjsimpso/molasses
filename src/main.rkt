@@ -210,7 +210,8 @@
     (super-new)
 
     (define/override (on-close-request index)
-      (eprintf "on-close-request: enter~n"))
+      (eprintf "on-close-request: enter~n")
+      (delete-tab this index))
 
     (define/override (on-new-request index)
       (eprintf "on-new-request: enter~n"))))

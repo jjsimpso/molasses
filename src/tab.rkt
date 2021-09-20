@@ -13,6 +13,7 @@
          goto-help-page
          next-tab
          prev-tab
+         delete-tab
          open-help-tab
          find-tp-address-field
          save-tabs
@@ -141,15 +142,6 @@
                           'text-field-enter)
               (send page-text go (url->request (send item get-value)))
               (send page-canvas focus))))))
-
-  (define delete-tab-button
-    (new button% (parent address-pane)
-         (label "Delete Tab")
-         (enabled #t)
-         (horiz-margin 0)
-         (callback
-          (lambda (item event)
-            (delete-tab tp)))))
 
   (define page-text
     (new browser-text%))
@@ -354,8 +346,7 @@ END
         (init-new-tab item tab-index))
       (change-tab item tab-index)))
 
-(define (delete-tab tp)
-  (define tab-index (send tp get-selection))
+(define (delete-tab tp tab-index)
   (define num-tabs  (send tp get-number))
   ;; can't delete the only tab (not counting +)
   (unless (= num-tabs 2)
