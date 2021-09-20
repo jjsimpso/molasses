@@ -205,10 +205,20 @@
 
 ;; Create Tab Panel and status bars
 
+(define molasses-tab-panel%
+  (class tab-panel%
+    (super-new)
+
+    (define/override (on-close-request index)
+      (eprintf "on-close-request: enter~n"))
+
+    (define/override (on-new-request index)
+      (eprintf "on-new-request: enter~n"))))
+
 (define tab-panel 
-  (new tab-panel%
+  (new molasses-tab-panel%
        (parent frame)
-       ;(style '(can-close))
+       (style '(flat-portable no-border new-button can-close))
        (callback tab-panel-callback)
        (choices '())))
 
