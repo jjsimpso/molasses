@@ -337,8 +337,11 @@ END
   (change-tab item tab-index))
 
 (define (new-tab tp)
+  (define new-index (send tp get-number))
   (send tp append "New")
-  (init-new-tab tp (send tp get-number)))
+  (init-new-tab tp new-index)
+  (send tp set-selection new-index)
+  (change-tab tp new-index))
 
 (define (delete-tab tp tab-index)
   (define num-tabs  (send tp get-number))
