@@ -13,6 +13,7 @@
          goto-help-page
          next-tab
          prev-tab
+         new-tab
          delete-tab
          open-help-tab
          find-tp-address-field
@@ -237,28 +238,25 @@ END
   (send page-canvas focus))
 
 (define (next-tab tp)
-  (define num-tabs (sub1 (send tp get-number))) ; don't count + tab
+  (define num-tabs (send tp get-number))
   (define new-tab (add1 (send tp get-selection)))
   (unless (>= new-tab num-tabs)
     (send tp set-selection new-tab)
     (change-tab tp new-tab)))
 
 (define (prev-tab tp)
-  (define num-tabs (sub1 (send tp get-number))) ; don't count + tab
   (define new-tab (sub1 (send tp get-selection)))
   (unless (< new-tab 0)
     (send tp set-selection new-tab)
     (change-tab tp new-tab)))
 
 (define (open-help-tab tp)
-  ;; get current index of the 'plus' tab. will be our new 'help' tab
-  (define plus-tab-index (sub1 (send tp get-number)))
+  ;; get index of the new help tab
+  (define help-tab-index (send tp get-number))
   (send tp append "Introduction")
-  (send tp delete plus-tab-index)
-  (send tp append "+")
-  (send tp set-selection plus-tab-index)
-  (init-new-tab tp plus-tab-index)
-  (change-tab tp plus-tab-index)
+  (send tp set-selection help-tab-index)
+  (init-new-tab tp help-tab-index)
+  (change-tab tp help-tab-index)
   (goto-help-page tp))
 
 (define (init-styles style-list)
@@ -336,20 +334,16 @@ END
 
 (define (tab-panel-callback item event)
   (define tab-index (send item get-selection))
-  (define tab-label (send item get-item-label tab-index))
+  (change-tab item tab-index))
 
-  (if (string=? tab-label "+")
-      (begin
-        (send item append "New")
-        (send item delete tab-index)
-        (send item append "+")
-        (init-new-tab item tab-index))
-      (change-tab item tab-index)))
+(define (new-tab tp)
+  (send tp append "New")
+  (init-new-tab tp (send tp get-number)))
 
 (define (delete-tab tp tab-index)
   (define num-tabs  (send tp get-number))
-  ;; can't delete the only tab (not counting +)
-  (unless (= num-tabs 2)
+  ;; can't delete the only tab
+  (unless (= num-tabs 1)
     ;; remove the deleted tab from our global list of tabs
     (set! tab-list
           (remove (tab-info null tab-index null)
@@ -363,8 +357,9 @@ END
         (set-tab-info-index! tab (sub1 (tab-info-index tab)))))
     ;; delete the tab from the panel
     (send tp delete tab-index)
-    ;; change to the new tab in the same location unless the new tab is +
-    (if (equal? (send tp get-item-label tab-index) "+")
+    ;; change to the new tab in the same location unless we deleted the last tab,
+    ;; then change to the new last tab at tab-index - 1.
+    (if (= tab-index (sub1 num-tabs))
         (begin
           (send tp set-selection (sub1 tab-index))
           (change-tab tp (sub1 tab-index)))
@@ -380,7 +375,7 @@ END
 
 (define (save-tabs tp)
   ;(eprintf "Saving tabs~n")
-  (define num-tabs (sub1 (send tp get-number))) ; subtract one because + tab doesn't count
+  (define num-tabs (send tp get-number))
   (define tabs
     (let loop ([index (sub1 num-tabs)]
                [tabs '()])

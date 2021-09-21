@@ -213,8 +213,9 @@
       (eprintf "on-close-request: enter~n")
       (delete-tab this index))
 
-    (define/override (on-new-request index)
-      (eprintf "on-new-request: enter~n"))))
+    (define/override (on-new-request)
+      (eprintf "on-new-request: enter~n")
+      (new-tab this))))
 
 (define tab-panel 
   (new molasses-tab-panel%
@@ -252,9 +253,6 @@
   (send tab-panel append "New")
   (init-new-tab tab-panel 0)
   (goto-help-page tab-panel))
-
-;; this tab is actually just used as a button
-(send tab-panel append "+")
 
 ;(send tab-panel set-selection 0)
 
