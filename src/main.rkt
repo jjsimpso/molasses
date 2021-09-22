@@ -209,6 +209,10 @@
   (class tab-panel%
     (super-new)
 
+    (define/augment (on-reorder former-indices)
+      (eprintf "on-reorder: enter~n")
+      (update-tab-order this former-indices))
+    
     (define/override (on-close-request index)
       (eprintf "on-close-request: enter~n")
       (delete-tab this index))
@@ -220,7 +224,7 @@
 (define tab-panel 
   (new molasses-tab-panel%
        (parent frame)
-       (style '(flat-portable no-border new-button can-close))
+       (style '(flat-portable no-border new-button can-close can-reorder))
        (callback tab-panel-callback)
        (choices '())))
 

@@ -15,6 +15,7 @@
          prev-tab
          new-tab
          delete-tab
+         update-tab-order
          open-help-tab
          find-tp-address-field
          save-tabs
@@ -30,6 +31,12 @@
 
 ;; list of tab-info structs
 (define tab-list '())
+
+(define (print-tab-list l)
+  (with-output-to-string
+    (thunk
+     (for ([tab (in-list l)])
+       (printf "tab id:~a, index:~a~n" (tab-info-id tab) (tab-info-index tab))))))
 
 (define tab-id-counter 0)
 (define (new-tab-id)
@@ -369,6 +376,29 @@ END
         (begin
           (send tp set-selection tab-index)
           (change-tab tp tab-index)))))
+
+(define (update-tab-order tp former-indices)
+  ;(eprintf "former-indices: ~a~n" former-indices)
+  ;(eprintf "old tab list:~n~a" (print-tab-list tab-list))
+  ;; put the list of tabs in the reverse order of their new indices
+  ;; tab-list is basically a stack with the rightmost tab on the top
+  (define new-tab-list
+    (foldl (lambda (old-index new-list)
+             (cons (find-tab-at-index old-index) new-list))
+           '()
+           former-indices))
+  ;(eprintf "between tab list:~n~a" (print-tab-list new-tab-list))
+  ;; update the tab info structs with the index to match their new position
+  (for ([i (in-range (sub1 (length new-tab-list)) -1 -1)]
+        [tab (in-list new-tab-list)])
+    (set-tab-info-index! tab i))
+  ;; update the global tab-list
+  (set! tab-list new-tab-list)
+  ;(eprintf "new tab list:~n~a" (print-tab-list tab-list))
+  ;; the moved tab should be the new active tab
+  (define new-selection (index-of former-indices (send tp get-selection)))
+  (send tp set-selection new-selection)
+  (change-tab tp new-selection))
 
 (define (tab-info->save-data tab)
   (define index (tab-info-index tab))
