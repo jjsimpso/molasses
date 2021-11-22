@@ -330,7 +330,8 @@ END
   (when tab-canvas
     ; this will set the status bar's message to the current status of the new tab
     (send tab-canvas update-status)
-    (send tab-canvas focus)))
+    (send tab-canvas focus))
+  void)
 
 (define (fill-tab-content tp)
   (define current-tab-index (send tp get-selection))
