@@ -205,10 +205,26 @@
 
 ;; Create Tab Panel and status bars
 
+(define molasses-tab-panel%
+  (class tab-panel%
+    (super-new)
+
+    (define/augment (on-reorder former-indices)
+      (eprintf "on-reorder: enter~n")
+      (update-tab-order this former-indices))
+    
+    (define/override (on-close-request index)
+      (eprintf "on-close-request: enter~n")
+      (delete-tab this index))
+
+    (define/override (on-new-request)
+      (eprintf "on-new-request: enter~n")
+      (new-tab this))))
+
 (define tab-panel 
-  (new tab-panel%
+  (new molasses-tab-panel%
        (parent frame)
-       ;(style '(can-close))
+       (style '(flat-portable no-border new-button can-close can-reorder))
        (callback tab-panel-callback)
        (choices '())))
 
@@ -241,9 +257,6 @@
   (send tab-panel append "New")
   (init-new-tab tab-panel 0)
   (goto-help-page tab-panel))
-
-;; this tab is actually just used as a button
-(send tab-panel append "+")
 
 ;(send tab-panel set-selection 0)
 
