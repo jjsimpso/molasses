@@ -194,8 +194,8 @@
   (define page-text (send page-canvas get-editor))
   (send page-text erase)
   (send page-text insert #<<END
-This is Molasses, your browser for the slow Internet. If you think of
-the Internet as the information super highway, then think of the slow
+This is Molasses, your browser for the Slow Internet. If you think of
+the Internet as an information super highway, then think of the Slow
 Internet as a country road. You can use Molasses to return to a
 simpler time. Currently Molasses supports two protocols: Gopher and
 Gemini.  Gopher is an authentically old protocol while Gemini is a new
@@ -203,8 +203,7 @@ protocol with an old soul.
 
 Molasses is a tabbed browser, so open as many tabs as you want! When
 exiting, any open tabs are saved and will be restored the next time
-you open the application.  Molasses doesn't currently support
-rearranging tabs, but you can close them with the Delete Tab button.
+you open the application.
 
 
 GOPHER
