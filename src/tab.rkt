@@ -348,7 +348,9 @@ END
   (send tp append "New")
   (init-new-tab tp new-index)
   (send tp set-selection new-index)
-  (change-tab tp new-index))
+  (change-tab tp new-index)
+  ;; set the focus to the address field
+  (send (find-tp-address-field tp) focus))
 
 (define (delete-tab tp tab-index)
   (define num-tabs  (send tp get-number))
