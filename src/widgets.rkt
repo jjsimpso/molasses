@@ -89,6 +89,8 @@
 (define (goto-gopher req page-text [initial-selection-pos #f])
   (eprintf "goto-gopher: ~a, ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req) initial-selection-pos)
 
+  (send page-text erase)
+  
   (define resp (gopher-fetch (request-host req)
                              (request-path/selector req)
                              (request-type req)
@@ -105,16 +107,13 @@
   (send page-text begin-edit-sequence)
   (cond
     [(gopher-response-error? resp)
-     (send page-text erase)
      (send page-text insert (port->string (gopher-response-data-port resp) #:close? #t))]
     [(equal? item-type #\1) ; directory
-     (send page-text erase)
      (for ([line (in-lines (gopher-response-data-port resp))])
        (insert-directory-line page-text line))
      (close-input-port (gopher-response-data-port resp))
      (send page-text init-gopher-menu initial-selection-pos)]
     [(or (equal? item-type #\0) (equal? item-type #\h)) ; text or html(just display raw html for now)
-     (send page-text erase)
      ;; insert one line at a time to handle end of line conversion
      #;(for ([line (in-lines (gopher-response-data-port resp))])
        (send page-text insert line)
@@ -131,7 +130,6 @@
      (define img (make-object image-snip%
                               (gopher-response-data-port resp)
                               'unknown))
-     (send page-text erase)
      (send page-text insert img)
      (send page-text set-position 0)
      (close-input-port (gopher-response-data-port resp))]
@@ -140,12 +138,10 @@
                               (gopher-response-data-port resp)
                               'gif))
      (close-input-port (gopher-response-data-port resp))
-     (send page-text erase)
      (send page-text insert img)
      (send page-text set-position 0)]
     [(or (equal? item-type #\d) ; document (PDF, Word, etc.)
          (equal? item-type #\P))
-     (send page-text erase)
      (send page-text insert (format "How would you like to handle document ~a ?~n~n" (request-path/selector req)))
      (insert-menu-item page-text
                        (gopher-dir-entity #\> "Open file in external application" (request-path/selector req) (request-host req) (~a (request-port req))))
@@ -155,7 +151,6 @@
      (send page-text init-gopher-menu #f)
      (close-input-port (gopher-response-data-port resp))]
     [else
-     (send page-text erase)
      (send page-text insert (format "Unsupported type ~a~n~n" item-type))
      (insert-menu-item page-text
                        (gopher-dir-entity #\9 "Download file" (request-path/selector req) (request-host req) (~a (request-port req))))
@@ -639,10 +634,10 @@
         (cond
           [(equal? (request-protocol req) 'gopher)
            (thread (thunk
-                    (goto-gopher req this initial-selection-pos)
                     (update-history)
                     (set! current-url (browser-url req initial-selection-pos))
                     (send (get-canvas) update-address req)
+                    (goto-gopher req this initial-selection-pos)
                     (send (get-canvas) update-status "Ready")))]
           [(equal? (request-protocol req) 'gemini)
            (thread (thunk
