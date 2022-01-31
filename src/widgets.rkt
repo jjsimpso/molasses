@@ -63,28 +63,26 @@
 
 (define (insert-directory-line text-widget line)
   ;(eprintf "insert-directory-line: ~a~n" line)
-
-  (define dir-entity (parse-dir-entity line))
-
-  (cond
-    ;; be permissive of blank lines
-    [(not (non-empty-string? line))
-     (send text-widget insert "\n")]
-    ;; just skip/ignore end of transmission
-    [(equal? (string-ref line 0) #\.)
-     void]
-    ;; display error line
-    [(equal? (gopher-dir-entity-type dir-entity) #\3)
-     (send text-widget insert (gopher-dir-entity-user-name dir-entity))
-     (send text-widget insert "\n")]
-    ;; insert informational lines as plain text
-    [(equal? (gopher-dir-entity-type dir-entity) #\i)
-     (send text-widget insert "       ")  ; indent information text to line up with menu items
-     (send text-widget insert (gopher-dir-entity-user-name dir-entity))
-     (send text-widget insert "\n")]
-    [else
-     (insert-menu-item text-widget dir-entity)
-     (send text-widget insert "\n")]))
+  (if (non-empty-string? line)
+      (let ([dir-entity (parse-dir-entity line)])
+        (cond
+          ;; just skip/ignore end of transmission
+          [(equal? (string-ref line 0) #\.)
+           void]
+          ;; display error line
+          [(equal? (gopher-dir-entity-type dir-entity) #\3)
+           (send text-widget insert (gopher-dir-entity-user-name dir-entity))
+           (send text-widget insert "\n")]
+          ;; insert informational lines as plain text
+          [(equal? (gopher-dir-entity-type dir-entity) #\i)
+           (send text-widget insert "       ")  ; indent information text to line up with menu items
+           (send text-widget insert (gopher-dir-entity-user-name dir-entity))
+           (send text-widget insert "\n")]
+          [else
+           (insert-menu-item text-widget dir-entity)
+           (send text-widget insert "\n")]))
+        ;; be permissive of blank lines
+        (send text-widget insert "\n")))
 
 (define (goto-gopher req page-text [initial-selection-pos #f])
   (eprintf "goto-gopher: ~a, ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req) initial-selection-pos)
