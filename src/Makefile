@@ -34,6 +34,10 @@ macos:
 clean:
 	rm -rf compiled/
 	rm -f $(EXE)
+
+clean-all:
+	rm -rf compiled/
+	rm -f $(EXE)
 	rm -rf $(NATIVE_DIST_DIR)
 	rm -rf $(WIN_BUILD_DIR)
 	rm -rf $(MAC_BUILD_DIR)
