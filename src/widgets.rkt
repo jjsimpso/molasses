@@ -599,6 +599,7 @@
     (define/public (cancel-request)
       (when (custodian? thread-custodian)
         (custodian-shutdown-all thread-custodian)
+        ;(eprintf "cancelled request~n")
         ;; without this the editor gets stuck in no refresh mode
         (when (in-edit-sequence?)
           (end-edit-sequence))
@@ -633,10 +634,10 @@
       (parameterize ([current-custodian thread-custodian])
         (cond
           [(equal? (request-protocol req) 'gopher)
+           (update-history)
+           (set! current-url (browser-url req initial-selection-pos))
+           (send (get-canvas) update-address req)
            (thread (thunk
-                    (update-history)
-                    (set! current-url (browser-url req initial-selection-pos))
-                    (send (get-canvas) update-address req)
                     (goto-gopher req this initial-selection-pos)
                     (send (get-canvas) update-status "Ready")))]
           [(equal? (request-protocol req) 'gemini)
