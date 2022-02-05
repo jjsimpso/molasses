@@ -87,7 +87,9 @@
 (define (goto-gopher req page-text [initial-selection-pos #f])
   (eprintf "goto-gopher: ~a, ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req) initial-selection-pos)
 
+  (send page-text begin-edit-sequence)
   (send page-text erase)
+  (send page-text end-edit-sequence)
   
   (define resp (gopher-fetch (request-host req)
                              (request-path/selector req)
