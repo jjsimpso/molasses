@@ -853,8 +853,10 @@
                                    (unbox end)))
              ;(eprintf "range (~a,~a): new line = ~a~n" (unbox start) (unbox end) new-line)
              (set-position (line-start-position new-line))]
+            [(next prior home end)
+             (super on-local-char event)]
             [else
-             (super on-local-char event)])))
+             (void)])))
     ))
 
 (define browser-canvas%
