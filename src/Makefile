@@ -35,7 +35,7 @@ clean:
 	rm -rf compiled/
 	rm -f $(EXE)
 
-clean-all:
+cleanall:
 	rm -rf compiled/
 	rm -f $(EXE)
 	rm -rf $(NATIVE_DIST_DIR)
