@@ -81,16 +81,12 @@
           [else
            (insert-menu-item text-widget dir-entity)
            (send text-widget insert "\n")]))
-        ;; be permissive of blank lines
-        (send text-widget insert "\n")))
+      ;; be permissive of blank lines
+      (send text-widget insert "\n")))
 
 (define (goto-gopher req page-text [initial-selection-pos #f])
   (eprintf "goto-gopher: ~a, ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req) initial-selection-pos)
 
-  (send page-text begin-edit-sequence)
-  (send page-text erase)
-  (send page-text end-edit-sequence)
-  
   (define resp (gopher-fetch (request-host req)
                              (request-path/selector req)
                              (request-type req)
@@ -101,9 +97,14 @@
                         (request-type req)
                         #\1))
 
+  ;; this flag is used to signal the main thread that text% updates have begun
+  (set-field! editor-busy? page-text #t)
+  
   ;; reset gopher-menu? boolean to default when loading a new page
   (set-field! gopher-menu? page-text #f)
 
+  (define update-start-time (current-inexact-monotonic-milliseconds))
+  
   (send page-text begin-edit-sequence)
   (cond
     [(gopher-response-error? resp)
@@ -156,7 +157,8 @@
                        (gopher-dir-entity #\9 "Download file" (request-path/selector req) (request-host req) (~a (request-port req))))
      (send page-text init-gopher-menu #f)
      (close-input-port (gopher-response-data-port resp))])
-  (send page-text end-edit-sequence))
+  (send page-text end-edit-sequence)
+  (eprintf "goto-gopher UI update took ~a ms~n" (- (current-inexact-monotonic-milliseconds) update-start-time)))
 
 ;; download gopher selector to a temp file and open it with an external application
 ;; set plumber to clean up file when molasses exits
@@ -476,7 +478,7 @@
   (class text% (super-new)
     (init-field [selection #f]
                 [gopher-menu? #f]
-                [thread-custodian #f]
+                [editor-busy? #f]
                 [current-url #f]
                 [history '()]) ; list of browser-url structs
     (inherit get-snip-position
@@ -495,9 +497,14 @@
              find-first-snip
              find-snip
              in-edit-sequence?
+             begin-edit-sequence
              end-edit-sequence
+             erase
              get-start-position get-end-position hide-caret)
 
+    (define thread-custodian #f)
+    (define request-thread-id #f)
+    
     ;; copied from Framework's text:hide-caret/selection-mixin
     (define/augment (after-set-position)
       (hide-caret (= (get-start-position) (get-end-position)))
@@ -598,8 +605,8 @@
 
     (define/public (cancel-request)
       (when (custodian? thread-custodian)
+        (eprintf "cancelling request: ~a~n" (custodian-managed-list thread-custodian (current-custodian)))
         (custodian-shutdown-all thread-custodian)
-        ;(eprintf "cancelled request~n")
         ;; without this the editor gets stuck in no refresh mode
         (when (in-edit-sequence?)
           (end-edit-sequence))
@@ -622,7 +629,17 @@
       ;; this will shutdown the previous custodian on every page load.
       ;; seems wasteful not to re-use the custodian if we aren't actually interrupting
       ;; the previous thread's work.
-      (cancel-request)
+      (if (and editor-busy? (thread? request-thread-id))
+          ;; killing a thread that is updating an editor<%> is not support so if
+          ;; the network request has completed and text% updates have been initiated
+          ;; we must wait for the thread to finish.
+          (begin
+            (send (get-canvas) update-status "Cancelling...")
+            (thread-wait request-thread-id)
+            (cancel-request))
+          (cancel-request))
+
+      (set! editor-busy? #f)
       (set! thread-custodian (make-custodian))
 
       (define update-history (make-history-updater current-url
@@ -637,9 +654,14 @@
            (update-history)
            (set! current-url (browser-url req initial-selection-pos))
            (send (get-canvas) update-address req)
-           (thread (thunk
-                    (goto-gopher req this initial-selection-pos)
-                    (send (get-canvas) update-status "Ready")))]
+           ;; clear the current page contents
+           (begin-edit-sequence)
+           (erase)
+           (end-edit-sequence)
+           (set! request-thread-id
+                 (thread (thunk
+                          (goto-gopher req this initial-selection-pos)
+                          (send (get-canvas) update-status "Ready"))))]
           [(equal? (request-protocol req) 'gemini)
            (thread (thunk
                     (define terminal-request (goto-gemini req this))
