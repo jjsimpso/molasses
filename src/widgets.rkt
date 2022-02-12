@@ -104,7 +104,7 @@
   (set-field! gopher-menu? page-text #f)
 
   (define update-start-time (current-inexact-monotonic-milliseconds))
-  
+
   (send page-text begin-edit-sequence)
   (cond
     [(gopher-response-error? resp)
@@ -394,8 +394,10 @@
   (eprintf "goto-gemini: ~a, ~a~n" (request-host req) (request-path/selector req))
 
   (define (show-gemini-error msg)
+    ;; this flag is used to signal the main thread that text% updates have begun
+    (set-field! editor-busy? page-text #t)
+    
     (send page-text begin-edit-sequence)
-    (send page-text erase)
     (send page-text insert msg)
     (send page-text end-edit-sequence)
     (close-input-port (gemini-response-data-port resp)))
@@ -410,24 +412,27 @@
   ;; the case needs to be in tail position so that it returns the correct value to load-page
   (case (gemini-response-status resp)
     [(10)
-     (define query-string (get-text-from-user "Input required" (gemini-response-meta resp)))
-     (define query-request (url->request (string-append (gemini-response-from-url resp) "?" query-string)))
      (close-input-port (gemini-response-data-port resp))
-     (goto-gemini query-request page-text)]
+     (define query-string (get-text-from-user "Input required" (gemini-response-meta resp)))
+     (if query-string
+         (let ([query-request (url->request (string-append (gemini-response-from-url resp) "?" query-string))])
+           (goto-gemini query-request page-text))
+         (void))]
     [(20 21)
+     ;; this flag is used to signal the main thread that text% updates have begun
+     (set-field! editor-busy? page-text #t)
+     
      (let ([data-port (gemini-response-data-port resp)]
            [mimetype (gemini-response-meta resp)]
            [from-url (gemini-response-from-url resp)])
        (cond
          [(string-prefix? mimetype "text/gemini")
           (send page-text begin-edit-sequence)
-          (send page-text erase)
           (insert-gemini-text page-text data-port from-url)
           (send page-text set-position 0)
           (send page-text end-edit-sequence)]
          [(string-prefix? mimetype "text/")
           (send page-text begin-edit-sequence)
-          (send page-text erase)
           ;; this isn't ideal but is still a lot faster than inserting one line at a time
           ;; (text% treats #\return as a newline so DOS formatted files have extra newlines)
           (send page-text insert (string-replace
@@ -439,13 +444,11 @@
          [(string-prefix? mimetype "image/")
           (define img (make-object image-snip% data-port 'unknown))
           (send page-text begin-edit-sequence)
-          (send page-text erase)
           (send page-text insert img)
           (send page-text set-position 0)
           (send page-text end-edit-sequence)]
          [else
           (send page-text begin-edit-sequence)
-          (send page-text erase)
           (send page-text insert (format "unknown mimetype: ~a~n" mimetype))
           (send page-text insert (format "Initiating download of ~a~n" (request-path/selector req)))
           (send page-text end-edit-sequence)
@@ -453,9 +456,10 @@
      (close-input-port (gemini-response-data-port resp))
      req]
     [(30 31)
+     ;; this flag is used to signal the main thread that text% updates have begun
+     (set-field! editor-busy? page-text #t)
      ;; initiate a file download
      (send page-text begin-edit-sequence)
-     (send page-text erase)
      (send page-text insert (format "Initiating download of ~a~n" (request-path/selector req)))
      (send page-text end-edit-sequence)
      (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]
@@ -663,10 +667,16 @@
                           (goto-gopher req this initial-selection-pos)
                           (send (get-canvas) update-status "Ready"))))]
           [(equal? (request-protocol req) 'gemini)
+           (update-history)
+           (set! current-url (browser-url req #f))
+           (send (get-canvas) update-address req)
+           ;; clear the current page contents
+           (begin-edit-sequence)
+           (erase)
+           (end-edit-sequence)
            (thread (thunk
                     (define terminal-request (goto-gemini req this))
                     (unless (void? terminal-request)
-                      (update-history)
                       (set! current-url (browser-url terminal-request #f))
                       (send (get-canvas) update-address terminal-request)
                       (send (get-canvas) update-status "Ready"))))]
