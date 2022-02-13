@@ -254,8 +254,9 @@
 
 ;; load any saved tabs, else initialize one new tab
 (unless (load-tabs tab-panel)
-  (send tab-panel append "New")
+  (send tab-panel append "Introduction")
   (init-new-tab tab-panel 0)
+  (send tab-panel set-selection 0)
   (goto-help-page tab-panel))
 
 ;(send tab-panel set-selection 0)
