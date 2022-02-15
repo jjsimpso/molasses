@@ -218,7 +218,7 @@ commands:
  * Up and Down arrows move the selection between menu items.
  * Right Arrow or Return follows the currently selected menu item 
    link. Left mouse click also follows links/menu items.
- * Left Arrow goes back to the previous page.There is also a back
+ * Left Arrow goes back to the previous page. There is also a back
    button on the Toolbar.
  * Page Up/Down scrolls the page without changing the selection, as
    does the mouse scroll wheel.
