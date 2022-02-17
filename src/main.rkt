@@ -28,6 +28,8 @@
             (define address-field (find-tp-address-field tab-panel))
             (send address-field focus)
             (send (send address-field get-editor) select-all)]
+           [(and ctrl? (eq? key-code #\t))
+            (new-tab tab-panel)]
            ;; Return #f if we don't recognise this key code so that it can be
            ;; delegated to lower levels in on-subwindow-char (such as the
            ;; canvas or the text).

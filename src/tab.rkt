@@ -236,6 +236,7 @@ the same as using a typical web browser.
 GLOBAL SHORTCUT KEYS
 --------------------
 CTRL+L     : Select address text
+CTRL+T     : New Tab
 CTRL+PGUP  : Next Tab
 CTRL+PGDWN : Next Tab
 END
