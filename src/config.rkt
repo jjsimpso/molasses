@@ -6,7 +6,7 @@
 (define tabs-file (build-path (find-system-path 'pref-dir) "molasses" "saved-tabs.rktd"))
 (define bookmarks-file (build-path (find-system-path 'pref-dir) "molasses" "bookmarks.rktd"))
 
-(define home-page-url "gopher://gopher.endangeredsoft.org")
+(define home-page-url "gopher://gopher.endangeredsoft.org/1/gopher/home")
 
 (define canvas-bg-color (make-color 33 33 33))
 (define text-fg-color (send the-color-database find-color "white smoke"))

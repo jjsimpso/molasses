@@ -254,11 +254,17 @@
        (label "Downloads")
        (stretchable-width #f)))
 
-;; load any saved tabs, else initialize one new tab
+;; load any saved tabs, else initialize two tabs, one open to the
+;; molasses home page and one containing the introductory help
+;; text
 (unless (load-tabs tab-panel)
-  (send tab-panel append "Introduction")
+  (send tab-panel append "Home")
   (init-new-tab tab-panel 0)
   (send tab-panel set-selection 0)
+  (goto-home-page tab-panel)
+  (send tab-panel append "Introduction")
+  (init-new-tab tab-panel 1)
+  (send tab-panel set-selection 1)
   (goto-help-page tab-panel))
 
 ;(send tab-panel set-selection 0)
