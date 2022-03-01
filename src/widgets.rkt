@@ -969,26 +969,54 @@
       ;(eprintf "goodbye event~n")
       (send canvas update-status "Ready"))))
 
+;; implements a text field that auto selects its contents when it gains focus
 (define address-field%
   (class text-field%
     (super-new)
     (inherit get-editor
              has-focus?
              focus)
-    ;; can return to this when https://github.com/racket/racket/issues/3883 is released
-    #;(define/override (on-focus on?)
-      (eprintf "on-focus ~a -> ~a~n" (has-focus?) on?))
+
+    (define last-focus? #f)
+    (define lost-focus-via-right-click? #f)
     
-    #;(define/override (on-subwindow-event recv event)
-      (if (send event button-down? 'left)
-          (if (has-focus?)
-              (begin
-                (eprintf "already has focus~n")
-                (super on-subwindow-event recv event))
-              (begin
-                (eprintf "selecting all~n")
-                (super on-subwindow-event recv event)
-                (focus)
-                (send (get-editor) select-all)
-                #t))
-          (super on-subwindow-event recv event)))))
+    (define/override (on-focus on?)
+      ;; only place to do something when focus leaves the text field
+      (eprintf "on-focus ~a -> ~a~n" last-focus? on?)
+      (unless on?
+        (if lost-focus-via-right-click?
+            (set! lost-focus-via-right-click? #f)
+            (begin
+              (set! last-focus? #f)
+              (send (get-editor) set-position 0)))))
+    
+    (define/override (on-subwindow-event recv event)
+      (define event-type (send event get-event-type))
+      (cond
+        [(eq? event-type 'left-down)
+         (if last-focus?
+             (begin
+               (eprintf "already has focus~n")
+               (super on-subwindow-event recv event))
+             (begin
+               (eprintf "selecting all~n")
+               (super on-subwindow-event recv event)
+               (set! last-focus? #t)
+               (send (get-editor) select-all)
+               #t))]
+        [(eq? event-type 'right-down)
+         (if last-focus?
+             (super on-subwindow-event recv event)
+             (begin
+               (set! last-focus? #t)
+               (super on-subwindow-event recv event)))]
+        ;; following a right-up event the popup menu will appear and take focus
+        ;; away from the text field.
+        [(eq? event-type 'right-up)
+         (if last-focus?
+             (begin
+               (set! lost-focus-via-right-click? #t)
+               (super on-subwindow-event recv event))
+             (super on-subwindow-event recv event))]
+        [else
+         (super on-subwindow-event recv event)]))))
