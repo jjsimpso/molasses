@@ -196,6 +196,12 @@
           (when label
             (add-bookmark url label bookmark-menu goto-bookmark))))))
 
+(new menu-item%
+     (label "Home")
+     (parent bookmark-menu)
+     (callback (lambda (item event)
+                 (goto-home-page tab-panel))))
+
 (new separator-menu-item%
      (parent bookmark-menu))
 
