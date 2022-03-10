@@ -5,6 +5,7 @@
 (define (remap-port port)
   (cond
     [(eq? (system-type) 'unix) port]
+    [(eq? (system-type) 'windows) (open-output-nowhere)]
     [(terminal-port? port) port]
     [else
      (open-output-nowhere)]))
@@ -13,4 +14,5 @@
                [current-error-port  (remap-port (current-error-port))])
   (setup-gui)
   (printf "handling events~n")
-  (yield 'wait))
+  (yield 'wait)
+  (void))
