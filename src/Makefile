@@ -19,7 +19,7 @@ windows:
 #	raco cross --target x86_64-win32 --vm cs -j 4 pkg install gui
 	mkdir -p $(WIN_BUILD_DIR)
 	rm -rf compiled/
-	raco cross --target x86_64-win32 --vm cs -j 4 exe -o $(WIN_BUILD_DIR)/$(EXE).exe main.rkt 
+	raco cross --target x86_64-win32 --vm cs -j 4 exe --gui -o $(WIN_BUILD_DIR)/$(EXE).exe main.rkt 
 	raco cross --target x86_64-win32 --vm cs dist $(WIN_BUILD_DIR)/$(EXE)-$(VERSION) $(WIN_BUILD_DIR)/$(EXE).exe
 
 macos:
@@ -28,8 +28,8 @@ macos:
 #	raco cross --target x86_64-macosx --vm cs -j 4 pkg install gui
 	mkdir -p $(MAC_BUILD_DIR)
 	rm -rf compiled/
-	raco cross --target x86_64-macosx --vm cs -j 4 exe -o $(MAC_BUILD_DIR)/$(EXE) main.rkt 
-	raco cross --target x86_64-macosx --vm cs dist $(MAC_BUILD_DIR)/$(EXE)-$(VERSION) $(MAC_BUILD_DIR)/$(EXE)
+	raco cross --target x86_64-macosx --vm cs -j 4 exe --gui -o $(MAC_BUILD_DIR)/$(EXE).app main.rkt
+	raco cross --target x86_64-macosx --vm cs dist $(MAC_BUILD_DIR)/$(EXE)-$(VERSION) $(MAC_BUILD_DIR)/$(EXE).app
 
 clean:
 	rm -rf compiled/
