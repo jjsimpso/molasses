@@ -239,6 +239,18 @@ CTRL+L     : Select address text
 CTRL+T     : New Tab
 CTRL+PGUP  : Next Tab
 CTRL+PGDWN : Next Tab
+
+
+DOWNLOADING FILES
+-----------------
+If the type of a Gopher menu item or Gemini link is not supported
+natively by Molasses, the file can still be downloaded for local
+viewing. Progress of active and completed downloads can be viewed by
+clicking on "Downloads" in the bottom right hand corner of the UI. A
+pop-up menu will show all downloaded files and their progress. 
+Selecting an item from this list will either cancel the download or,
+in the case of completed downloads, remove the entry from the download
+list.
 END
         )
   (send page-text set-position 0)
