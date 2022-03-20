@@ -5,6 +5,7 @@
 (require "gopher.rkt")
 (require "gemini.rkt")
 (require "download.rkt")
+(require "html.rkt")
 
 (provide browser-text%
          browser-canvas%
@@ -114,13 +115,25 @@
        (insert-directory-line page-text line))
      (close-input-port (gopher-response-data-port resp))
      (send page-text init-gopher-menu initial-selection-pos)]
-    [(or (equal? item-type #\0) (equal? item-type #\h)) ; text or html(just display raw html for now)
+    [(equal? item-type #\0) ; text
      ;; insert one line at a time to handle end of line conversion
      #;(for ([line (in-lines (gopher-response-data-port resp))])
        (send page-text insert line)
        (send page-text insert "\n"))
      ;; this isn't ideal but is still a lot faster than inserting one line at a time
      ;; (text% treats #\return as a newline so DOS formatted files have extra newlines)
+     (send page-text insert (string-replace
+                             (port->string (gopher-response-data-port resp))
+                             "\r\n"
+                             "\n"))
+     (close-input-port (gopher-response-data-port resp))
+     (send page-text set-position 0)]
+    [(equal? item-type #\h)
+     ; render html as text for now
+     #;(render-html-to-text (gopher-response-data-port resp)
+                          page-text
+                          #t
+                          #f)
      (send page-text insert (string-replace
                              (port->string (gopher-response-data-port resp))
                              "\r\n"
