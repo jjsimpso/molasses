@@ -637,6 +637,11 @@
                     ;; also save the position of the selection that we are following so we can return to it
                     (push-history (struct-copy browser-url old-url [selection-pos old-position]))
                     (push-history old-url))))))
+
+      (define canvas (get-canvas))
+
+      ;; background color can be changed by html rendering
+      (send canvas reset-background-color)
       
       ;; this will shutdown the previous custodian on every page load.
       ;; seems wasteful not to re-use the custodian if we aren't actually interrupting
@@ -646,7 +651,7 @@
           ;; the network request has completed and text% updates have been initiated
           ;; we must wait for the thread to finish.
           (begin
-            (send (get-canvas) update-status "Cancelling...")
+            (send canvas update-status "Cancelling...")
             (thread-wait request-thread-id)
             (cancel-request))
           (cancel-request))
@@ -658,14 +663,14 @@
                                                    (if selection
                                                        (get-snip-position selection)
                                                        #f)))
-      (send (get-canvas) update-status "Loading...")
+      (send canvas update-status "Loading...")
       
       (parameterize ([current-custodian thread-custodian])
         (cond
           [(equal? (request-protocol req) 'gopher)
            (update-history)
            (set! current-url (browser-url req initial-selection-pos))
-           (send (get-canvas) update-address req)
+           (send canvas update-address req)
            ;; clear the current page contents
            (begin-edit-sequence)
            (erase)
@@ -673,11 +678,11 @@
            (set! request-thread-id
                  (thread (thunk
                           (goto-gopher req this initial-selection-pos)
-                          (send (get-canvas) update-status "Ready"))))]
+                          (send canvas update-status "Ready"))))]
           [(equal? (request-protocol req) 'gemini)
            (update-history)
            (set! current-url (browser-url req #f))
-           (send (get-canvas) update-address req)
+           (send canvas update-address req)
            ;; clear the current page contents
            (begin-edit-sequence)
            (erase)
@@ -686,8 +691,8 @@
                     (define terminal-request (goto-gemini req this))
                     (unless (void? terminal-request)
                       (set! current-url (browser-url terminal-request #f))
-                      (send (get-canvas) update-address terminal-request)
-                      (send (get-canvas) update-status "Ready"))))]
+                      (send canvas update-address terminal-request)
+                      (send canvas update-status "Ready"))))]
           [else
            ;; TODO display error to user?
            (eprintf "Invalid request protocol!~n")])))
@@ -902,11 +907,18 @@
 (define browser-canvas%
   (class editor-canvas% (super-new)
     (init-field [tab-id 0]
+                [default-bg-color (make-color 33 33 33)]
                 [update-status-cb #f]
                 [update-address-cb #f])
-    (inherit get-editor)
+    (inherit get-editor
+             set-canvas-background)
 
     (define status-text "Ready")
+    
+    (set-canvas-background default-bg-color)
+
+    (define/public (reset-background-color)
+      (set-canvas-background default-bg-color))
     
     (define/public (update-status [text #f])
       (when update-status-cb

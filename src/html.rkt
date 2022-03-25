@@ -8,6 +8,8 @@
          sxml
          net/url)
 
+(require "config.rkt")
+
 ;; use browser/htmltext frome drracket as a starting point and basis for the api
 ;; 
 
@@ -69,6 +71,14 @@
                 (read-html-as-xml a-port))]
          [xexpr (map xml->xexpr xml)])
     (car xexpr)))
+
+(define (parse-color c-string)
+  (if (and (string? c-string)
+           (equal? (string-ref c-string 0) #\#))
+      (make-color (string->number (substring c-string 1 3) 16)
+                  (string->number (substring c-string 3 5) 16)
+                  (string->number (substring c-string 5 7) 16))
+      (make-color 255 255 255)))
 
 (define (read-html a-port)
   (html->xexp a-port))
@@ -154,6 +164,15 @@
            (for ([i (in-range start-paragraph (add1 (send a-text position-paragraph (current-pos))))])
              (eprintf "*** align ~a paragraph ~a~n" alignment i)
              (send a-text set-paragraph-alignment i alignment)))]
+        [(bgcolor)
+         (define bg-color (parse-color (cadr attr)))
+         (send (send a-text get-canvas) set-canvas-background bg-color)
+         (send (current-style-delta) set-delta-background bg-color)
+         (lambda () void)]
+        [(text)
+         (define text-color (parse-color (cadr attr)))
+         (send (current-style-delta) set-delta-foreground text-color)
+         (lambda () void)]
         [else
          (lambda () void)]))
     
@@ -195,7 +214,7 @@
            (loop (cdr s))]
           [(string? node)
            (a-text-insert node)
-           (eprintf "paragraph ~a: ~a~n" (send a-text position-paragraph (current-pos)) node)
+           ;(eprintf "paragraph ~a: ~a~n" (send a-text position-paragraph (current-pos)) node)
            (loop (cdr s))]
           #;[(attr-list? node)
            (printf "atrributes ~a~n" (cdr node))
@@ -209,4 +228,10 @@
 (define (render-html-to-text port text%-obj img-ok? eval-ok?)
   (unless (input-port? port)
     (raise-type-error 'render-html-to-text "input port" 0 (list port text%-obj)))
+  ;; TEMP - enable auto wrap automatically for html pages
+  (send text%-obj auto-wrap #t)
+  ;; set the canvas background color to match the default for html
+  (define canvas (send text%-obj get-active-canvas))
+  (when canvas
+    (send canvas set-canvas-background html-text-bg-color)) 
   (convert-html port text%-obj))

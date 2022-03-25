@@ -158,6 +158,7 @@
     (new browser-canvas% (parent tab-contents)
          (editor page-text)
          (tab-id tab-id)
+         (default-bg-color canvas-bg-color)
          (update-status-cb update-status)
          (update-address-cb update-address)
          (style '(auto-hscroll auto-vscroll))
@@ -169,7 +170,6 @@
   (send page-text set-styles-sticky #f)
   
   (send* page-canvas
-    (set-canvas-background canvas-bg-color)
     (force-display-focus #t)
     (lazy-refresh #t))
 
@@ -312,6 +312,14 @@ END
   (make-header-style "Header1" 24)
   (make-header-style "Header2" 18)
   (make-header-style "Header3" 14)
+
+  ;; create default html style
+  (define html-standard (send style-list new-named-style "Html Standard" standard))
+  (define html-standard-delta (make-object style-delta%))
+  (send* html-standard-delta
+    (set-delta-foreground html-text-fg-color)
+    (set-delta-background html-text-bg-color))
+  (send html-standard set-delta html-standard-delta)
 )
 
 (define (find-tp-address-field tp)
