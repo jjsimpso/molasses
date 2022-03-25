@@ -129,15 +129,10 @@
      (close-input-port (gopher-response-data-port resp))
      (send page-text set-position 0)]
     [(equal? item-type #\h)
-     ; render html as text for now
-     #;(render-html-to-text (gopher-response-data-port resp)
+     (render-html-to-text (gopher-response-data-port resp)
                           page-text
                           #t
                           #f)
-     (send page-text insert (string-replace
-                             (port->string (gopher-response-data-port resp))
-                             "\r\n"
-                             "\n"))
      (close-input-port (gopher-response-data-port resp))
      (send page-text set-position 0)]
     [(equal? item-type #\I) ; image
