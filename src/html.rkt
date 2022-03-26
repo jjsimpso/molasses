@@ -112,6 +112,9 @@
           (send sl find-named-style "Standard")
           (send sl find-named-style "Basic"))))
   (define current-style-delta (make-parameter (make-object style-delta% 'change-nothing)))
+  ;; don't use a parameter for link color since it will change so rarely
+  (define current-link-color html-link-color)
+  (define current-vlink-color html-vlink-color)
   
   (with-method ([a-text-insert (a-text insert)]
                 [current-pos (a-text last-position)]
@@ -139,6 +142,8 @@
 
     (define (update-style-delta elem)
       (case elem
+        [(a)
+         (send (current-style-delta) set-delta-foreground current-link-color)]
         [(b)
          ;(eprintf "applying bold style at ~a~n" (current-pos))
          (send (current-style-delta) set-delta 'change-bold)]
@@ -173,13 +178,35 @@
          (define text-color (parse-color (cadr attr)))
          (send (current-style-delta) set-delta-foreground text-color)
          (lambda () void)]
+        [(link)
+         (define prev-link-color current-link-color)
+         (set! current-link-color (parse-color (cadr attr)))
+         (lambda ()
+           (set! current-link-color prev-link-color))]
+        [(vlink)
+         (define prev-vlink-color current-vlink-color)
+         (set! current-vlink-color (parse-color (cadr attr)))
+         (lambda ()
+           (set! current-vlink-color prev-vlink-color))]
+        [(href)
+         (define link-start-pos (current-pos))
+         (define vlink-delta (make-object style-delta%))
+         (send vlink-delta set-delta-foreground current-vlink-color)
+         (lambda ()
+           ;; add clickback to link region (temp function to just change the link color)
+           (send a-text set-clickback
+                 link-start-pos
+                 (current-pos)
+                 (lambda (text-widget start end)
+                   (eprintf "link to ~a clicked~n" (cadr attr))
+                   (send text-widget change-style vlink-delta start end))))]
         [else
          (lambda () void)]))
     
     (send a-text set-styles-sticky #t)
     (eprintf "sticky = ~a~n" (send a-text get-styles-sticky))
     (send a-text change-style html-basic-style)
-      
+    
     (let loop ([s content])
       (unless (empty? s)
         (define node (car s))

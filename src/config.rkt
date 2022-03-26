@@ -17,4 +17,4 @@
 (define html-text-fg-color (send the-color-database find-color "black"))
 (define html-text-bg-color (make-color #xC0 #xC0 #xC0))
 (define html-link-color (send the-color-database find-color "blue"))
-(define html-link-highlight-color (send the-color-database find-color "yellow"))
+(define html-vlink-color (send the-color-database find-color "yellow"))
