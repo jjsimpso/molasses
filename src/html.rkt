@@ -19,6 +19,8 @@
 
 (provide render-html-to-text)
 
+(define paragraph-elements '(h1 h2 h3 h4 p))
+
 (define delta:fixed (make-object style-delta% 'change-family 'modern))
 (define delta:default-face (make-object style-delta% 'change-family 'default))
 (define delta:bold (make-object style-delta% 'change-bold))
@@ -58,7 +60,7 @@
 (define (fixup-newlines c)
   (cond
     [(string? c)
-     (string-replace c "\r\n" "\n")]
+      (string-replace c "\r\n" "\n")]
     [(pair? c)
      (cons (fixup-newlines (car c))
            (fixup-newlines (cdr c)))]
@@ -112,10 +114,13 @@
           (send sl find-named-style "Standard")
           (send sl find-named-style "Basic"))))
   (define current-style-delta (make-parameter (make-object style-delta% 'change-nothing)))
+  (define current-element (make-parameter #f))
+  ;; alignment is a special case since it isn't controlled by a style and must be applied to each paragraph
+  (define current-alignment 'left)  
   ;; don't use a parameter for link color since it will change so rarely
   (define current-link-color html-link-color)
   (define current-vlink-color html-vlink-color)
-  
+
   (with-method ([a-text-insert (a-text insert)]
                 [current-pos (a-text last-position)]
                 [delete (a-text delete)]
@@ -128,18 +133,17 @@
         (let ([pos-after (current-pos)])
           (change-style html-basic-style pos-before pos-after))))
 
-    (define (handle-element elem)
-      (case elem
-        [(b)
-         (eprintf "applying bold style at ~a~n" (current-pos))
-         (send a-text change-style delta:bold (current-pos))]
-        [(h1)
-         (eprintf "applying h1 style at ~a~n" (current-pos))
-         (send a-text change-style delta:h1 (current-pos))]
-        [else
-         void]))
+    (define (insert-newline)
+      (let ((s (make-object string-snip% "\n")))
+        (send s set-flags (cons 'hard-newline (send s get-flags)))
+        (send a-text insert s)))
     
-
+    (define (set-alignment align)
+      ;(eprintf "setting alignment to ~a~n" align)
+      (send a-text set-paragraph-alignment
+            (send a-text position-paragraph (current-pos))
+            align))
+    
     (define (update-style-delta elem)
       (case elem
         [(a)
@@ -151,6 +155,16 @@
          ;(eprintf "applying h1 style at ~a~n" (current-pos))
          (send (current-style-delta) set-delta 'change-bold)
          (send (current-style-delta) set-size-mult 2.0)]
+        [(h2)
+         (send (current-style-delta) set-delta 'change-bold)
+         (send (current-style-delta) set-size-mult 1.5)]
+        [(h3)
+         (send (current-style-delta) set-delta 'change-bold)
+         (send (current-style-delta) set-size-mult 1.2)]
+        [(h4)
+         (send (current-style-delta) set-delta 'change-bold)]
+        [(pre)
+         (send (current-style-delta) set-delta 'change-family 'modern)]
         [else
          void]))
 
@@ -158,17 +172,14 @@
       (case (car attr)
         [(align)
          (define value (cadr attr))
-         (define alignment
+         (define prev-alignment current-alignment)
+         (set! current-alignment
            (cond
              [(string-ci=? value "center") 'center]
              [(string-ci=? value "left") 'left]
              [(string-ci=? value "right") 'right]))
-         (define start-paragraph (send a-text position-paragraph (current-pos)))
          (lambda ()
-           ;(eprintf "closing align tag~n")
-           (for ([i (in-range start-paragraph (add1 (send a-text position-paragraph (current-pos))))])
-             (eprintf "*** align ~a paragraph ~a~n" alignment i)
-             (send a-text set-paragraph-alignment i alignment)))]
+           (set! current-alignment prev-alignment))]
         [(bgcolor)
          (define bg-color (parse-color (cadr attr)))
          (send (send a-text get-canvas) set-canvas-background bg-color)
@@ -215,11 +226,9 @@
            (printf "element ~a~n" (sxml:element-name node))
            (define style-copy (make-object style-delta% 'change-nothing))
            (send style-copy copy (current-style-delta))
-           (parameterize ([current-style-delta style-copy])
+           (parameterize ([current-style-delta style-copy]
+                          [current-element (car node)])
              (update-style-delta (car node))
-             (eprintf "setting style to ~a,~a~n"
-                      (send (current-style-delta) get-weight-on)
-                      (send (current-style-delta) get-size-mult))
              (change-style (current-style-delta) (current-pos))
              ;; get attributes for this tag and process them
              ;; returns a list of functions to call when closing the tag
@@ -232,16 +241,36 @@
              ;; perform actions to close the tag
              (for ([f (in-list close-tag-funcs)])
                (f)))
-           
-           (eprintf "changing style back to ~a,~a~n"
-                    (send (current-style-delta) get-weight-on)
-                    (send (current-style-delta) get-size-mult))
+
+           (eprintf "ending ~a~n" (car node))
+           (when (memq (car node) paragraph-elements)
+             (eprintf "inserting newlines~n")
+             (insert-newline)
+             (insert-newline))
            (change-style html-basic-style (current-pos))
            (change-style (current-style-delta) (current-pos))
            (loop (cdr s))]
           [(string? node)
-           (a-text-insert node)
-           ;(eprintf "paragraph ~a: ~a~n" (send a-text position-paragraph (current-pos)) node)
+           (case (current-element)
+             [(head title)
+              void]
+             [(pre)
+              (define insert-pos (current-pos))
+              (a-text-insert node)
+              (send a-text set-paragraph-alignment (send a-text position-paragraph insert-pos) 'left)]
+             [else
+              (define text (string-trim node #px"[\n\r]+" #:left? #f))
+              (when (non-empty-string? text)
+                (define insert-pos (current-pos))
+                ;; special case for paragraphs with multiple strings (which means that newlines were found when parsing)
+                ;; add space to the end of the line so strings will flow together, essentially replacing the trimmed
+                ;; newline with a space
+                (if (and (eq? (current-element) 'p)
+                         (and (not (empty? (cdr s))) (string? (cadr s))))
+                    (a-text-insert (string-append text " "))
+                    (a-text-insert text))
+                (send a-text set-paragraph-alignment (send a-text position-paragraph insert-pos) current-alignment)
+                (eprintf "~a,~a paragraph ~a: ~a~n" (current-element) current-alignment (send a-text position-paragraph insert-pos) node))])
            (loop (cdr s))]
           #;[(attr-list? node)
            (printf "atrributes ~a~n" (cdr node))
