@@ -5,6 +5,8 @@
            net/url)
 
 (require html-parsing
+         (except-in html make-object)
+         xml
          sxml
          net/url)
 
@@ -19,7 +21,9 @@
 
 (provide render-html-to-text)
 
-(define paragraph-elements '(h1 h2 h3 h4 p))
+(define paragraph-elements '(h1 h2 h3 h4 h5 h6 p))
+
+(define font-size-vec #(6 8 10 12 16 20 24))
 
 (define delta:fixed (make-object style-delta% 'change-family 'modern))
 (define delta:default-face (make-object style-delta% 'change-family 'default))
@@ -67,7 +71,7 @@
     [else
      c]))
 
-#;(define (read-html a-port)
+(define (read-html2 a-port)
   (let* ([xml (parameterize ([read-html-comments #t]
                              [use-html-spec #f])
                 (read-html-as-xml a-port))]
@@ -134,9 +138,14 @@
           (change-style html-basic-style pos-before pos-after))))
 
     (define (insert-newline)
-      (let ((s (make-object string-snip% "\n")))
-        (send s set-flags (cons 'hard-newline (send s get-flags)))
-        (send a-text insert s)))
+      (eprintf "inserting newline~n")
+      ;(define last-snip (send a-text find-snip (current-pos) 'after))
+      ;(send last-snip set-flags (cons 'hard-newline (send last-snip get-flags)))
+      ;; adding a hard-newline flag appears to prevent a string from being word wrapped,
+      ;; so add the flag to a new string containing a single space and then insert a newline 
+      (define space (make-object string-snip% " "))
+      (send space set-flags (cons 'hard-newline (send space get-flags)))
+      (send a-text insert "\n"))
     
     (define (set-alignment align)
       ;(eprintf "setting alignment to ~a~n" align)
@@ -161,7 +170,7 @@
         [(h3)
          (send (current-style-delta) set-delta 'change-bold)
          (send (current-style-delta) set-size-mult 1.2)]
-        [(h4)
+        [(h4 h5 h6)
          (send (current-style-delta) set-delta 'change-bold)]
         [(pre)
          (send (current-style-delta) set-delta 'change-family 'modern)]
@@ -199,6 +208,19 @@
          (set! current-vlink-color (parse-color (cadr attr)))
          (lambda ()
            (set! current-vlink-color prev-vlink-color))]
+        [(size)
+         (define val (string->number (cadr attr)))
+         (cond
+           [(or (char=? (string-ref (cadr attr) 0) #\+)
+                (char=? (string-ref (cadr attr) 0) #\-))
+            (define cur-size (send (current-style-delta) get-size-mult))
+            (eprintf "current font size = ~a~n" cur-size)
+            #;(send (current-style-delta) set-delta )]
+           [(and (> val 0) (< val 8))
+            (eprintf "setting font size to ~a~n" val)
+            (send (current-style-delta) set-delta 'change-size (vector-ref font-size-vec val))]
+           [else void])
+         (lambda () void)]
         [(href)
          (define link-start-pos (current-pos))
          (define vlink-delta (make-object style-delta%))
@@ -224,31 +246,41 @@
         (cond
           [(sxml:element? node)
            (printf "element ~a~n" (sxml:element-name node))
-           (define style-copy (make-object style-delta% 'change-nothing))
-           (send style-copy copy (current-style-delta))
-           (parameterize ([current-style-delta style-copy]
-                          [current-element (car node)])
-             (update-style-delta (car node))
-             (change-style (current-style-delta) (current-pos))
-             ;; get attributes for this tag and process them
-             ;; returns a list of functions to call when closing the tag
-             (define close-tag-funcs
-               (for/list ([attr (in-list (sxml:attr-list node))])
-                 (eprintf "handling attribute ~a~n" attr)
-                 (handle-attribute attr)))
-             ;; recurse into the element
-             (loop (cdr node))
-             ;; perform actions to close the tag
-             (for ([f (in-list close-tag-funcs)])
-               (f)))
-
-           (eprintf "ending ~a~n" (car node))
-           (when (memq (car node) paragraph-elements)
-             (eprintf "inserting newlines~n")
-             (insert-newline)
-             (insert-newline))
-           (change-style html-basic-style (current-pos))
-           (change-style (current-style-delta) (current-pos))
+           (case (sxml:element-name node)
+             [(br)
+              (insert-newline)]
+             [(hr)
+              (when (not (equal? (get-character (sub1 (current-pos))) #\newline))
+                (insert-newline))
+              (send a-text insert "---------------------------")
+              (insert-newline)]
+             [else
+              (define style-copy (make-object style-delta% 'change-nothing))
+              (send style-copy copy (current-style-delta))
+              (parameterize ([current-style-delta style-copy]
+                             [current-element (car node)])
+                (update-style-delta (car node))
+                (change-style (current-style-delta) (current-pos))
+                ;; get attributes for this tag and process them
+                ;; returns a list of functions to call when closing the tag
+                (define close-tag-funcs
+                  (for/list ([attr (in-list (sxml:attr-list node))])
+                    (eprintf "handling attribute ~a~n" attr)
+                    (handle-attribute attr)))
+                
+                ;; recurse into the element
+                (loop (cdr node))
+                ;; perform actions to close the tag
+                (for ([f (in-list close-tag-funcs)])
+                  (f)))
+              
+              (eprintf "ending ~a~n" (car node))
+              (when (memq (car node) paragraph-elements)
+                (eprintf "inserting newlines~n")
+                (insert-newline)
+                (insert-newline))
+              (change-style html-basic-style (current-pos))
+              (change-style (current-style-delta) (current-pos))])
            (loop (cdr s))]
           [(string? node)
            (case (current-element)
@@ -270,13 +302,15 @@
                     (a-text-insert (string-append text " "))
                     (a-text-insert text))
                 (send a-text set-paragraph-alignment (send a-text position-paragraph insert-pos) current-alignment)
-                (eprintf "~a,~a paragraph ~a: ~a~n" (current-element) current-alignment (send a-text position-paragraph insert-pos) node))])
+                (eprintf "~a,~a paragraph ~a: ~a~n" (current-element) current-alignment (send a-text position-paragraph insert-pos) text))
+              (when (not (non-empty-string? text))
+                (eprintf "skipped newline char~n"))])
            (loop (cdr s))]
           #;[(attr-list? node)
            (printf "atrributes ~a~n" (cdr node))
            (loop (cdr s))]
           [else
-           ;(printf "skip ~a~n" node)
+           (printf "skip ~a~n" node)
            (loop (cdr s))])))
     
     void))
