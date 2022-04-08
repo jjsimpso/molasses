@@ -79,12 +79,13 @@
     (car xexpr)))
 
 (define (parse-color c-string)
-  (if (and (string? c-string)
-           (equal? (string-ref c-string 0) #\#))
-      (make-color (string->number (substring c-string 1 3) 16)
-                  (string->number (substring c-string 3 5) 16)
-                  (string->number (substring c-string 5 7) 16))
-      (make-color 255 255 255)))
+  (cond
+    [(equal? (string-ref c-string 0) #\#)
+     (make-color (string->number (substring c-string 1 3) 16)
+                 (string->number (substring c-string 3 5) 16)
+                 (string->number (substring c-string 5 7) 16))]
+    [else
+      (make-object color% c-string)]))
 
 (define (read-html a-port)
   (html->xexp a-port))
@@ -163,7 +164,7 @@
             (send a-text position-paragraph (current-pos))
             align))
     
-    (define (update-style-delta elem)
+    (define (handle-element elem)
       (case elem
         [(p)
          (start-new-paragraph)]
@@ -238,6 +239,11 @@
             (send (current-style-delta) set-delta 'change-size (vector-ref font-size-vec val))]
            [else void])
          (lambda () void)]
+        [(color)
+         (eprintf "setting font color to ~a~n" (cadr attr))
+         (define text-color (parse-color (cadr attr)))
+         (send (current-style-delta) set-delta-foreground text-color)
+         (lambda () void)]
         [(href)
          (define link-start-pos (current-pos))
          (define vlink-delta (make-object style-delta%))
@@ -276,14 +282,14 @@
               (send style-copy copy (current-style-delta))
               (parameterize ([current-style-delta style-copy]
                              [current-element (car node)])
-                (update-style-delta (car node))
-                (change-style (current-style-delta) (current-pos))
+                (handle-element (car node))
                 ;; get attributes for this tag and process them
                 ;; returns a list of functions to call when closing the tag
                 (define close-tag-funcs
                   (for/list ([attr (in-list (sxml:attr-list node))])
                     (eprintf "handling attribute ~a~n" attr)
                     (handle-attribute attr)))
+                (change-style (current-style-delta) (current-pos))
                 
                 ;; recurse into the element
                 (loop (cdr node))
@@ -331,7 +337,7 @@
            (printf "atrributes ~a~n" (cdr node))
            (loop (cdr s))]
           [else
-           (printf "skip ~a~n" node)
+           ;(printf "skip ~a~n" node)
            (loop (cdr s))])))
     
     void))
