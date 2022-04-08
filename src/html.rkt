@@ -21,7 +21,7 @@
 
 (provide render-html-to-text)
 
-(define paragraph-elements '(h1 h2 h3 h4 h5 h6 p))
+(define paragraph-elements '(h1 h2 h3 h4 h5 h6 p pre))
 
 (define font-size-vec #(6 8 10 12 16 20 24))
 
@@ -131,6 +131,9 @@
                 [get-character (a-text get-character)]
                 [change-style (a-text change-style)])
 
+    (define (last-char-newline?)
+      (equal? (get-character (sub1 (current-pos))) #\newline))
+    
     (define (insert what) 
       (let ([pos-before (current-pos)])
         (a-text-insert what pos-before)
@@ -146,6 +149,13 @@
       (define space (make-object string-snip% " "))
       (send space set-flags (cons 'hard-newline (send space get-flags)))
       (send a-text insert "\n"))
+
+    (define (start-new-paragraph)
+      (when (and (not (zero? (current-pos)))
+                 (not (last-char-newline?)))
+        (eprintf "starting new paragraph~n")
+        (insert-newline)
+        (insert-newline)))
     
     (define (set-alignment align)
       ;(eprintf "setting alignment to ~a~n" align)
@@ -155,6 +165,8 @@
     
     (define (update-style-delta elem)
       (case elem
+        [(p)
+         (start-new-paragraph)]
         [(a)
          (send (current-style-delta) set-delta-foreground current-link-color)]
         [(b)
@@ -162,17 +174,22 @@
          (send (current-style-delta) set-delta 'change-bold)]
         [(h1)
          ;(eprintf "applying h1 style at ~a~n" (current-pos))
+         (start-new-paragraph)
          (send (current-style-delta) set-delta 'change-bold)
          (send (current-style-delta) set-size-mult 2.0)]
         [(h2)
+         (start-new-paragraph)
          (send (current-style-delta) set-delta 'change-bold)
          (send (current-style-delta) set-size-mult 1.5)]
         [(h3)
+         (start-new-paragraph)
          (send (current-style-delta) set-delta 'change-bold)
          (send (current-style-delta) set-size-mult 1.2)]
         [(h4 h5 h6)
+         (start-new-paragraph)
          (send (current-style-delta) set-delta 'change-bold)]
         [(pre)
+         (start-new-paragraph)
          (send (current-style-delta) set-delta 'change-family 'modern)]
         [else
          void]))
@@ -250,7 +267,7 @@
              [(br)
               (insert-newline)]
              [(hr)
-              (when (not (equal? (get-character (sub1 (current-pos))) #\newline))
+              (when (not (last-char-newline?))
                 (insert-newline))
               (send a-text insert "---------------------------")
               (insert-newline)]
@@ -275,9 +292,13 @@
                   (f)))
               
               (eprintf "ending ~a~n" (car node))
+              ;; insert newlines and the end of a "paragraph" element
+              ;; only insert one newline if the paragraph already ends with a newline character
+              ;; otherwise insert two in order to create a blank line
               (when (memq (car node) paragraph-elements)
-                (eprintf "inserting newlines~n")
-                (insert-newline)
+                (eprintf "inserting newlines at end of 'paragraph'~n")
+                (when (not (last-char-newline?))
+                  (insert-newline))
                 (insert-newline))
               (change-style html-basic-style (current-pos))
               (change-style (current-style-delta) (current-pos))])
@@ -297,7 +318,7 @@
                 ;; special case for paragraphs with multiple strings (which means that newlines were found when parsing)
                 ;; add space to the end of the line so strings will flow together, essentially replacing the trimmed
                 ;; newline with a space
-                (if (and (eq? (current-element) 'p)
+                (if (and (memq (current-element) paragraph-elements)
                          (and (not (empty? (cdr s))) (string? (cadr s))))
                     (a-text-insert (string-append text " "))
                     (a-text-insert text))
