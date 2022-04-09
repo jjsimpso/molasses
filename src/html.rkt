@@ -85,7 +85,10 @@
                  (string->number (substring c-string 3 5) 16)
                  (string->number (substring c-string 5 7) 16))]
     [else
-      (make-object color% c-string)]))
+     (define named-color (send the-color-database find-color c-string))
+     (if named-color
+         named-color
+         (make-color 16 16 16))]))
 
 (define (read-html a-port)
   (html->xexp a-port))
