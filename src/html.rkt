@@ -23,7 +23,6 @@
 
 (define paragraph-elements '(h1 h2 h3 h4 h5 h6 p pre))
 
-(define font-size-vec #(6 8 10 12 16 20 24))
 
 (define delta:fixed (make-object style-delta% 'change-family 'modern))
 (define delta:default-face (make-object style-delta% 'change-family 'default))
@@ -90,6 +89,27 @@
          named-color
          (make-color 16 16 16))]))
 
+;; read the font size string and return a new font size
+(define (parse-font-size size-string cur-size)
+  (define val (string->number size-string))
+  (cond
+    [(or (char=? (string-ref size-string 0) #\+)
+         (char=? (string-ref size-string 0) #\-))
+     (define new-size (+ cur-size val))
+     (if (<= 1 new-size 7)
+         new-size
+         (if (< new-size 1)
+             1
+             7))]
+    [(and (>= val 1) (<= val 7))
+     val]
+    [else
+     (if (<= 1 val 7)
+         val
+         (if (< val 1)
+             1
+             7))]))
+
 (define (read-html a-port)
   (html->xexp a-port))
 
@@ -128,12 +148,19 @@
   ;; don't use a parameter for link color since it will change so rarely
   (define current-link-color html-link-color)
   (define current-vlink-color html-vlink-color)
-
+  (define current-font-size 3)
+  
   (with-method ([a-text-insert (a-text insert)]
                 [current-pos (a-text last-position)]
                 [delete (a-text delete)]
                 [get-character (a-text get-character)]
                 [change-style (a-text change-style)])
+
+    (define (get-font-size)
+      (send (send (send (send a-text find-snip (current-pos) 'after)
+                        get-style)
+                  get-font)
+            get-size))
 
     (define (last-char-newline?)
       (equal? (get-character (sub1 (current-pos))) #\newline))
@@ -230,18 +257,16 @@
          (lambda ()
            (set! current-vlink-color prev-vlink-color))]
         [(size)
-         (define val (string->number (cadr attr)))
-         (cond
-           [(or (char=? (string-ref (cadr attr) 0) #\+)
-                (char=? (string-ref (cadr attr) 0) #\-))
-            (define cur-size (send (current-style-delta) get-size-mult))
-            (eprintf "current font size = ~a~n" cur-size)
-            #;(send (current-style-delta) set-delta )]
-           [(and (> val 0) (< val 8))
-            (eprintf "setting font size to ~a~n" val)
-            (send (current-style-delta) set-delta 'change-size (vector-ref font-size-vec val))]
-           [else void])
-         (lambda () void)]
+         (define font-size-vec #(0.5 2/3 5/6 1.0 4/3 5/3 2.0))  ; 6 8 10 12 16 20 24
+         (define prev-size current-font-size)
+         (define size (parse-font-size (cadr attr)
+                                       prev-size))
+         (eprintf "new font size: ~a -> ~a -> ~a~n" prev-size (cadr attr) size)
+         (set! current-font-size size)
+         (send (current-style-delta) set-size-mult (vector-ref font-size-vec (sub1 size)))
+         ;(send (current-style-delta) set-delta 'change-size (vector-ref font-size-vec val))]
+         (lambda ()
+           (set! current-font-size prev-size))]
         [(color)
          (eprintf "setting font color to ~a~n" (cadr attr))
          (define text-color (parse-color (cadr attr)))
@@ -332,7 +357,8 @@
                     (a-text-insert (string-append text " "))
                     (a-text-insert text))
                 (send a-text set-paragraph-alignment (send a-text position-paragraph insert-pos) current-alignment)
-                (eprintf "~a,~a paragraph ~a: ~a~n" (current-element) current-alignment (send a-text position-paragraph insert-pos) text))
+                (eprintf "~a,~a,~a paragraph ~a: ~a~n" (current-element) current-alignment (get-font-size)
+                         (send a-text position-paragraph insert-pos) text))
               (when (not (non-empty-string? text))
                 (eprintf "skipped newline char~n"))])
            (loop (cdr s))]
