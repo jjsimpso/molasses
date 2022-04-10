@@ -26,22 +26,6 @@
 
 (define delta:fixed (make-object style-delta% 'change-family 'modern))
 (define delta:default-face (make-object style-delta% 'change-family 'default))
-(define delta:bold (make-object style-delta% 'change-bold))
-(define delta:underline (make-object style-delta% 'change-underline #t))
-(define delta:italic (make-object style-delta% 'change-italic))
-(define delta:h1
-  (let ([d (make-object style-delta% 'change-bold)])
-    (send d set-size-mult 2.0)
-    d))
-(define delta:h2
-  (let ([d (make-object style-delta% 'change-bold)])
-    (send d set-size-mult 1.5)
-    d))
-(define delta:h3
-  (let ([d (make-object style-delta% 'change-bold)])
-    (send d set-size-mult 1.2)
-    d))
-(define delta:h4 (make-object style-delta% 'change-bold))
 (define delta:subscript
   (let ([d (make-object style-delta%)])
     (send d set-alignment-on 'bottom)
@@ -201,10 +185,12 @@
         [(a)
          (send (current-style-delta) set-delta-foreground current-link-color)]
         [(b)
-         ;(eprintf "applying bold style at ~a~n" (current-pos))
          (send (current-style-delta) set-delta 'change-bold)]
+        [(i)
+         (send (current-style-delta) set-delta 'change-italic)]
+        [(u)
+         (send (current-style-delta) set-delta 'change-underline #t)]        
         [(h1)
-         ;(eprintf "applying h1 style at ~a~n" (current-pos))
          (start-new-paragraph)
          (send (current-style-delta) set-delta 'change-bold)
          (send (current-style-delta) set-size-mult 2.0)]
