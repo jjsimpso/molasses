@@ -317,6 +317,7 @@ END
   (define html-standard (send style-list new-named-style "Html Standard" standard))
   (define html-standard-delta (make-object style-delta%))
   (send* html-standard-delta
+    (set-family 'roman)
     (set-delta-foreground html-text-fg-color)
     (set-delta-background html-text-bg-color))
   (send html-standard set-delta html-standard-delta)
