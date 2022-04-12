@@ -189,7 +189,7 @@
         [(i)
          (send (current-style-delta) set-delta 'change-italic)]
         [(u)
-         (send (current-style-delta) set-delta 'change-underline #t)]        
+         (send (current-style-delta) set-delta 'change-underline #t)]
         [(h1)
          (start-new-paragraph)
          (send (current-style-delta) set-delta 'change-bold)
@@ -276,7 +276,7 @@
     (send a-text set-styles-sticky #t)
     (eprintf "sticky = ~a~n" (send a-text get-styles-sticky))
     (send a-text change-style html-basic-style)
-    
+        
     (let loop ([s content])
       (unless (empty? s)
         (define node (car s))
@@ -332,16 +332,10 @@
               (a-text-insert node)
               (send a-text set-paragraph-alignment (send a-text position-paragraph insert-pos) 'left)]
              [else
-              (define text (string-trim node #px"[\n\r]+" #:left? #f))
+              (define text (string-normalize-spaces node))
               (when (non-empty-string? text)
                 (define insert-pos (current-pos))
-                ;; special case for paragraphs with multiple strings (which means that newlines were found when parsing)
-                ;; add space to the end of the line so strings will flow together, essentially replacing the trimmed
-                ;; newline with a space
-                (if (and (memq (current-element) paragraph-elements)
-                         (and (not (empty? (cdr s))) (string? (cadr s))))
-                    (a-text-insert (string-append text " "))
-                    (a-text-insert text))
+                (a-text-insert (string-append text " "))
                 (send a-text set-paragraph-alignment (send a-text position-paragraph insert-pos) current-alignment)
                 (eprintf "~a,~a,~a paragraph ~a: ~a~n" (current-element) current-alignment (get-font-size)
                          (send a-text position-paragraph insert-pos) text))
