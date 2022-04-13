@@ -149,12 +149,6 @@
     (define (last-char-newline?)
       (equal? (get-character (sub1 (current-pos))) #\newline))
     
-    (define (insert what) 
-      (let ([pos-before (current-pos)])
-        (a-text-insert what pos-before)
-        (let ([pos-after (current-pos)])
-          (change-style html-basic-style pos-before pos-after))))
-
     (define (insert-newline)
       (eprintf "inserting newline~n")
       ;(define last-snip (send a-text find-snip (current-pos) 'after))
@@ -177,6 +171,10 @@
       (send a-text set-paragraph-alignment
             (send a-text position-paragraph (current-pos))
             align))
+
+    (define (apply-current-style)
+      (change-style html-basic-style (current-pos))
+      (change-style (current-style-delta) (current-pos)))
     
     (define (handle-element elem)
       (case elem
@@ -303,7 +301,8 @@
                   (for/list ([attr (in-list (sxml:attr-list node))])
                     (eprintf "handling attribute ~a~n" attr)
                     (handle-attribute attr)))
-                (change-style (current-style-delta) (current-pos))
+                
+                (apply-current-style)
                 
                 ;; recurse into the element
                 (loop (cdr node))
@@ -320,8 +319,7 @@
                 (when (not (last-char-newline?))
                   (insert-newline))
                 (insert-newline))
-              (change-style html-basic-style (current-pos))
-              (change-style (current-style-delta) (current-pos))])
+              (apply-current-style)])
            (loop (cdr s))]
           [(string? node)
            (case (current-element)
