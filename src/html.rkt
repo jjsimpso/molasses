@@ -241,7 +241,7 @@
          (lambda ()
            (set! current-vlink-color prev-vlink-color))]
         [(size)
-         (define font-size-vec #(0.5 2/3 5/6 1.0 4/3 5/3 2.0))  ; 6 8 10 12 16 20 24
+         (define font-size-vec #(2/3 5/6 1.0 7/6 4/3 5/3 2.0))  ; 8 10 12 14 16 20 24
          (define prev-size current-font-size)
          (define size (parse-font-size (cadr attr)
                                        prev-size))
