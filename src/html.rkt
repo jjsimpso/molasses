@@ -21,7 +21,7 @@
 
 (provide render-html-to-text)
 
-(define paragraph-elements '(h1 h2 h3 h4 h5 h6 p pre))
+(define paragraph-elements '(h1 h2 h3 h4 h5 h6 p pre center))
 
 
 (define delta:fixed (make-object style-delta% 'change-family 'modern))
@@ -49,8 +49,12 @@
     [(string? c)
       (string-replace c "\r\n" "\n")]
     [(pair? c)
-     (cons (fixup-newlines (car c))
-           (fixup-newlines (cdr c)))]
+     (if (and (string? (car c))
+              (regexp-match #px"^\\s+$" (car c)))
+         ;; skip strings that consist only of whitespace
+         (fixup-newlines (cdr c))
+         (cons (fixup-newlines (car c))
+               (fixup-newlines (cdr c))))]
     [else
      c]))
 
@@ -148,6 +152,16 @@
 
     (define (last-char-newline?)
       (equal? (get-character (sub1 (current-pos))) #\newline))
+
+    (define (followed-by-newline? node)
+      (eprintf "followed-by-newline? ~a~n" node)
+      (cond
+        [(empty? node) #f]
+        [(sxml:element? node)
+         (or (eq? (sxml:element-name node) 'br)
+             (eq? (sxml:element-name node) 'hr))]
+        [else
+         #f]))
     
     (define (insert-newline)
       (eprintf "inserting newline~n")
@@ -206,6 +220,9 @@
         [(pre)
          (start-new-paragraph)
          (send (current-style-delta) set-delta 'change-family 'modern)]
+        [(center)
+         ;; alignment is handled elsewhere
+         (start-new-paragraph)]
         [else
          void]))
 
@@ -301,7 +318,10 @@
                   (for/list ([attr (in-list (sxml:attr-list node))])
                     (eprintf "handling attribute ~a~n" attr)
                     (handle-attribute attr)))
-                
+                ;; hack for center element. treat it as an align attribute
+                (when (eq? (car node) 'center)
+                  (set! close-tag-funcs (cons (handle-attribute '(align "center"))
+                                              close-tag-funcs)))
                 (apply-current-style)
                 
                 ;; recurse into the element
@@ -313,10 +333,13 @@
               (eprintf "ending ~a~n" (car node))
               ;; insert newlines and the end of a "paragraph" element
               ;; only insert one newline if the paragraph already ends with a newline character
+              ;; or the next element is a <br> or <hr>
               ;; otherwise insert two in order to create a blank line
               (when (memq (car node) paragraph-elements)
                 (eprintf "inserting newlines at end of 'paragraph'~n")
-                (when (not (last-char-newline?))
+                (when (and (not (last-char-newline?))
+                           (and (not (empty? (cdr s)))
+                                (not (followed-by-newline? (cadr s)))))
                   (insert-newline))
                 (insert-newline))
               (apply-current-style)])
