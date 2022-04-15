@@ -151,7 +151,10 @@
             get-size))
 
     (define (last-char-newline?)
-      (equal? (get-character (sub1 (current-pos))) #\newline))
+      (define cur-pos (current-pos))
+      (if (equal? cur-pos 0)
+          #t
+          (equal? (get-character (sub1 cur-pos)) #\newline)))
 
     (define (followed-by-newline? node)
       (eprintf "followed-by-newline? ~a~n" node)
