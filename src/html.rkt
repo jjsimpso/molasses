@@ -10,7 +10,8 @@
          sxml
          net/url)
 
-(require "config.rkt")
+(require "config.rkt"
+         "html-snips.rkt")
 
 ;; use browser/htmltext frome drracket as a starting point and basis for the api
 ;; 
@@ -307,7 +308,7 @@
              [(hr)
               (when (not (last-char-newline?))
                 (insert-newline))
-              (send a-text insert "---------------------------")
+              (send a-text insert (make-object horz-line-snip%))
               (insert-newline)]
              [else
               (define style-copy (make-object style-delta% 'change-nothing))
