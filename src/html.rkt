@@ -193,105 +193,139 @@
     (define (apply-current-style)
       (change-style html-basic-style (current-pos))
       (change-style (current-style-delta) (current-pos)))
+
+    (define (handle-body-attributes node)
+      (for/list ([attr (in-list (sxml:attr-list node))])
+        (eprintf "handling body attribute ~a~n" attr)
+        (case (car attr)
+          [(bgcolor)
+           (define bg-color (parse-color (cadr attr)))
+           (send (send a-text get-canvas) set-canvas-background bg-color)
+           (send (current-style-delta) set-delta-background bg-color)
+           (lambda () void)]
+          [(text)
+           (define text-color (parse-color (cadr attr)))
+           (send (current-style-delta) set-delta-foreground text-color)
+           (lambda () void)]
+          [(link)
+           (define prev-link-color current-link-color)
+           (set! current-link-color (parse-color (cadr attr)))
+           (lambda ()
+             (set! current-link-color prev-link-color))]
+          [(vlink)
+           (define prev-vlink-color current-vlink-color)
+           (set! current-vlink-color (parse-color (cadr attr)))
+           (lambda ()
+             (set! current-vlink-color prev-vlink-color))]
+          [else
+           (eprintf "  null func for attribute ~a~n" attr)
+           (lambda () void)])))
+
+    (define (handle-font-attributes node)
+      (define font-size-vec #(2/3 5/6 1.0 7/6 4/3 5/3 2.0))  ; 8 10 12 14 16 20 24
+      (define size-value (sxml:attr node 'size))
+      (define color-value (sxml:attr node 'color))
+
+      ;; changes current style only, no need for close tag function
+      (when color-value
+        (eprintf "setting font color to ~a~n" color-value)
+        (define text-color (parse-color color-value))
+        (send (current-style-delta) set-delta-foreground text-color))
+      
+      (if size-value
+          (let ([prev-size current-font-size]
+                [size (parse-font-size size-value current-font-size)])
+            (eprintf "new font size: ~a -> ~a -> ~a~n" prev-size size-value size)
+            (set! current-font-size size)
+            (send (current-style-delta) set-size-mult (vector-ref font-size-vec (sub1 size)))
+            (list (lambda ()
+                    (set! current-font-size prev-size))))
+          '()))
+          
+    (define (handle-paragraph-attributes node)
+      (define value (sxml:attr node 'align))
+      (if value
+          (let ([prev-alignment current-alignment])
+            (set! current-alignment
+                  (cond
+                    [(string-ci=? value "center") 'center]
+                    [(string-ci=? value "left") 'left]
+                    [(string-ci=? value "right") 'right]))
+            (list (lambda ()
+                    (set! current-alignment prev-alignment))))
+          '()))
+
+    (define (handle-href node)
+      (define href-value (sxml:attr node 'href))
+      (if href-value
+          (let ([link-start-pos (current-pos)]
+                [vlink-delta (make-object style-delta%)])
+            (send vlink-delta set-delta-foreground current-vlink-color)
+            (list (lambda ()
+                    ;; add clickback to link region (temp function to just change the link color)
+                    (send a-text set-clickback
+                          link-start-pos
+                          (current-pos)
+                          (lambda (text-widget start end)
+                            (eprintf "link to ~a clicked~n" href-value)
+                            (send text-widget change-style vlink-delta start end))))))
+          '()))
     
-    (define (handle-element elem)
-      (case elem
+    ;; handle each element based on the element type
+    ;; return a list of functions to call when closing the element
+    (define (handle-element node)
+      (case (car node)
         [(p)
-         (start-new-paragraph)]
+         (start-new-paragraph)
+         (handle-paragraph-attributes node)]
         [(a)
-         (send (current-style-delta) set-delta-foreground current-link-color)]
+         (send (current-style-delta) set-delta-foreground current-link-color)
+         (handle-href node)]
         [(b)
-         (send (current-style-delta) set-delta 'change-bold)]
+         (send (current-style-delta) set-delta 'change-bold)
+         '()]
         [(i)
-         (send (current-style-delta) set-delta 'change-italic)]
+         (send (current-style-delta) set-delta 'change-italic)
+         '()]
         [(u)
-         (send (current-style-delta) set-delta 'change-underline #t)]
+         (send (current-style-delta) set-delta 'change-underline #t)
+         '()]
         [(h1)
          (start-new-paragraph)
          (send (current-style-delta) set-delta 'change-bold)
-         (send (current-style-delta) set-size-mult 2.0)]
+         (send (current-style-delta) set-size-mult 2.0)
+         (handle-paragraph-attributes node)]
         [(h2)
          (start-new-paragraph)
          (send (current-style-delta) set-delta 'change-bold)
-         (send (current-style-delta) set-size-mult 1.5)]
+         (send (current-style-delta) set-size-mult 1.5)
+         (handle-paragraph-attributes node)]
         [(h3)
          (start-new-paragraph)
          (send (current-style-delta) set-delta 'change-bold)
-         (send (current-style-delta) set-size-mult 1.2)]
+         (send (current-style-delta) set-size-mult 1.2)
+         (handle-paragraph-attributes node)]
         [(h4 h5 h6)
          (start-new-paragraph)
-         (send (current-style-delta) set-delta 'change-bold)]
+         (send (current-style-delta) set-delta 'change-bold)
+         (handle-paragraph-attributes node)]
         [(pre)
          (start-new-paragraph)
-         (send (current-style-delta) set-delta 'change-family 'modern)]
+         (send (current-style-delta) set-delta 'change-family 'modern)
+         '()]
         [(center)
-         ;; alignment is handled elsewhere
-         (start-new-paragraph)]
-        [else
-         void]))
-
-    (define (handle-attribute attr)
-      (case (car attr)
-        [(align)
-         (define value (cadr attr))
+         (start-new-paragraph)
          (define prev-alignment current-alignment)
-         (set! current-alignment
-           (cond
-             [(string-ci=? value "center") 'center]
-             [(string-ci=? value "left") 'left]
-             [(string-ci=? value "right") 'right]))
-         (lambda ()
-           (set! current-alignment prev-alignment))]
-        [(bgcolor)
-         (define bg-color (parse-color (cadr attr)))
-         (send (send a-text get-canvas) set-canvas-background bg-color)
-         (send (current-style-delta) set-delta-background bg-color)
-         (lambda () void)]
-        [(text)
-         (define text-color (parse-color (cadr attr)))
-         (send (current-style-delta) set-delta-foreground text-color)
-         (lambda () void)]
-        [(link)
-         (define prev-link-color current-link-color)
-         (set! current-link-color (parse-color (cadr attr)))
-         (lambda ()
-           (set! current-link-color prev-link-color))]
-        [(vlink)
-         (define prev-vlink-color current-vlink-color)
-         (set! current-vlink-color (parse-color (cadr attr)))
-         (lambda ()
-           (set! current-vlink-color prev-vlink-color))]
-        [(size)
-         (define font-size-vec #(2/3 5/6 1.0 7/6 4/3 5/3 2.0))  ; 8 10 12 14 16 20 24
-         (define prev-size current-font-size)
-         (define size (parse-font-size (cadr attr)
-                                       prev-size))
-         (eprintf "new font size: ~a -> ~a -> ~a~n" prev-size (cadr attr) size)
-         (set! current-font-size size)
-         (send (current-style-delta) set-size-mult (vector-ref font-size-vec (sub1 size)))
-         ;(send (current-style-delta) set-delta 'change-size (vector-ref font-size-vec val))]
-         (lambda ()
-           (set! current-font-size prev-size))]
-        [(color)
-         (eprintf "setting font color to ~a~n" (cadr attr))
-         (define text-color (parse-color (cadr attr)))
-         (send (current-style-delta) set-delta-foreground text-color)
-         (lambda () void)]
-        [(href)
-         (define link-start-pos (current-pos))
-         (define vlink-delta (make-object style-delta%))
-         (send vlink-delta set-delta-foreground current-vlink-color)
-         (lambda ()
-           ;; add clickback to link region (temp function to just change the link color)
-           (send a-text set-clickback
-                 link-start-pos
-                 (current-pos)
-                 (lambda (text-widget start end)
-                   (eprintf "link to ~a clicked~n" (cadr attr))
-                   (send text-widget change-style vlink-delta start end))))]
+         (set! current-alignment 'center)
+         (list (lambda ()
+                 (set! current-alignment prev-alignment)))]
+        [(body)
+         (handle-body-attributes node)]
+        [(font)
+         (handle-font-attributes node)]
         [else
-         (lambda () void)]))
-    
+         '()]))
+
     (send a-text set-styles-sticky #t)
     (eprintf "sticky = ~a~n" (send a-text get-styles-sticky))
     (send a-text change-style html-basic-style)
@@ -315,26 +349,19 @@
               (send style-copy copy (current-style-delta))
               (parameterize ([current-style-delta style-copy]
                              [current-element (car node)])
-                (handle-element (car node))
-                ;; get attributes for this tag and process them
-                ;; returns a list of functions to call when closing the tag
-                (define close-tag-funcs
-                  (for/list ([attr (in-list (sxml:attr-list node))])
-                    (eprintf "handling attribute ~a~n" attr)
-                    (handle-attribute attr)))
-                ;; hack for center element. treat it as an align attribute
-                (when (eq? (car node) 'center)
-                  (set! close-tag-funcs (cons (handle-attribute '(align "center"))
-                                              close-tag-funcs)))
+                ;; handle the element. returns a list of functions to call when closing the tag
+                ;; will also update the current style
+                (define close-tag-funcs (handle-element node))
                 (apply-current-style)
                 
                 ;; recurse into the element
                 (loop (cdr node))
+                
                 ;; perform actions to close the tag
                 (for ([f (in-list close-tag-funcs)])
                   (f)))
-              
               (eprintf "ending ~a~n" (car node))
+              
               ;; insert newlines and the end of a "paragraph" element
               ;; only insert one newline if the paragraph already ends with a newline character
               ;; or the next element is a <br> or <hr>
@@ -346,6 +373,7 @@
                                 (not (followed-by-newline? (cadr s)))))
                   (insert-newline))
                 (insert-newline))
+              ;; reset the style
               (apply-current-style)])
            (loop (cdr s))]
           [(string? node)
