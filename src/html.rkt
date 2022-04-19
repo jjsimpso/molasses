@@ -22,9 +22,6 @@
 
 (provide render-html-to-text)
 
-(define paragraph-elements '(h1 h2 h3 h4 h5 h6 p pre center))
-
-
 (define delta:fixed (make-object style-delta% 'change-family 'modern))
 (define delta:default-face (make-object style-delta% 'change-family 'default))
 (define delta:subscript
@@ -50,12 +47,8 @@
     [(string? c)
       (string-replace c "\r\n" "\n")]
     [(pair? c)
-     (if (and (string? (car c))
-              (regexp-match #px"^\\s+$" (car c)))
-         ;; skip strings that consist only of whitespace
-         (fixup-newlines (cdr c))
-         (cons (fixup-newlines (car c))
-               (fixup-newlines (cdr c))))]
+     (cons (fixup-newlines (car c))
+           (fixup-newlines (cdr c)))]
     [else
      c]))
 
@@ -131,7 +124,7 @@
           (send sl find-named-style "Standard")
           (send sl find-named-style "Basic"))))
   (define current-style-delta (make-parameter (make-object style-delta% 'change-nothing)))
-  (define current-element (make-parameter #f))
+  (define current-block (make-parameter #f))
   ;; alignment is a special case since it isn't controlled by a style and must be applied to each paragraph
   (define current-alignment 'left)  
   ;; don't use a parameter for link color since it will change so rarely
@@ -183,7 +176,7 @@
         (eprintf "starting new paragraph~n")
         (insert-newline)
         (insert-newline)))
-    
+
     (define (set-alignment align)
       ;(eprintf "setting alignment to ~a~n" align)
       (send a-text set-paragraph-alignment
@@ -193,6 +186,23 @@
     (define (apply-current-style)
       (change-style html-basic-style (current-pos))
       (change-style (current-style-delta) (current-pos)))
+
+    (define (is-block-element? elem)
+      ;; treat head, title, and body as blocks even though they aren't technically block elements
+      ;; head and title need special treatment but body currently doesn't
+      (define block-elements '(head title body h1 h2 h3 h4 h5 h6 p pre center))
+      (memq elem block-elements))
+
+    ;; defines elements that create paragraphs and require a newline or two after closing
+    ;; may eventually get rid of this function
+    (define (is-paragraph-element? elem)
+      (define para-elements '(h1 h2 h3 h4 h5 h6 p pre center))
+      (memq elem para-elements))
+    
+    (define (update-block current-block elem)
+      (if (is-block-element? elem)
+          elem
+          current-block))
 
     (define (handle-body-attributes node)
       (for/list ([attr (in-list (sxml:attr-list node))])
@@ -348,7 +358,7 @@
               (define style-copy (make-object style-delta% 'change-nothing))
               (send style-copy copy (current-style-delta))
               (parameterize ([current-style-delta style-copy]
-                             [current-element (car node)])
+                             [current-block (update-block (current-block) (car node))])
                 ;; handle the element. returns a list of functions to call when closing the tag
                 ;; will also update the current style
                 (define close-tag-funcs (handle-element node))
@@ -366,7 +376,7 @@
               ;; only insert one newline if the paragraph already ends with a newline character
               ;; or the next element is a <br> or <hr>
               ;; otherwise insert two in order to create a blank line
-              (when (memq (car node) paragraph-elements)
+              (when (is-paragraph-element? (car node))
                 (eprintf "inserting newlines at end of 'paragraph'~n")
                 (when (and (not (last-char-newline?))
                            (and (not (empty? (cdr s)))
@@ -377,12 +387,13 @@
               (apply-current-style)])
            (loop (cdr s))]
           [(string? node)
-           (case (current-element)
+           (case (current-block)
              [(head title)
               void]
              [(pre)
               (define insert-pos (current-pos))
               (a-text-insert node)
+              (eprintf "pre: ~a" node)
               (send a-text set-paragraph-alignment (send a-text position-paragraph insert-pos) 'left)]
              [else
               (define text (string-normalize-spaces node))
@@ -390,7 +401,7 @@
                 (define insert-pos (current-pos))
                 (a-text-insert (string-append text " "))
                 (send a-text set-paragraph-alignment (send a-text position-paragraph insert-pos) current-alignment)
-                (eprintf "~a,~a,~a paragraph ~a: ~a~n" (current-element) current-alignment (get-font-size)
+                (eprintf "~a,~a,~a paragraph ~a: ~a~n" (current-block) current-alignment (get-font-size)
                          (send a-text position-paragraph insert-pos) text))
               (when (not (non-empty-string? text))
                 (eprintf "skipped newline char~n"))])
