@@ -350,9 +350,26 @@
              [(br)
               (insert-newline)]
              [(hr)
+              (define width-value (sxml:attr node 'width))
+              (define width
+                (if width-value
+                    (if (string-contains? width-value "%")
+                        (cons 'percent
+                              (string->number (car (string-split width-value "%"))))
+                        (cons 'pixels
+                              (string->number width-value)))
+                    '('percent . 100)))
+              (define align
+                (case (sxml:attr node 'align)
+                  [("left") 'left]
+                  [("right") 'right]
+                  [("center") 'center]
+                  [else 'center]))
               (when (not (last-char-newline?))
                 (insert-newline))
-              (send a-text insert (make-object horz-line-snip%))
+              (send a-text insert (new horz-line-snip%
+                                       [width-attribute width]
+                                       [align-attribute align]))
               (insert-newline)]
              [else
               (define style-copy (make-object style-delta% 'change-nothing))
