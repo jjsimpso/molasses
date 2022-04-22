@@ -131,6 +131,8 @@
   (define current-link-color html-link-color)
   (define current-vlink-color html-vlink-color)
   (define current-font-size 3)
+
+  (define horz-inset (send (send a-text get-canvas) horizontal-inset))
   
   (with-method ([a-text-insert (a-text insert)]
                 [current-pos (a-text last-position)]
@@ -369,7 +371,8 @@
                 (insert-newline))
               (send a-text insert (new horz-line-snip%
                                        [width-attribute width]
-                                       [align-attribute align]))
+                                       [align-attribute align]
+                                       [horz-offset horz-inset]))
               (insert-newline)]
              [else
               (define style-copy (make-object style-delta% 'change-nothing))
