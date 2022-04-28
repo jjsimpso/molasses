@@ -516,6 +516,9 @@
 
     (define thread-custodian #f)
     (define request-thread-id #f)
+
+    (define/public (get-current-request)
+      (and current-url (browser-url-req current-url)))
     
     ;; copied from Framework's text:hide-caret/selection-mixin
     (define/augment (after-set-position)

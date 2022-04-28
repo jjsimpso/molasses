@@ -11,7 +11,9 @@
          net/url)
 
 (require "config.rkt"
-         "html-snips.rkt")
+         "html-snips.rkt"
+         "gopher.rkt"
+         "request.rkt")
 
 ;; use browser/htmltext frome drracket as a starting point and basis for the api
 ;; 
@@ -22,8 +24,6 @@
 
 (provide render-html-to-text)
 
-(define delta:fixed (make-object style-delta% 'change-family 'modern))
-(define delta:default-face (make-object style-delta% 'change-family 'default))
 (define delta:subscript
   (let ([d (make-object style-delta%)])
     (send d set-alignment-on 'bottom)
@@ -38,9 +38,28 @@
   (let ([d (make-object style-delta%)])
     (send d set-size-mult 0.75)
     d))
-
-(define delta:center (make-object style-delta% 'change-alignment 'center))
 (define delta:symbol (make-object style-delta% 'change-family 'symbol))
+
+;; create a new image snip
+;; use img src attribute and request structure to compose a gopher request to the image
+;; 
+(define (load-new-image-snip src request)
+  (define selector
+    (if (equal? (string-ref src 0) #\/)
+        src
+        ; src is a relative path
+        (string-replace (request-path/selector request)
+                        (last (string-split (request-path/selector request) "/"))
+                        src)))
+  (define response (gopher-fetch (request-host request)
+                                 selector
+                                 "I"
+                                 (request-port request)))
+  (define new-snip (make-object image-snip%
+                                (gopher-response-data-port response)
+                                'unknown))
+  (close-input-port (gopher-response-data-port response))
+  new-snip)
 
 (define (fixup-newlines c)
   (cond
@@ -116,7 +135,7 @@
        (printf "skip ~a~n" node)
        (walk-sxml (cdr s))])))
 
-(define (convert-html a-port a-text)
+(define (convert-html a-port a-text img-ok?)
   (define content (parse-html a-port))
   (define html-basic-style
     (let ([sl (send a-text get-style-list)])
@@ -374,6 +393,17 @@
                                        [align-attribute align]
                                        [horz-offset horz-inset]))
               (insert-newline)]
+             [(img)
+              (when img-ok?
+                (define src-value (sxml:attr node 'src))
+                (define request (send a-text get-current-request))
+                (when request
+                  #;(define align
+                    (case (sxml:attr node 'align)
+                      [("left") 'left]
+                      [("right") 'right]
+                      [else #f]))
+                  (send a-text insert (load-new-image-snip src-value request))))]
              [else
               (define style-copy (make-object style-delta% 'change-nothing))
               (send style-copy copy (current-style-delta))
@@ -435,7 +465,7 @@
     
     void))
 
-(define (render-html-to-text port text%-obj img-ok? eval-ok?)
+(define (render-html-to-text port text%-obj [img-ok? #f] [eval-ok? #f])
   (unless (input-port? port)
     (raise-type-error 'render-html-to-text "input port" 0 (list port text%-obj)))
   ;; TEMP - enable auto wrap automatically for html pages
@@ -444,4 +474,4 @@
   (define canvas (send text%-obj get-active-canvas))
   (when canvas
     (send canvas set-canvas-background html-text-bg-color)) 
-  (convert-html port text%-obj))
+  (convert-html port text%-obj img-ok?))
