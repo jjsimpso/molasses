@@ -2,6 +2,7 @@
 
 (require racket/class
          racket/snip
+         racket/draw
          racket/format)
 
 (provide horz-line-snip%)
@@ -46,9 +47,6 @@
       (define old-pen (send dc get-pen))
       (define old-smoothing (send dc get-smoothing))
       
-      (send dc set-pen "black" 1 'solid)
-      (send dc set-smoothing 'smoothed)
-      
       (define-values (w h) (send dc get-size))
       (define drawable-width (- w (* horz-offset 2)))
       (define width (calc-width w))
@@ -62,8 +60,10 @@
       (send dc draw-rectangle x y (+ x drawable-width) height)
       ;(send dc draw-line x y (+ x drawable-width) y)
       (send dc set-brush old-brush)
-      (send dc set-pen "black" 1 'solid)
       |#
+      (send dc set-pen (make-object color% #x9a #x9a #x9a) 1 'solid)
+      (send dc set-smoothing 'aligned)
+
       (define x-pos
         (cond
           [(eq? align-attribute 'left) x]
@@ -72,11 +72,19 @@
           [else
            ;; default to 'center
            (+ x (/ (max (- drawable-width width) 0) 2))]))
-      (define y-pos (+ y (/ height 2)))
+      (define y-pos (sub1 (+ y (/ height 2))))
+      (define y-pos-line2 (add1 y-pos))
       ;(eprintf "draw: align=~a,w=~a,width=~a draw ~a to ~a~n" align-attribute w width x-pos (+ x-pos width))
       ;(eprintf "draw: draw rectangle ~a to ~a~n" x (+ x drawable-width))
-      (send dc draw-line x-pos           y-pos
-                         (+ x-pos width) y-pos)
+      (send dc draw-line x-pos                  y-pos
+                         (sub1 (+ x-pos width)) y-pos)
+      (send dc set-pen (make-object color% #xba #xba #xba) 1 'solid)
+      (send dc draw-point (+ x-pos width) y-pos)
+      (send dc set-pen (make-object color% #xb9 #xb9 #xb9) 1 'solid)
+      (send dc draw-point x-pos y-pos-line2)
+      (send dc set-pen (make-object color% #xee #xee #xee) 1 'solid)
+      (send dc draw-line (add1 x-pos)      y-pos-line2
+                         (+ x-pos width) y-pos-line2)
 
       (send dc set-smoothing old-smoothing)
       (send dc set-pen old-pen))
