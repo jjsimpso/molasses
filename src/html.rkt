@@ -253,7 +253,7 @@
            (lambda () void)])))
 
     (define (handle-font-attributes node)
-      (define font-size-vec #(2/3 5/6 1.0 7/6 4/3 5/3 2.0))  ; 8 10 12 14 16 20 24
+      (define font-size-vec #(7/12 5/6 1.0 1.125 1.5 2.0 3.0))  ; 7 10 12 13.5 18 24 36
       (define size-value (sxml:attr node 'size))
       (define color-value (sxml:attr node 'color))
 
