@@ -1,11 +1,120 @@
-#lang racket/base
+#lang racket
 
 (require racket/class
          racket/snip
          racket/draw
          racket/format)
 
-(provide horz-line-snip%)
+(provide horz-line-snip%
+         img-hack-snip%)
+
+(define (next-break-pos s pos)
+  (define (line-break? c)
+    (char=? c #\space))
+  
+  (for/last ([c (in-string s pos)]
+             [i (in-naturals pos)]
+             #:final (line-break? c))
+    ;(printf "c[~a]=~a~n" i c)
+    (if (line-break? c)
+        i
+        #f)))
+
+(define img-hack-snip%
+  (class snip%
+    (super-new)
+    (init-field [in #f]
+                [align 'left]
+                [horz-offset 5])
+    
+    (define img (if in
+                    (make-object bitmap% in)
+                    ; fill in later with default image
+                    (make-object bitmap% 64 64)))
+
+    ;; list of strings to draw in order with their style% and alignment
+    (define str-list '())
+    (define (str-string str)
+      (first str))
+    (define (str-style str)
+      (second str))
+    (define (str-alignment str)
+      (third str))
+
+    (define/public (push s style alignment)
+      (set! str-list (append str-list (list (list s style alignment)))))
+    
+    (define (calc-width dc-width)
+      (- dc-width (* horz-offset 2)))
+    
+    (define/override (get-extent dc x y	 	 	 	 
+                                   [w #f]
+                                   [h #f]
+                                   [descent #f]
+                                   [space #f]
+                                   [lspace #f]
+                                   [rspace #f])
+      (define (maybe-set-box! b v) (when b (set-box! b v)))
+      (define-values (width height) (send dc get-size))
+      
+      (maybe-set-box! w (calc-width width))
+      (maybe-set-box! h (send img get-height))
+      (maybe-set-box! descent 0.0)
+      (maybe-set-box! space 0.0)
+      (maybe-set-box! lspace 0.0)
+      (maybe-set-box! rspace 0.0))
+
+    (define/override (draw dc x y left top right bottom dx dy draw-caret)
+      (define-values (w h) (send dc get-size))
+      (define img-width (send img get-width))
+      ;; text origin
+      (define-values (tx ty) (values x y))
+      (define endx w)
+      
+      ;; draw image
+      (cond
+        [(and (eq? align 'right)
+              (< img-width w))
+         ;(eprintf "img draw: x=~a, w=~a, img-width=~a~n" x w img-width)
+         (set! endx (- w img-width)) ; need to add some margin to this
+         (send dc draw-bitmap img (- w img-width) y)]
+        [else
+         (set! tx (+ x img-width)) ; need to add some margin to this
+         (send dc draw-bitmap img x y)])
+      ;; draw text
+      (define curx tx)
+      (define cury ty)
+      (for ([str (in-list str-list)])
+        (define s (string-trim (str-string str) #:left? #f))
+        (define style (str-style str))
+        (let loop ([prev-end 0]
+                   [start 0]
+                   [end (next-break-pos s 0)])
+          (define-values (line-width line-height descent extra)
+            (if (not end)
+                (send dc get-text-extent (substring s start))
+                (send dc get-text-extent (substring s start end))))
+          ;(eprintf "loop end=~a, curx=~a, endx=~a, linew=~a~n" end curx endx line-width)
+          (cond
+            [(> (+ curx line-width) endx)
+             ;; draw a line of text and move to the next line
+             ;(eprintf "drawing text ~a~n" (substring s start prev-end))
+             (send dc draw-text (substring s start prev-end) curx cury #f)
+             (set! curx tx)
+             (set! cury (+ cury line-height))
+             (loop (add1 prev-end) (add1 prev-end) end)]
+            [(not end)
+             ;; end of string but we don't have a full line yet
+             ;; write the partial line and increment starting x coordinate
+             ;(eprintf "drawing partial text ~a~n" (substring s start))
+             (send dc draw-text (substring s start) curx cury #f)
+             ; don't worry about space at end for now
+             (set! curx (+ curx line-width))]
+            [else
+             ;; add another word to the line
+             (loop end start (next-break-pos s (add1 end)))]))))
+
+    ))
 
 (define horz-line-snip%
   (class snip%
