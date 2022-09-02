@@ -5,11 +5,17 @@
 (require (for-syntax syntax/parse))
 
 (provide dlist
+         dlist-head
+         dlist-tail
+         set-dlist-head!
+         set-dlist-tail!
          dlink
          dlist-new
          dlist-empty?
          dlist-head-value
          dlist-tail-value
+         dlist-head-next
+         dlist-tail-prev
          dlist-append!
          dlist-push!
          dlist-pop!
@@ -22,8 +28,8 @@
          dlist-advance-tail!
          dlist-retreat-tail!)
 
-;; head points to first element of the dlist
-;; tail points to the last element of the dlist
+;; head points to first element of the dlist, a dlink
+;; tail points to the last element of the dlist, a dlink
 ;; if there is only one element in the dlist, tail will be #f
 (struct dlist
   ([head #:mutable]
@@ -43,6 +49,7 @@
 (define (dlist-empty? dl)
   (not (dlist-head dl)))
 
+;; returns the value of the first element in the dlist, or #f
 (define (dlist-head-value dl)
   (if (dlist-head dl)
       (dlink-value (dlist-head dl))
@@ -54,6 +61,18 @@
   (if (dlist-tail dl)
       (dlink-value (dlist-tail dl))
       (dlist-head-value dl)))
+
+;; returns a dlink or #f
+(define (dlist-head-next dl)
+  (if (dlist-head dl)
+      (dlink-next (dlist-head dl))
+      #f))
+
+;; returns a dlink or #f
+(define (dlist-tail-prev dl)
+  (if (dlist-tail dl)
+      (dlink-prev (dlist-tail dl))
+      #f))
 
 (define (dlist-append! dl value)
   (define old-tail (dlist-tail dl))
@@ -319,6 +338,7 @@
  
   (dlist-retreat-tail! cursor)
   (check-equal? (dlist-tail-value cursor) 4)
+  (check-equal? (for/list ([v (in-dlist cursor)]) v) '(1 2 3 4))
   (check-equal? 
    (with-handlers [(exn:fail:contract? (lambda (e) #t))]
      (dlist-append! cursor 6))
