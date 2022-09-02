@@ -47,8 +47,38 @@
     ;; list of all elements in order of insertion
     (define elements (dlist-new))
 
-    #;(define (first-visible-element)
-      )
+    (define visible-elements #f)
+
+    (define (element-visible? e top bottom)
+      (and (<= (element-y1 e) bottom)
+           (>= (element-y2 e) top)))
+    
+    (define/public (set-visible-elements!)
+      (define-values (cw ch) (get-client-size))
+      (define-values (left top) (get-view-start))
+      (define-values (right bottom) (values (+ left cw) (+ top ch)))
+
+      (define cursor (dlist-cursor elements))
+      ;; find first visible element
+      (for ([e (in-dlist cursor)]
+            #:break (element-visible? e top bottom))
+        (dlist-advance-head! cursor))
+      ;; set cursor's tail to element after first visible and advance tail until we reach the
+      ;; last visible elment
+      (set-dlist-tail! cursor (dlist-head-next cursor))
+      (let loop ([e (dlist-tail-value cursor)])
+        (cond
+          [(not e) void]
+          [(element-visible? e top bottom)
+           (dlist-advance-tail! cursor)
+           (loop (dlist-tail-value cursor))]
+          [else
+           (if (eq? (dlist-tail-prev cursor)
+                    (dlist-head cursor))
+               (set-dlist-tail! cursor #f)
+               (set-dlist-tail! cursor (dlist-tail-prev cursor)))]))
+      (set! visible-elements cursor)
+      (printf "set-visible-elements ~a to ~a~n" (dlist-head-value visible-elements) (dlist-tail-value visible-elements)))
 
     ;; iterate over all elements and calculate virtual size of canvas
     (define (calculate-virtual-size)
@@ -108,7 +138,7 @@
       
       (when (or (> max-linewidth vw)
                 (> y vh))
-        (printf "update-virtual-size: ~ax~a to ~ax~a~n" vw vh max-linewidth y)
+        ;(printf "update-virtual-size: ~ax~a to ~ax~a~n" vw vh max-linewidth y)
         (init-auto-scrollbars (max max-linewidth vw)
                               (max y vh)
                               hscroll
@@ -119,11 +149,10 @@
       (define-values (vw vh) (get-virtual-size))
       (define-values (left top) (get-view-start))
       (define-values (right bottom) (values (+ left cw) (+ top ch)))
-      
+
       (printf "on-paint ~ax~a of ~ax~a~n" cw ch vw vh)
       (for ([e (in-dlist elements)])
-        (when (and (<= (element-y1 e) bottom)
-                   (>= (element-y2 e) top))
+        (when (element-visible? e top bottom)
           (send (element-snip e) draw dc (element-x1 e) (element-y1 e) (element-x1 e) (element-y1 e) (+ (element-x1 e) cw) (+ (element-y1 e) ch) 0 0 'no-caret))))
     
     (define/public (append-string s [alignment 'left])
@@ -160,3 +189,4 @@
 (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
   (send canvas append-string (port->string (gopher-response-data-port response))))
 (printf "append finished~n")
+;(send canvas set-visible-elements!)
