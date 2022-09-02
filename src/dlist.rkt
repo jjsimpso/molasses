@@ -48,10 +48,12 @@
       (dlink-value (dlist-head dl))
       #f))
 
+;; returns the value of the last element in the dlist, which could actually be the value
+;; pointed to by HEAD if the dlist only has one element
 (define (dlist-tail-value dl)
   (if (dlist-tail dl)
       (dlink-value (dlist-tail dl))
-      #f))
+      (dlist-head-value dl)))
 
 (define (dlist-append! dl value)
   (define old-tail (dlist-tail dl))
