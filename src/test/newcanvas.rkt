@@ -38,8 +38,10 @@
     (struct element
       ([snip #:mutable]
        [alignment #:mutable]
-       [cache-ystart #:auto #:mutable]
-       [cache-yend #:auto #:mutable])
+       [x1 #:auto #:mutable] ; upper left coords
+       [y1 #:auto #:mutable]
+       [x2 #:auto #:mutable] ; lower right coords
+       [y2 #:auto #:mutable])
       #:prefab #:auto-value 0)
     
     ;; list of all elements in order of insertion
@@ -47,19 +49,15 @@
 
     #;(define (first-visible-element)
       )
-    
-    (define/override (on-paint)
-      (define-values (cw ch) (get-client-size))
+
+    ;; iterate over all elements and calculate virtual size of canvas
+    (define (calculate-virtual-size)
       (define-values (vw vh) (get-virtual-size))
-      (define-values (left top) (get-view-start))
-      (define-values (right bottom) (values (+ left cw) (+ top ch)))
       ;; calculate the current scrollbar positions in 0.0-1.0 range for init-auto-scrollbars
       (define-values (hscroll vscroll)
         (let-values ([(x y) (get-view-start)])
           (values (/ x vw)
                   (/ y vh))))
-      
-      (printf "on-paint ~ax~a of ~ax~a~n" cw ch vw vh)
       (define max-linewidth 0)
       (define snip-w (box 0))
       (define snip-h (box 0))
@@ -67,20 +65,66 @@
       (define x 0)
       (define y 0)
       (for ([e (in-dlist elements)])
-        (set-element-cache-ystart! e y)
-        (when (and (<= (element-cache-ystart e) bottom)
-                   (>= (element-cache-yend e) top))
-          (send (element-snip e) draw dc x y x y (+ x cw) (+ y ch) 0 0 'no-caret))
+        (set-element-x1! e x)
+        (set-element-y1! e y)
         (send (element-snip e) get-extent dc x y snip-w snip-h #f #f #f #f)
         (set! y (inexact->exact (+ y (unbox snip-h))))
-        (set-element-cache-yend! e y)
-        (when (> (+ x (unbox snip-w))
-                 max-linewidth)
-          (set! max-linewidth (inexact->exact (+ x (unbox snip-w))))))
+        (set-element-x2! e (inexact->exact (+ x (unbox snip-w))))
+        (set-element-y2! e y)
+        (when (> (element-x2 e) max-linewidth)
+          (set! max-linewidth (element-x2 e))))
 
       (when (or (not (equal? vw max-linewidth))
                 (not (equal? vh y)))
         (init-auto-scrollbars max-linewidth y hscroll vscroll)))
+
+    ;; update virtual size of canvas
+    ;; e is the new element and must be the tail of the element list
+    ;; previous is the previous tail of the element list
+    (define (update-virtual-size e previous)
+      (define-values (vw vh) (get-virtual-size))
+      ;; calculate the current scrollbar positions in 0.0-1.0 range for init-auto-scrollbars
+      (define-values (hscroll vscroll)
+        (let-values ([(x y) (get-view-start)])
+          (values (/ x vw)
+                  (/ y vh))))
+      (define max-linewidth 0)
+      (define snip-w (box 0))
+      (define snip-h (box 0))
+      ;; current drawing position
+      (define-values (x y)
+        (if previous
+            (values 0 (element-y2 previous))
+            (values 0 0)))
+
+      (set-element-x1! e x)
+      (set-element-y1! e y)
+      (send (element-snip e) get-extent dc x y snip-w snip-h #f #f #f #f)
+      (set! y (inexact->exact (+ y (unbox snip-h))))
+      (set-element-x2! e (inexact->exact (+ x (unbox snip-w))))
+      (set-element-y2! e y)
+      (when (> (element-x2 e) vw)
+        (set! max-linewidth (element-x2 e)))
+      
+      (when (or (> max-linewidth vw)
+                (> y vh))
+        (printf "update-virtual-size: ~ax~a to ~ax~a~n" vw vh max-linewidth y)
+        (init-auto-scrollbars (max max-linewidth vw)
+                              (max y vh)
+                              hscroll
+                              vscroll)))
+    
+    (define/override (on-paint)
+      (define-values (cw ch) (get-client-size))
+      (define-values (vw vh) (get-virtual-size))
+      (define-values (left top) (get-view-start))
+      (define-values (right bottom) (values (+ left cw) (+ top ch)))
+      
+      (printf "on-paint ~ax~a of ~ax~a~n" cw ch vw vh)
+      (for ([e (in-dlist elements)])
+        (when (and (<= (element-y1 e) bottom)
+                   (>= (element-y2 e) top))
+          (send (element-snip e) draw dc (element-x1 e) (element-y1 e) (element-x1 e) (element-y1 e) (+ (element-x1 e) cw) (+ (element-y1 e) ch) 0 0 'no-caret))))
     
     (define/public (append-string s [alignment 'left])
       (case mode
@@ -88,9 +132,13 @@
          ;; for plaintext mode, insert each line in string as an element
          (define p (open-input-string s))
          (for ([line (in-lines p)])
-           (dlist-append! elements (element (make-object string-snip% line) alignment)))]
+           (define e (element (make-object string-snip% line) alignment))
+           (update-virtual-size e (dlist-tail-value elements))
+           (dlist-append! elements e))]
         [else
-         (dlist-append! elements (element (make-object string-snip% s) alignment))]))
+         (define e (element (make-object string-snip% s) alignment))
+         (update-virtual-size e (dlist-tail-value elements))
+         (dlist-append! elements e)]))
       
 
     ))
