@@ -17,10 +17,10 @@
          dlist->list
          in-dlist
          dlist-cursor
-         dlist-advance-head
-         dlist-retreat-head
-         dlist-advance-tail
-         dlist-retreat-tail)
+         dlist-advance-head!
+         dlist-retreat-head!
+         dlist-advance-tail!
+         dlist-retreat-tail!)
 
 ;; head points to first element of the dlist
 ;; tail points to the last element of the dlist
@@ -189,7 +189,7 @@
 
 ;; advances the head pointer to the next link if it exists
 ;; returns the new head or #f if head didn't change
-(define (dlist-advance-head dl)
+(define (dlist-advance-head! dl)
   (cond
     [(and (dlist-head dl) (dlink-next (dlist-head dl)))
      (set-dlist-head! dl (dlink-next (dlist-head dl)))
@@ -200,7 +200,7 @@
 
 ;; moves the head pointer back one link, but stops if already at beginning
 ;; returns the new head or #f if head didn't change
-(define (dlist-retreat-head dl)
+(define (dlist-retreat-head! dl)
   (cond
     [(and (dlist-head dl) (dlink-prev (dlist-head dl)))
      (set-dlist-head! dl (dlink-prev (dlist-head dl)))
@@ -209,7 +209,7 @@
 
 ;; advances the tail pointer to the next link, but stops if already at the end
 ;; returns the new tail or #f if tail didn't change
-(define (dlist-advance-tail dl)
+(define (dlist-advance-tail! dl)
   (cond
     [(and (dlist-tail dl) (dlink-next (dlist-tail dl)))
      (set-dlist-tail! dl (dlink-next (dlist-tail dl)))
@@ -218,7 +218,7 @@
 
 ;; moves the tail pointer back one link
 ;; returns the new tail or #f if there was no tail or if the dlist now has one element
-(define (dlist-retreat-tail dl)
+(define (dlist-retreat-tail! dl)
   (cond
     [(dlist-tail dl)
      (set-dlist-tail! dl (dlink-prev (dlist-tail dl)))
@@ -252,7 +252,7 @@
   (check-equal? (dlist-head-value cursor) 1)
   (check-equal? (dlist-tail-value cursor) 5)
   
-  (dlist-advance-head cursor)
+  (dlist-advance-head! cursor)
   (check-equal? (dlist-head-value cursor) 2)
   (check-equal? (dlist-tail-value cursor) 5)
   (check-equal? (for/list ([v (in-dlist cursor)]) v) '(2 3 4 5))
@@ -266,14 +266,14 @@
    (with-handlers [(exn:fail:contract? (lambda (e) #t))]
      (dlist-push! cursor 0))
    #t)
-  (dlist-retreat-head cursor)
+  (dlist-retreat-head! cursor)
 
   (check-equal? (dlist-head-value cursor) 1)
   (check-equal? (dlist-tail-value cursor) 5)
-  (check-equal? (dlist-retreat-head cursor) #f)
-  (check-equal? (dlist-advance-tail cursor) #f)
+  (check-equal? (dlist-retreat-head! cursor) #f)
+  (check-equal? (dlist-advance-tail! cursor) #f)
  
-  (dlist-retreat-tail cursor)
+  (dlist-retreat-tail! cursor)
   (check-equal? (dlist-tail-value cursor) 4)
   (check-equal? 
    (with-handlers [(exn:fail:contract? (lambda (e) #t))]
@@ -281,7 +281,7 @@
    #t)
   (check-equal? (dlist->list cursor) '(1 2 3 4))
   (check-equal? (for/list ([v (in-dlist cursor)]) v) '(1 2 3 4))
-  (dlist-advance-tail cursor)
+  (dlist-advance-tail! cursor)
   (check-equal? (dlist-tail-value cursor) 5)
   ;;; ----------
   
