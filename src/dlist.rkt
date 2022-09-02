@@ -181,6 +181,44 @@
                              (dlist-tail expr)))]])))
 
 
+(define (in-dlink-reverse/proc n)
+  #f)
+
+(define-sequence-syntax in-dlink-reverse
+  (lambda () #'in-dlink-reverse/proc)
+  (lambda (stx)
+    (syntax-parse stx
+      [[(val) (_ dlink-expr head-expr)]
+       #'[(val)
+          (:do-in
+           ([(node tail) (values dlink-expr head-expr)])
+           (unless (or (dlink? node)
+                       (false? node))
+             (raise-argument-error 'in-dlink-reverse "dlink?" node))
+           ([n node])
+           (dlink? n)
+           ([(next val) (values (if (eq? n tail)
+                                    #f
+                                    (dlink-prev n))
+                                (dlink-value n))])
+           #true
+           #true
+           [next])]]
+      [_ #false])))
+
+(define (in-dlist-reverse/proc n)
+  #f)
+
+(define-sequence-syntax in-dlist-reverse
+  (lambda () #'in-dlist-reverse/proc)
+  (lambda (stx)
+    (syntax-parse stx
+      [[(a) (_ expr)]
+       #'[(a) (in-dlink-reverse (and (dlist? expr)
+                                     (or (dlist-tail expr) (dlist-head expr)))
+                                (and (dlist? expr)
+                                     (dlist-head expr)))]])))
+
 ;;; Functions to manipulate a cursor over a portion of an existing dlist
 ;;; Need to be careful with these functions. Modifying the underlying dlist
 ;;; could cause unexpected behavior.
@@ -233,7 +271,11 @@
 
 (module+ test (require rackunit)
   (define a-dlist (dlist-new))
+  (check-equal? (for/list ([v (in-dlist a-dlist)]) v) '())
+  (check-equal? (for/list ([v (in-dlist-reverse a-dlist)]) v) '())
   (dlist-append! a-dlist 3)
+  (check-equal? (for/list ([v (in-dlist a-dlist)]) v) '(3))
+  (check-equal? (for/list ([v (in-dlist-reverse a-dlist)]) v) '(3))
   (check-equal? (dlink-value (dlist-head a-dlist)) 3)
   (check-equal? (dlist-tail a-dlist) #f)
   (dlist-append! a-dlist 4)
@@ -247,7 +289,7 @@
   (check-equal? (dlist->list a-dlist) '(1 2 3 4 5))
   (check-equal? (dlist-length a-dlist) 5)
   (check-equal? (for/list ([v (in-dlist a-dlist)]) v) '(1 2 3 4 5))
-  
+  (check-equal? (for/list ([v (in-dlist-reverse a-dlist)]) v) '(5 4 3 2 1))
   
   ;;; cursor tests
   (define cursor (dlist-cursor a-dlist))
