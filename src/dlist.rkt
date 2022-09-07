@@ -1,6 +1,7 @@
 #lang racket
 
-(require racket/struct)
+(require racket/struct
+         racket/unsafe/ops)
 
 (require (for-syntax syntax/parse))
 
@@ -9,7 +10,6 @@
          dlist-tail
          set-dlist-head!
          set-dlist-tail!
-         dlink
          dlist-new
          dlist-empty?
          dlist-head-value
@@ -40,7 +40,7 @@
   (value
    [prev #:mutable]
    [next #:mutable])
-  #:transparent)
+  #:transparent #:authentic)
 
 
 (define (dlist-new)
@@ -179,8 +179,8 @@
            (dlink? n)
            ([(next val) (values (if (eq? n tail)
                                     #f
-                                    (dlink-next n))
-                                (dlink-value n))])
+                                    (unsafe-struct*-ref n 2)) ; next
+                                (unsafe-struct*-ref n 0))])   ; value
            #true
            #true
            [next])]]
