@@ -21,6 +21,7 @@
              get-client-size
              get-virtual-size
              get-view-start
+             show-scrollbars
              init-auto-scrollbars
              suspend-flush
              resume-flush
@@ -30,6 +31,9 @@
     ;; tentative mode options: 'plaintext, 'columnar, 'layout
     (define mode 'plaintext)
 
+    ;; initially hide both scrollbars 
+    (init-auto-scrollbars #f #f 0 0)
+    
     ;; store the drawing context for efficiency
     (define dc (get-dc))
 
@@ -48,6 +52,8 @@
     (define elements (dlist-new))
 
     (define visible-elements #f)
+
+    (define canvas-width 0)
 
     (define (element-visible? e top bottom)
       (and (<= (element-y1 e) bottom)
@@ -104,9 +110,15 @@
         (when (> (element-x2 e) max-linewidth)
           (set! max-linewidth (element-x2 e))))
 
+      (set! canvas-width max-linewidth)
+      
       (when (or (not (equal? vw max-linewidth))
                 (not (equal? vh y)))
-        (init-auto-scrollbars max-linewidth y hscroll vscroll)))
+        (define-values (cw ch) (get-client-size))
+        (define horz-pixels max-linewidth)
+        (define vert-pixels y)
+        (show-scrollbars (> horz-pixels cw) (> vert-pixels ch))
+        (init-auto-scrollbars horz-pixels vert-pixels hscroll vscroll)))
 
     ;; update virtual size of canvas
     ;; e is the new element and must be the tail of the element list
@@ -118,7 +130,6 @@
         (let-values ([(x y) (get-view-start)])
           (values (/ x vw)
                   (/ y vh))))
-      (define max-linewidth 0)
       (define snip-w (box 0))
       (define snip-h (box 0))
       ;; current drawing position
@@ -134,13 +145,17 @@
       (set-element-x2! e (inexact->exact (+ x (unbox snip-w))))
       (set-element-y2! e y)
       (when (> (element-x2 e) vw)
-        (set! max-linewidth (element-x2 e)))
+        (set! canvas-width (element-x2 e)))
       
-      (when (or (> max-linewidth vw)
+      (when (or (> canvas-width vw)
                 (> y vh))
         ;(printf "update-virtual-size: ~ax~a to ~ax~a~n" vw vh max-linewidth y)
-        (init-auto-scrollbars (max max-linewidth vw)
-                              (max y vh)
+        (define-values (cw ch) (get-client-size))
+        (define horz-pixels canvas-width)
+        (define vert-pixels y)
+        (show-scrollbars (> horz-pixels cw) (> vert-pixels ch))
+        (init-auto-scrollbars horz-pixels
+                              vert-pixels
                               hscroll
                               vscroll)))
     
@@ -150,10 +165,22 @@
       (define-values (left top) (get-view-start))
       (define-values (right bottom) (values (+ left cw) (+ top ch)))
 
-      (printf "on-paint ~ax~a of ~ax~a~n" cw ch vw vh)
+      ;(printf "on-paint ~ax~a of ~ax~a~n" cw ch vw vh)
+      ;; todo: check to see if view-start changed. will need to cache value.
+      ;; if so, call update-visible-elements!
+      
+      ;; only draw visible elements
       (for ([e (in-dlist elements)])
         (when (element-visible? e top bottom)
           (send (element-snip e) draw dc (element-x1 e) (element-y1 e) (element-x1 e) (element-y1 e) (+ (element-x1 e) cw) (+ (element-y1 e) ch) 0 0 'no-caret))))
+
+    (define/override (on-size width height)
+      (define-values (cw ch) (get-client-size))
+      (define-values (vw vh) (get-virtual-size))
+      ;(printf "on-size client=~ax~a virtual=~ax~a new=~ax~a~n" cw ch vw vh width height)
+      (show-scrollbars (> vw cw)
+                       (> (element-y2 (dlist-tail-value elements))
+                          ch)))
     
     (define/public (append-string s [alignment 'left])
       (case mode
@@ -180,10 +207,10 @@
 (send frame show #t)
 
 (define highlander-text "He is immortal. Born in the highlands of Scotland 400 years ago, there are others like him. Some good, some evil. For centuries he has battled the forces of darkness with holy ground his only refuge. He cannot die unless you take his head and with it his power. There can be only one. He is Duncan Macleod, the Highlander!\n")
-(define test-selector "gamefaqs-archive/ps2/final-fantasy-xii/FAQ_Walkthrough-by--Berserker.txt")
-;(define test-selector ".")
+;(define test-selector "gamefaqs-archive/ps2/final-fantasy-xii/FAQ_Walkthrough-by--Berserker.txt")
+(define test-selector ".")
 
-(send canvas append-string highlander-text)
+;(send canvas append-string highlander-text)
 (send canvas append-string "\n\n")
 (send canvas append-string "text\nwith lots\nof\nnewlines")
 (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
