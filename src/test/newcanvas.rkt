@@ -18,6 +18,7 @@
 (define layout-canvas%
   (class canvas% (super-new)
     (inherit get-dc
+             get-size
              get-client-size
              get-virtual-size
              get-view-start
@@ -36,7 +37,17 @@
     
     ;; store the drawing context for efficiency
     (define dc (get-dc))
+    
+    ;; width of virtual canvas
+    (define canvas-width 10)
+    
+    ;; cached scroll position of primary axis used for visible element determination
+    (define scroll-position 0)
 
+    ;; needed so that we can tell if the canvas is getting bigger or smaller during on-size events
+    (define cached-client-width 10)
+    (define cached-client-height 10)
+    
     ;; an element is a snip with a horizontal alignment
     ;; alignment can be 'left, 'right, or 'center
     (struct element
@@ -52,8 +63,6 @@
     (define elements (dlist-new))
 
     (define visible-elements #f)
-
-    (define canvas-width 0)
 
     (define (element-visible? e top bottom)
       (and (<= (element-y1 e) bottom)
@@ -76,16 +85,73 @@
         (cond
           [(not e) void]
           [(element-visible? e top bottom)
-           (dlist-advance-tail! cursor)
-           (loop (dlist-tail-value cursor))]
+           (when (dlist-advance-tail! cursor) ; returns false when tail can't advance any further
+             (loop (dlist-tail-value cursor)))]
           [else
            (if (eq? (dlist-tail-prev cursor)
                     (dlist-head cursor))
                (set-dlist-tail! cursor #f)
                (set-dlist-tail! cursor (dlist-tail-prev cursor)))]))
       (set! visible-elements cursor)
-      (printf "set-visible-elements ~a to ~a~n" (dlist-head-value visible-elements) (dlist-tail-value visible-elements)))
+      #;(printf "set-visible-elements ~a to ~a~n" (dlist-head-value visible-elements) (dlist-tail-value visible-elements)))
 
+    (define (adjust-visible-elements-forward! cursor top bottom)
+      ;; advance the tail to last visible element
+      (let loop ([e (dlist-tail-value cursor)])
+        (cond
+          [(not e) void]
+          [(element-visible? e top bottom)
+           ;(printf "adjust-visible-elements-forward! loop~n")
+           (when (dlist-advance-tail! cursor) ; returns false when tail can't advance any further
+             (loop (dlist-tail-value cursor)))]
+          [else
+           (if (eq? (dlist-tail-prev cursor)
+                    (dlist-head cursor))
+               (set-dlist-tail! cursor #f)
+               (set-dlist-tail! cursor (dlist-tail-prev cursor)))]))
+      ;; advance the head while it isn't visible
+      (for ([e (in-dlist visible-elements)]
+            #:break (element-visible? e top bottom))
+        ;(printf "adjust-visible-elements-forward! for~n")
+        (dlist-advance-head! visible-elements))
+      void)
+
+    (define (adjust-visible-elements-back! cursor top bottom)
+      ;; retreat the head to first visible element
+      (let loop ([e (dlist-head-value cursor)])
+        (cond
+          [(not e) void] ; should never happen
+          [(element-visible? e top bottom)
+           (when (dlist-retreat-head! cursor)
+             (loop (dlist-head-value cursor)))]
+          [else
+           (unless (not (dlist-tail cursor))
+             (set-dlist-head! cursor (dlist-head-next cursor)))]))
+      ;; retreat the tail until it is visible
+      (let loop ([e (dlist-tail-value cursor)])
+        (cond
+          [(not e) void]
+          [(element-visible? e top bottom) void]
+          [else
+           (when (dlist-retreat-tail! cursor)
+             (loop (dlist-tail-value cursor)))]))
+      void)
+    
+    ;;
+    (define (update-visible-elements! scroll-change top bottom)
+      ;(printf "update-visible-elements! ~a~n" scroll-change)
+      (when visible-elements
+        (define head-element (dlist-head-value visible-elements))
+        (define tail-element (dlist-tail-value visible-elements))
+        
+        (if (> scroll-change 0)
+            (if (and tail-element (element-visible? tail-element top bottom))
+                (adjust-visible-elements-forward! visible-elements top bottom)
+                (set-visible-elements!))
+            (if (and head-element (element-visible? head-element top bottom))
+                (adjust-visible-elements-back! visible-elements top bottom)
+                (set-visible-elements!)))))
+    
     ;; iterate over all elements and calculate virtual size of canvas
     (define (calculate-virtual-size)
       (define-values (vw vh) (get-virtual-size))
@@ -149,7 +215,7 @@
       
       (when (or (> canvas-width vw)
                 (> y vh))
-        ;(printf "update-virtual-size: ~ax~a to ~ax~a~n" vw vh max-linewidth y)
+        ;(printf "update-virtual-size: ~ax~a to ~ax~a~n" vw vh canvas-width y)
         (define-values (cw ch) (get-client-size))
         (define horz-pixels canvas-width)
         (define vert-pixels y)
@@ -166,19 +232,39 @@
       (define-values (right bottom) (values (+ left cw) (+ top ch)))
 
       ;(printf "on-paint ~ax~a of ~ax~a~n" cw ch vw vh)
-      ;; todo: check to see if view-start changed. will need to cache value.
-      ;; if so, call update-visible-elements!
+      (when (not visible-elements)
+        (set-visible-elements!))
+      
+      ;; check to see if view-start changed. if so, call update-visible-elements!
+      (when (not (equal? scroll-position top))
+        (update-visible-elements! (- top scroll-position) top bottom)
+        (set! scroll-position top))
       
       ;; only draw visible elements
-      (for ([e (in-dlist elements)])
-        (when (element-visible? e top bottom)
-          (send (element-snip e) draw dc (element-x1 e) (element-y1 e) (element-x1 e) (element-y1 e) (+ (element-x1 e) cw) (+ (element-y1 e) ch) 0 0 'no-caret))))
+      (for ([e (in-dlist visible-elements)])
+        (send (element-snip e)
+              draw dc
+              (element-x1 e) (element-y1 e)
+              (element-x1 e) (element-y1 e)
+              (+ (element-x1 e) cw) (+ (element-y1 e) ch)
+              0 0 'no-caret)))
 
     (define/override (on-size width height)
       (define-values (cw ch) (get-client-size))
-      (define-values (vw vh) (get-virtual-size))
-      ;(printf "on-size client=~ax~a virtual=~ax~a new=~ax~a~n" cw ch vw vh width height)
-      (show-scrollbars (> vw cw)
+      (define-values (left top) (get-view-start))
+      (define-values (right bottom) (values (+ left cw) (+ top ch)))
+
+      ;(define-values (w h) (get-size))
+      ;(printf "on-size client=~ax~a window=~ax~a new=~ax~a~n" cw ch w h width height)
+
+      ;; update visible elements
+      (if (> ch cached-client-height)
+          (adjust-visible-elements-forward! visible-elements top bottom)
+          (adjust-visible-elements-back! visible-elements top bottom))
+      (set! cached-client-width cw)
+      (set! cached-client-height ch)
+      
+      (show-scrollbars (> canvas-width cw)
                        (> (element-y2 (dlist-tail-value elements))
                           ch)))
     
@@ -207,8 +293,8 @@
 (send frame show #t)
 
 (define highlander-text "He is immortal. Born in the highlands of Scotland 400 years ago, there are others like him. Some good, some evil. For centuries he has battled the forces of darkness with holy ground his only refuge. He cannot die unless you take his head and with it his power. There can be only one. He is Duncan Macleod, the Highlander!\n")
-;(define test-selector "gamefaqs-archive/ps2/final-fantasy-xii/FAQ_Walkthrough-by--Berserker.txt")
-(define test-selector ".")
+(define test-selector "gamefaqs-archive/ps2/final-fantasy-xii/FAQ_Walkthrough-by--Berserker.txt")
+;(define test-selector ".")
 
 ;(send canvas append-string highlander-text)
 (send canvas append-string "\n\n")
