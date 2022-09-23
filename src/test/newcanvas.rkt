@@ -1,7 +1,8 @@
 #lang racket/gui
 
 (require "../dlist.rkt"
-         "../gopher.rkt")
+         "../gopher.rkt"
+         "../config.rkt")
 
 #;(require mred/private/mrcanvas
          mred/private/wx
@@ -63,6 +64,13 @@
     (define elements (dlist-new))
 
     (define visible-elements #f)
+
+    (define styles (new style-list%))
+    (send styles new-named-style "Standard" (send styles find-named-style "Basic"))
+
+    ;; style to use if no style is specified
+    ;; this can be changed with set-default-style before appending a string to set its snip to this style
+    (define default-style (send styles find-named-style "Standard"))
 
     (define (element-visible? e top bottom)
       (and (<= (element-y1 e) bottom)
@@ -198,6 +206,8 @@
                   (/ y vh))))
       (define snip-w (box 0))
       (define snip-h (box 0))
+      (define snip-descent (box 0))
+      (define snip-space (box 0))
       ;; current drawing position
       (define-values (x y)
         (if previous
@@ -206,8 +216,10 @@
 
       (set-element-x1! e x)
       (set-element-y1! e y)
-      (send (element-snip e) get-extent dc x y snip-w snip-h #f #f #f #f)
-      (set! y (inexact->exact (+ y (unbox snip-h))))
+      (send (element-snip e) get-extent dc x y snip-w snip-h snip-descent snip-space #f #f)
+      ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
+      ;; add 1 pixel to line height to match what the standard editor canvas appears to do
+      (set! y (add1 (inexact->exact (+ y (unbox snip-h)))))
       (set-element-x2! e (inexact->exact (+ x (unbox snip-w))))
       (set-element-y2! e y)
       (when (> (element-x2 e) vw)
@@ -239,9 +251,15 @@
       (when (not (equal? scroll-position top))
         (update-visible-elements! (- top scroll-position) top bottom)
         (set! scroll-position top))
+
+      (define current-style #f)
       
       ;; only draw visible elements
       (for ([e (in-dlist visible-elements)])
+        ;; set the style if it has changed
+        (when (not (eq? (send (element-snip e) get-style) current-style))
+          (set! current-style (send (element-snip e) get-style))
+          (send current-style switch-to dc #f))
         (send (element-snip e)
               draw dc
               (element-x1 e) (element-y1 e)
@@ -274,7 +292,9 @@
          ;; for plaintext mode, insert each line in string as an element
          (define p (open-input-string s))
          (for ([line (in-lines p)])
-           (define e (element (make-object string-snip% line) alignment))
+           (define ss (make-object string-snip% line))
+           (send ss set-style default-style)
+           (define e (element ss alignment))
            (update-virtual-size e (dlist-tail-value elements))
            (dlist-append! elements e))]
         [else
@@ -282,13 +302,69 @@
          (update-virtual-size e (dlist-tail-value elements))
          (dlist-append! elements e)]))
       
+    (define/public (get-style-list) styles)
 
+    (define/public (set-default-stlye style-name)
+      (define style (send styles find-named-style style-name))
+      (if style
+          (set! default-style style)
+          #f))
+    
     ))
 
 (define canvas
   (new layout-canvas% (parent frame)
        (style '(hscroll vscroll resize-corner))
        ))
+
+(define (init-styles style-list)
+  (define standard (send style-list find-named-style "Standard"))
+  (define standard-delta (make-object style-delta%))
+  (send* standard-delta
+    (set-family 'modern)
+    ;(set-face font-name)
+    (set-delta 'change-size 12)
+    (set-delta-foreground text-fg-color)
+    (set-delta-background canvas-bg-color))
+  (send standard set-delta standard-delta)
+
+  (define (make-color-style name color)
+    ;; Each style created with this procedure copies "Standard" style
+    ;; and creates a new style by name 'name' and with the foreground
+    ;; color 'color'.
+    (send (send style-list new-named-style name standard)
+          set-delta (send* (make-object style-delta%)
+                      (copy standard-delta)
+                      (set-delta-foreground color))))
+
+  (define (make-header-style name size)
+    ;; Each style created with this procedure copies "Standard" style
+    ;; and creates a new style by name 'name' and with the size 'size'.
+    (send (send style-list new-named-style name standard)
+          set-delta (send* (make-object style-delta%)
+                      (copy standard-delta)
+                      (set-delta 'change-weight 'bold)
+                      (set-delta 'change-size size))))
+  
+  (make-color-style "Link" link-color)
+  (make-color-style "Link Highlight" link-highlight-color)
+  (make-header-style "Header1" 24)
+  (make-header-style "Header2" 18)
+  (make-header-style "Header3" 14)
+
+  ;; create default html style
+  (define html-standard (send style-list new-named-style "Html Standard" standard))
+  (define html-standard-delta (make-object style-delta%))
+  (send* html-standard-delta
+    (set-family 'roman)
+    (set-delta 'change-size 12)
+    (set-delta-foreground html-text-fg-color)
+    (set-delta-background html-text-bg-color))
+  (send html-standard set-delta html-standard-delta)
+)
+
+(init-styles (send canvas get-style-list))
+(send canvas set-canvas-background canvas-bg-color)
 
 (send frame show #t)
 
@@ -297,9 +373,8 @@
 ;(define test-selector ".")
 
 ;(send canvas append-string highlander-text)
-(send canvas append-string "\n\n")
-(send canvas append-string "text\nwith lots\nof\nnewlines")
+;(send canvas append-string "\n\n")
+;(send canvas append-string "text\nwith lots\nof\nnewlines")
 (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
   (send canvas append-string (port->string (gopher-response-data-port response))))
 (printf "append finished~n")
-;(send canvas set-visible-elements!)
