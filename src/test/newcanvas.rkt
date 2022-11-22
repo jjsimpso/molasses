@@ -48,17 +48,36 @@
     ;; needed so that we can tell if the canvas is getting bigger or smaller during on-size events
     (define cached-client-width 10)
     (define cached-client-height 10)
+
+    ;; (left x top) is upper left corner of box
+    (struct bounding-box
+      (left top right bottom)
+      #:prefab)
+
+    ;; checks if bounding-box bb is at least partially within the range top to bottom
+    (define (within-vertical-range? bb top bottom)
+      (and (<= (bounding-box-top bb) bottom)
+           (>= (bounding-box-bottom bb) top)))
+
+    ;; checks if bounding-box bb is at least partially within the range left to right
+    (define (within-horizontal-range? bb left right)
+      (and (<= (bounding-box-left bb) right)
+           (>= (bounding-box-right bb) left)))
     
     ;; an element is a snip with a horizontal alignment
     ;; alignment can be 'left, 'right, or 'center
     (struct element
       ([snip #:mutable]
        [alignment #:mutable]
-       [x1 #:auto #:mutable] ; upper left coords
-       [y1 #:auto #:mutable]
-       [x2 #:auto #:mutable] ; lower right coords
-       [y2 #:auto #:mutable])
-      #:prefab #:auto-value 0)
+       [bb-list #:auto #:mutable]) ; list of bounding boxes which cover element 
+      #:prefab #:auto-value #f)
+
+    (define (element-bottom e)
+      (define bottom 0)
+      (for/last ([bb (in-list (element-bb-list e))])
+        (when (> (bounding-box-bottom bb) bottom)
+          (set! bottom (bounding-box-bottom bb)))
+        bottom))
     
     ;; list of all elements in order of insertion
     (define elements (dlist-new))
@@ -73,8 +92,9 @@
     (define default-style (send styles find-named-style "Standard"))
 
     (define (element-visible? e top bottom)
-      (and (<= (element-y1 e) bottom)
-           (>= (element-y2 e) top)))
+      (for/first ([bb (in-list (element-bb-list e))]
+                  #:when (within-vertical-range? bb top bottom))
+        #t))
     
     (define/public (set-visible-elements!)
       (define-values (cw ch) (get-client-size))
@@ -161,7 +181,7 @@
                 (set-visible-elements!)))))
     
     ;; iterate over all elements and calculate virtual size of canvas
-    (define (calculate-virtual-size)
+    #;(define (calculate-virtual-size)
       (define-values (vw vh) (get-virtual-size))
       ;; calculate the current scrollbar positions in 0.0-1.0 range for init-auto-scrollbars
       (define-values (hscroll vscroll)
@@ -194,10 +214,24 @@
         (show-scrollbars (> horz-pixels cw) (> vert-pixels ch))
         (init-auto-scrollbars horz-pixels vert-pixels hscroll vscroll)))
 
-    ;; update virtual size of canvas
-    ;; e is the new element and must be the tail of the element list
+    (define (calc-drawing-position previous-element)
+      (if previous-element
+          (let ([end-bb
+                 (for/last ([bb (in-list (element-bb-list previous-element))])
+                   bb)])
+            ;; todo: check end-bb
+            (case mode
+              [(plaintext)
+               (values 0 (bounding-box-bottom end-bb))]
+              [else
+               (values (bounding-box-right end-bb)
+                       (bounding-box-bottom end-bb))]))
+          (values 0 0)))
+    
+    ;; places element on the virtual canvas and updates virtual size of canvas
+    ;; e is the new element and must be the new tail of the element list
     ;; previous is the previous tail of the element list
-    (define (update-virtual-size e previous)
+    (define (place-element e previous)
       (define-values (vw vh) (get-virtual-size))
       ;; calculate the current scrollbar positions in 0.0-1.0 range for init-auto-scrollbars
       (define-values (hscroll vscroll)
@@ -208,26 +242,29 @@
       (define snip-h (box 0))
       (define snip-descent (box 0))
       (define snip-space (box 0))
+      
       ;; current drawing position
-      (define-values (x y)
-        (if previous
-            (values 0 (element-y2 previous))
-            (values 0 0)))
+      (define-values (x y) (calc-drawing-position previous))
 
-      (set-element-x1! e x)
-      (set-element-y1! e y)
       (send (element-snip e) get-extent dc x y snip-w snip-h snip-descent snip-space #f #f)
       ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
+      
+      ;; coordinates for element bounding region
+      (define-values (x1 y1 x2 y2) (values x y (inexact->exact (+ x (unbox snip-w))) 0))
+
       ;; add 1 pixel to line height to match what the standard editor canvas appears to do
       (set! y (add1 (inexact->exact (+ y (unbox snip-h)))))
-      (set-element-x2! e (inexact->exact (+ x (unbox snip-w))))
-      (set-element-y2! e y)
-      (when (> (element-x2 e) vw)
-        (set! canvas-width (element-x2 e)))
+      (set! y2 y)
+
+      ;; just a list with a single element for now
+      (set-element-bb-list! e (list (bounding-box x1 y1 x2 y2)))
+      
+      (when (> x2 vw)
+        (set! canvas-width x2))
       
       (when (or (> canvas-width vw)
                 (> y vh))
-        ;(printf "update-virtual-size: ~ax~a to ~ax~a~n" vw vh canvas-width y)
+        ;(printf "place-element virtual size: ~ax~a to ~ax~a~n" vw vh canvas-width y)
         (define-values (cw ch) (get-client-size))
         (define horz-pixels canvas-width)
         (define vert-pixels y)
@@ -256,15 +293,17 @@
       
       ;; only draw visible elements
       (for ([e (in-dlist visible-elements)])
+        ;; assume only one bounding box until we implement word wrap
+        (define bb (car (element-bb-list e)))
         ;; set the style if it has changed
         (when (not (eq? (send (element-snip e) get-style) current-style))
           (set! current-style (send (element-snip e) get-style))
           (send current-style switch-to dc #f))
         (send (element-snip e)
               draw dc
-              (element-x1 e) (element-y1 e)
-              (element-x1 e) (element-y1 e)
-              (+ (element-x1 e) cw) (+ (element-y1 e) ch)
+              (bounding-box-left bb) (bounding-box-top bb)
+              (bounding-box-left bb) (bounding-box-top bb)
+              (bounding-box-right bb) (bounding-box-bottom bb)
               0 0 'no-caret)))
 
     (define/override (on-size width height)
@@ -283,9 +322,15 @@
       (set! cached-client-height ch)
       
       (show-scrollbars (> canvas-width cw)
-                       (> (element-y2 (dlist-tail-value elements))
-                          ch)))
+                       (> (element-bottom (dlist-tail-value elements)) ch)))
+
+    ;;
+    (define/public (append-snip s [alignment 'left])
+      (define e (element s alignment))
+      (place-element e (dlist-tail-value elements))
+      (dlist-append! elements e))
     
+    ;; append string using the default stlye
     (define/public (append-string s [alignment 'left])
       (case mode
         [(plaintext)
@@ -295,11 +340,11 @@
            (define ss (make-object string-snip% line))
            (send ss set-style default-style)
            (define e (element ss alignment))
-           (update-virtual-size e (dlist-tail-value elements))
+           (place-element e (dlist-tail-value elements))
            (dlist-append! elements e))]
         [else
          (define e (element (make-object string-snip% s) alignment))
-         (update-virtual-size e (dlist-tail-value elements))
+         (place-element e (dlist-tail-value elements))
          (dlist-append! elements e)]))
       
     (define/public (get-style-list) styles)

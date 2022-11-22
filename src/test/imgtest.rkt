@@ -40,3 +40,4 @@
 ;(send editor insert space)
 ;(send editor insert "\n")
 (send editor insert (new horz-line-snip%))
+(send editor insert "text\nwith lots\nof\nnewlines")
