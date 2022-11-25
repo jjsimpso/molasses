@@ -290,21 +290,28 @@
         (set! scroll-position top))
 
       (define current-style #f)
-      
-      ;; only draw visible elements
-      (for ([e (in-dlist visible-elements)])
-        ;; assume only one bounding box until we implement word wrap
-        (define bb (car (element-bb-list e)))
-        ;; set the style if it has changed
-        (when (not (eq? (send (element-snip e) get-style) current-style))
-          (set! current-style (send (element-snip e) get-style))
-          (send current-style switch-to dc #f))
-        (send (element-snip e)
-              draw dc
-              (bounding-box-left bb) (bounding-box-top bb)
-              (bounding-box-left bb) (bounding-box-top bb)
-              (bounding-box-right bb) (bounding-box-bottom bb)
-              0 0 'no-caret)))
+
+      (send dc suspend-flush)
+
+      (dynamic-wind
+        void
+        (lambda ()
+          ;; only draw visible elements
+          (for ([e (in-dlist visible-elements)])
+            ;; assume only one bounding box until we implement word wrap
+            (define bb (car (element-bb-list e)))
+            ;; set the style if it has changed
+            (when (not (eq? (send (element-snip e) get-style) current-style))
+              (set! current-style (send (element-snip e) get-style))
+              (send current-style switch-to dc #f))
+            (send (element-snip e)
+                  draw dc
+                  (bounding-box-left bb) (bounding-box-top bb)
+                  (bounding-box-left bb) (bounding-box-top bb)
+                  (bounding-box-right bb) (bounding-box-bottom bb)
+                  0 0 'no-caret)))
+        (lambda ()
+          (send dc resume-flush))))
 
     (define/override (on-size width height)
       (define-values (cw ch) (get-client-size))
