@@ -18,6 +18,8 @@
 
 (define layout-canvas%
   (class canvas% (super-new)
+    (init [horiz-margin 5]
+          [vert-margin 5])
     (inherit get-dc
              get-size
              get-client-size
@@ -33,14 +35,20 @@
     ;; tentative mode options: 'plaintext, 'columnar, 'layout
     (define mode 'plaintext)
 
+    ;; 
+    (define xmargin horiz-margin)
+    (define ymargin vert-margin)
+
     ;; initially hide both scrollbars 
     (init-auto-scrollbars #f #f 0 0)
     
     ;; store the drawing context for efficiency
     (define dc (get-dc))
     
-    ;; width of virtual canvas
+    ;; size of canvas's content, which doesn't include margins if they exist
+    ;; equivalent to virtual size minus the margins
     (define canvas-width 10)
+    (define canvas-height 10)
     
     ;; cached scroll position of primary axis used for visible element determination
     (define scroll-position 0)
@@ -49,6 +57,11 @@
     (define cached-client-width 10)
     (define cached-client-height 10)
 
+    (define (get-drawable-size)
+      (define-values (cw ch) (get-client-size))
+      (values (- cw (* 2 xmargin))
+              (- ch (* 2 ymargin))))
+    
     ;; (left x top) is upper left corner of box
     (struct bounding-box
       (left top right bottom)
@@ -97,9 +110,9 @@
         #t))
     
     (define/public (set-visible-elements!)
-      (define-values (cw ch) (get-client-size))
+      (define-values (dw dh) (get-drawable-size))
       (define-values (left top) (get-view-start))
-      (define-values (right bottom) (values (+ left cw) (+ top ch)))
+      (define-values (right bottom) (values (+ left dw) (+ top dh)))
 
       (define cursor (dlist-cursor elements))
       ;; find first visible element
@@ -259,21 +272,34 @@
       ;; just a list with a single element for now
       (set-element-bb-list! e (list (bounding-box x1 y1 x2 y2)))
       
-      (when (> x2 vw)
+      (when (> x2 canvas-width)
         (set! canvas-width x2))
+
+      (when (> y2 canvas-height)
+        (set! canvas-height y2))
       
-      (when (or (> canvas-width vw)
-                (> y vh))
+      (when (or (> (+ canvas-width (* xmargin 2)) vw)
+                (> (+ canvas-height (* ymargin 2)) vh))
         ;(printf "place-element virtual size: ~ax~a to ~ax~a~n" vw vh canvas-width y)
         (define-values (cw ch) (get-client-size))
-        (define horz-pixels canvas-width)
-        (define vert-pixels y)
+        (define horz-pixels (+ canvas-width (* xmargin 2)))
+        (define vert-pixels (+ canvas-height (* ymargin 2)))
         (show-scrollbars (> horz-pixels cw) (> vert-pixels ch))
         (init-auto-scrollbars horz-pixels
                               vert-pixels
                               hscroll
                               vscroll)))
-    
+
+    (define (clear-rectangle x y width height)
+      ;(printf "clear-rectangle ~a,~a  ~ax~a~n" x y width height)
+      (define old-brush (send dc get-brush))
+      (define old-pen (send dc get-pen))
+      (send dc set-pen (get-canvas-background) 1 'transparent)
+      (send dc set-brush (get-canvas-background) 'solid)
+      (send dc draw-rectangle x y width height)
+      (send dc set-brush old-brush)
+      (send dc set-pen old-pen))
+
     (define/override (on-paint)
       (define-values (cw ch) (get-client-size))
       (define-values (vw vh) (get-virtual-size))
@@ -304,32 +330,37 @@
             (when (not (eq? (send (element-snip e) get-style) current-style))
               (set! current-style (send (element-snip e) get-style))
               (send current-style switch-to dc #f))
+            (define-values (x y) (values (+ (bounding-box-left bb) xmargin)
+                                         (+ (bounding-box-top bb) ymargin)))
             (send (element-snip e)
                   draw dc
-                  (bounding-box-left bb) (bounding-box-top bb)
-                  (bounding-box-left bb) (bounding-box-top bb)
-                  (bounding-box-right bb) (bounding-box-bottom bb)
-                  0 0 'no-caret)))
+                  x y
+                  x y
+                  (+ (bounding-box-right bb) xmargin) (+ (bounding-box-bottom bb) ymargin)
+                  0 0 'no-caret))
+          ;; clear bottom vertical margin in case it was drawn to
+          (clear-rectangle left (- bottom ymargin) cw ymargin))
         (lambda ()
           (send dc resume-flush))))
 
     (define/override (on-size width height)
       (define-values (cw ch) (get-client-size))
+      (define-values (dw dh) (get-drawable-size))
       (define-values (left top) (get-view-start))
-      (define-values (right bottom) (values (+ left cw) (+ top ch)))
+      (define-values (right bottom) (values (+ left dw) (+ top dh)))
 
       ;(define-values (w h) (get-size))
       ;(printf "on-size client=~ax~a window=~ax~a new=~ax~a~n" cw ch w h width height)
 
-      ;; update visible elements
+      ;; update visible elements if window height changes
       (if (> ch cached-client-height)
           (adjust-visible-elements-forward! visible-elements top bottom)
           (adjust-visible-elements-back! visible-elements top bottom))
       (set! cached-client-width cw)
       (set! cached-client-height ch)
       
-      (show-scrollbars (> canvas-width cw)
-                       (> (element-bottom (dlist-tail-value elements)) ch)))
+      (show-scrollbars (> canvas-width dw)
+                       (> (element-bottom (dlist-tail-value elements)) dh)))
 
     ;;
     (define/public (append-snip s [alignment 'left])
@@ -367,6 +398,8 @@
 (define canvas
   (new layout-canvas% (parent frame)
        (style '(hscroll vscroll resize-corner))
+       (horiz-margin 5)
+       (vert-margin 5)
        ))
 
 (define (init-styles style-list)
