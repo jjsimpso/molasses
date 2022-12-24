@@ -23,10 +23,11 @@
     (inherit get-dc
              get-size
              get-client-size
-             get-virtual-size
-             get-view-start
              show-scrollbars
-             init-auto-scrollbars
+             init-manual-scrollbars
+             set-scroll-page
+             set-scroll-pos
+             set-scroll-range
              suspend-flush
              resume-flush
              flush
@@ -40,7 +41,7 @@
     (define ymargin vert-margin)
 
     ;; initially hide both scrollbars 
-    (init-auto-scrollbars #f #f 0 0)
+    (init-manual-scrollbars #f #f (* xmargin 2) (* ymargin 2) 0 0)
     
     ;; store the drawing context for efficiency
     (define dc (get-dc))
@@ -50,8 +51,9 @@
     (define canvas-width 10)
     (define canvas-height 10)
     
-    ;; cached scroll position of primary axis used for visible element determination
-    (define scroll-position 0)
+    ;; scroll position. upper left coordinates of viewable portion of the canvas
+    (define scroll-x 0)
+    (define scroll-y 0)
 
     ;; needed so that we can tell if the canvas is getting bigger or smaller during on-size events
     (define cached-client-width 10)
@@ -61,6 +63,15 @@
       (define-values (cw ch) (get-client-size))
       (values (- cw (* 2 xmargin))
               (- ch (* 2 ymargin))))
+
+    ;; replaces version from canvas% since we're using manual scrollbars
+    (define (get-virtual-size)
+      (values (+ canvas-width (* xmargin 2))
+              (+ canvas-height (* ymargin 2))))
+
+    ;; replaces version from canvas% since we're using manual scrollbars
+    (define (get-view-start)
+      (values scroll-x scroll-y))
     
     ;; (left x top) is upper left corner of box
     (struct bounding-box
@@ -180,7 +191,7 @@
     
     ;;
     (define (update-visible-elements! scroll-change top bottom)
-      ;(printf "update-visible-elements! ~a~n" scroll-change)
+      ;(printf "update-visible-elements! change=~a, top=~a, bottom=~a~n" scroll-change top bottom)
       (when visible-elements
         (define head-element (dlist-head-value visible-elements))
         (define tail-element (dlist-tail-value visible-elements))
@@ -245,12 +256,8 @@
     ;; e is the new element and must be the new tail of the element list
     ;; previous is the previous tail of the element list
     (define (place-element e previous)
+      (define-values (cw ch) (get-client-size))
       (define-values (vw vh) (get-virtual-size))
-      ;; calculate the current scrollbar positions in 0.0-1.0 range for init-auto-scrollbars
-      (define-values (hscroll vscroll)
-        (let-values ([(x y) (get-view-start)])
-          (values (/ x vw)
-                  (/ y vh))))
       (define snip-w (box 0))
       (define snip-h (box 0))
       (define snip-descent (box 0))
@@ -271,6 +278,7 @@
 
       ;; just a list with a single element for now
       (set-element-bb-list! e (list (bounding-box x1 y1 x2 y2)))
+      ;(printf "bb size = (~a,~a) (~a,~a)~n" x1 y1 x2 y2)
       
       (when (> x2 canvas-width)
         (set! canvas-width x2))
@@ -284,11 +292,9 @@
         (define-values (cw ch) (get-client-size))
         (define horz-pixels (+ canvas-width (* xmargin 2)))
         (define vert-pixels (+ canvas-height (* ymargin 2)))
-        (show-scrollbars (> horz-pixels cw) (> vert-pixels ch))
-        (init-auto-scrollbars horz-pixels
-                              vert-pixels
-                              hscroll
-                              vscroll)))
+        (set-scroll-range 'horizontal (max 0 (- horz-pixels cw)))
+        (set-scroll-range 'vertical (max 0 (- vert-pixels ch)))
+        (show-scrollbars (> horz-pixels cw) (> vert-pixels ch))))
 
     (define (clear-rectangle x y width height)
       ;(printf "clear-rectangle ~a,~a  ~ax~a~n" x y width height)
@@ -303,18 +309,14 @@
     (define/override (on-paint)
       (define-values (cw ch) (get-client-size))
       (define-values (vw vh) (get-virtual-size))
-      (define-values (left top) (get-view-start))
+      (define-values (left top) (values scroll-x scroll-y))
       (define-values (right bottom) (values (+ left cw) (+ top ch)))
 
-      ;(printf "on-paint ~ax~a of ~ax~a~n" cw ch vw vh)
+      ;(printf "on-paint ~ax~a of ~ax~a at ~ax~a~n" cw ch vw vh left top)
+      
       (when (not visible-elements)
         (set-visible-elements!))
       
-      ;; check to see if view-start changed. if so, call update-visible-elements!
-      (when (not (equal? scroll-position top))
-        (update-visible-elements! (- top scroll-position) top bottom)
-        (set! scroll-position top))
-
       (define current-style #f)
 
       (send dc suspend-flush)
@@ -322,6 +324,7 @@
       (dynamic-wind
         void
         (lambda ()
+          (clear-rectangle 0 0 cw ch)
           ;; only draw visible elements
           (for ([e (in-dlist visible-elements)])
             ;; assume only one bounding box until we implement word wrap
@@ -330,19 +333,37 @@
             (when (not (eq? (send (element-snip e) get-style) current-style))
               (set! current-style (send (element-snip e) get-style))
               (send current-style switch-to dc #f))
-            (define-values (x y) (values (+ (bounding-box-left bb) xmargin)
-                                         (+ (bounding-box-top bb) ymargin)))
+            (define-values (x y) (values (+ (- (bounding-box-left bb) left) xmargin)
+                                         (+ (- (bounding-box-top bb) top) ymargin)))
+            ;(printf "snip at ~ax~a (bb top=~a), text=~a~n" x y (bounding-box-top bb) (send (element-snip e) get-text 0 80))
             (send (element-snip e)
                   draw dc
                   x y
                   x y
-                  (+ (bounding-box-right bb) xmargin) (+ (bounding-box-bottom bb) ymargin)
+                  (+ (- (bounding-box-right bb) left) xmargin) (+ (- (bounding-box-bottom bb) top) ymargin)
                   0 0 'no-caret))
           ;; clear bottom vertical margin in case it was drawn to
           (clear-rectangle left (- bottom ymargin) cw ymargin))
         (lambda ()
           (send dc resume-flush))))
 
+    (define/override (on-scroll event)
+      (define-values (cw ch) (get-client-size))
+
+      ;(printf "on-scroll: ~a ~a~n" (send event get-direction) (send event get-position))
+      
+      (if (eq? (send event get-direction) 'vertical)
+          (let* ([top (send event get-position)]
+                 [bottom (+ top ch)])
+            (set! scroll-y top)
+            ;; just to be safe
+            (when (not visible-elements)
+              (set-visible-elements!))
+            (update-visible-elements! (- top scroll-y) top bottom))
+          (set! scroll-x (send event get-position)))
+            
+      (on-paint))
+    
     (define/override (on-size width height)
       (define-values (cw ch) (get-client-size))
       (define-values (dw dh) (get-drawable-size))
@@ -358,9 +379,16 @@
           (adjust-visible-elements-back! visible-elements top bottom))
       (set! cached-client-width cw)
       (set! cached-client-height ch)
-      
+
+      ;; need to update the scroll range when the client size changes
+      (define horz-pixels (+ canvas-width (* xmargin 2)))
+      (define vert-pixels (+ canvas-height (* ymargin 2)))
+      (set-scroll-range 'horizontal (max 0 (- horz-pixels cw)))
+      (set-scroll-range 'vertical (max 0 (- vert-pixels ch)))
+      (set-scroll-page 'horizontal cw)
+      (set-scroll-page 'vertical ch)
       (show-scrollbars (> canvas-width dw)
-                       (> (element-bottom (dlist-tail-value elements)) dh)))
+                       (> canvas-height dh)))
 
     ;;
     (define/public (append-snip s [alignment 'left])
@@ -391,9 +419,8 @@
       (define style (send styles find-named-style style-name))
       (if style
           (set! default-style style)
-          #f))
-    
-    ))
+          #f))    
+))
 
 (define canvas
   (new layout-canvas% (parent frame)
@@ -455,6 +482,7 @@
 
 (define highlander-text "He is immortal. Born in the highlands of Scotland 400 years ago, there are others like him. Some good, some evil. For centuries he has battled the forces of darkness with holy ground his only refuge. He cannot die unless you take his head and with it his power. There can be only one. He is Duncan Macleod, the Highlander!\n")
 (define test-selector "gamefaqs-archive/ps2/final-fantasy-xii/FAQ_Walkthrough-by--Berserker.txt")
+;(define test-selector "/media/floppies.txt")
 ;(define test-selector ".")
 
 ;(send canvas append-string highlander-text)
