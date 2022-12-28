@@ -354,12 +354,12 @@
       
       (if (eq? (send event get-direction) 'vertical)
           (let* ([top (send event get-position)]
-                 [bottom (+ top ch)])
+                 [bottom (+ top ch)]
+                 [change (- top scroll-y)])
             (set! scroll-y top)
-            ;; just to be safe
-            (when (not visible-elements)
-              (set-visible-elements!))
-            (update-visible-elements! (- top scroll-y) top bottom))
+            (if (not visible-elements)
+                (set-visible-elements!)
+                (update-visible-elements! change top bottom)))
           (set! scroll-x (send event get-position)))
             
       (on-paint))
@@ -485,6 +485,11 @@
 ;(define test-selector "/media/floppies.txt")
 ;(define test-selector ".")
 
+(let ([response (gopher-fetch "gopher.endangeredsoft.org" "games/9.png" #\0 70)])
+  (send canvas append-snip
+        (make-object image-snip%
+                     (gopher-response-data-port response)
+                     'unknown)))
 ;(send canvas append-string highlander-text)
 ;(send canvas append-string "\n\n")
 ;(send canvas append-string "text\nwith lots\nof\nnewlines")
