@@ -133,12 +133,18 @@
       #f))
 
 (define (dlist-length dl)
-  (let loop ([cursor (dlist-head dl)]
-             [i 0])
-    (if cursor
-        (loop (dlink-next cursor)
-              (add1 i))
-        i)))
+  (define head (dlist-head dl))
+  (define tail (dlist-tail dl))
+  (cond
+    [(not head) 0]
+    [(not tail) 1]
+    [else
+     (let loop ([cursor head]
+                [i 0])
+       (if (eq? cursor tail)
+           (add1 i)
+           (loop (dlink-next cursor)
+                 (add1 i))))]))
 
 #;(define (dlist->list dl)
   (let loop ([cursor (or (dlist-tail dl)
@@ -182,7 +188,7 @@
                                     (unsafe-struct*-ref n 2)) ; next
                                 (unsafe-struct*-ref n 0))])   ; value
            #true
-           #true
+           tail  ; stop condition for cursors with only one element (tail will be false)
            [next])]]
       [_ #false])))
 
@@ -269,10 +275,14 @@
 ;; advances the tail pointer to the next link, but stops if already at the end
 ;; returns the new tail or #f if tail didn't change
 (define (dlist-advance-tail! dl)
+  (define tail (dlist-tail dl))
   (cond
-    [(and (dlist-tail dl) (dlink-next (dlist-tail dl)))
-     (set-dlist-tail! dl (dlink-next (dlist-tail dl)))
+    [(and tail (dlink-next tail))
+     (set-dlist-tail! dl (dlink-next tail))
      (dlist-tail dl)]
+    [(and (false? tail) (dlink-next (dlist-head dl)))
+     ;; dl is a cursor currently pointing to only one element
+     (set-dlist-tail! dl (dlink-next (dlist-head dl)))]
     [else #f]))
 
 ;; moves the tail pointer back one link
@@ -338,6 +348,7 @@
  
   (dlist-retreat-tail! cursor)
   (check-equal? (dlist-tail-value cursor) 4)
+  (check-equal? (dlist-length cursor) 4)
   (check-equal? (for/list ([v (in-dlist cursor)]) v) '(1 2 3 4))
   (check-equal? 
    (with-handlers [(exn:fail:contract? (lambda (e) #t))]
@@ -345,6 +356,15 @@
    #t)
   (check-equal? (dlist->list cursor) '(1 2 3 4))
   (check-equal? (for/list ([v (in-dlist cursor)]) v) '(1 2 3 4))
+  (dlist-retreat-tail! cursor)
+  (dlist-retreat-tail! cursor)
+  (dlist-retreat-tail! cursor)
+  (check-equal? (dlist->list cursor) '(1))
+  (check-equal? (for/list ([v (in-dlist cursor)]) v) '(1))
+  (check-equal? (dlist-tail-value cursor) 1)
+  (dlist-advance-tail! cursor)
+  (dlist-advance-tail! cursor)
+  (dlist-advance-tail! cursor)
   (dlist-advance-tail! cursor)
   (check-equal? (dlist-tail-value cursor) 5)
   ;;; ----------
