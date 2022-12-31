@@ -92,6 +92,7 @@
     ;; alignment can be 'left, 'right, or 'center
     (struct element
       ([snip #:mutable]
+       [end-of-line #:mutable]
        [alignment #:mutable]
        [bb-list #:auto #:mutable]) ; list of bounding boxes which cover element 
       #:prefab #:auto-value #f)
@@ -174,6 +175,7 @@
         (cond
           [(not e) void] ; should never happen
           [(element-visible? e top bottom)
+           ;(printf "adjust-visible-elements-back! loop 1~n")
            (when (dlist-retreat-head! cursor)
              (loop (dlist-head-value cursor)))]
           [else
@@ -181,6 +183,7 @@
              (set-dlist-head! cursor (dlist-head-next cursor)))]))
       ;; retreat the tail until it is visible
       (let loop ([e (dlist-tail-value cursor)])
+        ;(printf "adjust-visible-elements-back! loop 2~n")
         (cond
           [(not e) void]
           [(element-visible? e top bottom) void]
@@ -202,7 +205,8 @@
                 (set-visible-elements!))
             (if (and head-element (element-visible? head-element top bottom))
                 (adjust-visible-elements-back! visible-elements top bottom)
-                (set-visible-elements!)))))
+                (set-visible-elements!)))
+        #;(printf "update-visible-elements: # visible = ~a~n" (dlist-length visible-elements))))
     
     ;; iterate over all elements and calculate virtual size of canvas
     #;(define (calculate-virtual-size)
@@ -246,10 +250,13 @@
             ;; todo: check end-bb
             (case mode
               [(plaintext)
-               (values 0 (bounding-box-bottom end-bb))]
+               (if (element-end-of-line previous-element)
+                   (values 0 (bounding-box-bottom end-bb))
+                   (values (bounding-box-right end-bb)
+                           (bounding-box-top end-bb)))]
               [else
                (values (bounding-box-right end-bb)
-                       (bounding-box-bottom end-bb))]))
+                       (bounding-box-top end-bb))]))
           (values 0 0)))
     
     ;; places element on the virtual canvas and updates virtual size of canvas
@@ -370,13 +377,14 @@
       (define-values (left top) (get-view-start))
       (define-values (right bottom) (values (+ left dw) (+ top dh)))
 
-      ;(define-values (w h) (get-size))
+      (define-values (w h) (get-size))
       ;(printf "on-size client=~ax~a window=~ax~a new=~ax~a~n" cw ch w h width height)
 
       ;; update visible elements if window height changes
       (if (> ch cached-client-height)
           (adjust-visible-elements-forward! visible-elements top bottom)
           (adjust-visible-elements-back! visible-elements top bottom))
+      ;(printf "on-size: # visible = ~a~n" (dlist-length visible-elements))
       (set! cached-client-width cw)
       (set! cached-client-height ch)
 
@@ -391,25 +399,28 @@
                        (> canvas-height dh)))
 
     ;;
-    (define/public (append-snip s [alignment 'left])
-      (define e (element s alignment))
+    (define/public (append-snip s [end-of-line #f] [alignment 'left])
+      (define e (element s end-of-line alignment))
       (place-element e (dlist-tail-value elements))
       (dlist-append! elements e))
     
     ;; append string using the default stlye
-    (define/public (append-string s [alignment 'left])
+    (define/public (append-string s [end-of-line #t] [alignment 'left])
       (case mode
         [(plaintext)
          ;; for plaintext mode, insert each line in string as an element
+         ;; default to adding newline after each line/element
          (define p (open-input-string s))
          (for ([line (in-lines p)])
            (define ss (make-object string-snip% line))
            (send ss set-style default-style)
-           (define e (element ss alignment))
+           (define e (element ss end-of-line alignment))
            (place-element e (dlist-tail-value elements))
            (dlist-append! elements e))]
         [else
-         (define e (element (make-object string-snip% s) alignment))
+         (define ss (make-object string-snip% s))
+         (send ss set-style default-style)
+         (define e (element ss end-of-line alignment))
          (place-element e (dlist-tail-value elements))
          (dlist-append! elements e)]))
       
@@ -472,8 +483,42 @@
     (set-delta 'change-size 12)
     (set-delta-foreground html-text-fg-color)
     (set-delta-background html-text-bg-color))
-  (send html-standard set-delta html-standard-delta)
-)
+  (send html-standard set-delta html-standard-delta))
+
+(define (add-gopher-menu c)
+  (define standard-style
+    (send (send c get-style-list) find-named-style "Standard"))
+  (define link-style
+    (send (send c get-style-list) find-named-style "Link"))
+
+  (define (insert-menu-item c type-text display-text)
+    (define type-snip (new string-snip%))
+    (define link-snip (new string-snip%))
+  
+    ;; insert text for type indication
+    (send type-snip set-style standard-style)
+    (send type-snip insert type-text (string-length type-text))
+    (send c append-snip type-snip #f)
+    
+    ;(define link-start-pos (send c last-position))
+    (send link-snip set-style link-style)
+    (send link-snip insert display-text (string-length display-text))
+    (send c append-snip link-snip #t))
+
+  (insert-menu-item c " (DIR) " "Directory 1")
+  (insert-menu-item c " (DIR) " "Directory 2")
+  (insert-menu-item c " (DIR) " "Directory 3")
+  (send c append-string "       " #f)
+  (send c append-string "\n")
+  (send c append-string "       " #f)
+  (send c append-string "Here is some informational text.")
+  (send c append-string "       " #f)
+  (send c append-string "There are a few text files below:")
+  (send c append-string "       " #f)
+  (send c append-string "\n")
+  (insert-menu-item c "(TEXT) " "Read about Foo")
+  (insert-menu-item c "(TEXT) " "Read about Bar"))
+
 
 (init-styles (send canvas get-style-list))
 (send canvas set-canvas-background canvas-bg-color)
@@ -489,10 +534,12 @@
   (send canvas append-snip
         (make-object image-snip%
                      (gopher-response-data-port response)
-                     'unknown)))
-;(send canvas append-string highlander-text)
-;(send canvas append-string "\n\n")
-;(send canvas append-string "text\nwith lots\nof\nnewlines")
+                     'unknown)
+        #t))
+(send canvas append-string highlander-text)
+(send canvas append-string "\n\n")
+(send canvas append-string "text\nwith lots\nof\nnewlines")
+(add-gopher-menu canvas)
 (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
   (send canvas append-string (port->string (gopher-response-data-port response))))
 (printf "append finished~n")
