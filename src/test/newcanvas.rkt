@@ -59,6 +59,10 @@
     (define cached-client-width 10)
     (define cached-client-height 10)
 
+    ;; current position to place next element
+    (define place-x 0)
+    (define place-y 0)
+    
     (define (get-drawable-size)
       (define-values (cw ch) (get-client-size))
       (values (- cw (* 2 xmargin))
@@ -73,37 +77,16 @@
     (define (get-view-start)
       (values scroll-x scroll-y))
     
-    ;; (left x top) is upper left corner of box
-    (struct bounding-box
-      (left top right bottom)
-      #:prefab)
-
-    ;; checks if bounding-box bb is at least partially within the range top to bottom
-    (define (within-vertical-range? bb top bottom)
-      (and (<= (bounding-box-top bb) bottom)
-           (>= (bounding-box-bottom bb) top)))
-
-    ;; checks if bounding-box bb is at least partially within the range left to right
-    (define (within-horizontal-range? bb left right)
-      (and (<= (bounding-box-left bb) right)
-           (>= (bounding-box-right bb) left)))
-    
     ;; an element is a snip with a horizontal alignment
     ;; alignment can be 'left, 'right, or 'center
     (struct element
       ([snip #:mutable]
        [end-of-line #:mutable]
        [alignment #:mutable]
-       [bb-list #:auto #:mutable]) ; list of bounding boxes which cover element 
+       [xpos #:mutable] ; position of top left corner of element
+       [ypos #:mutable])
       #:prefab #:auto-value #f)
 
-    (define (element-bottom e)
-      (define bottom 0)
-      (for/last ([bb (in-list (element-bb-list e))])
-        (when (> (bounding-box-bottom bb) bottom)
-          (set! bottom (bounding-box-bottom bb)))
-        bottom))
-    
     ;; list of all elements in order of insertion
     (define elements (dlist-new))
 
@@ -117,9 +100,16 @@
     (define default-style (send styles find-named-style "Standard"))
 
     (define (element-visible? e top bottom)
-      (for/first ([bb (in-list (element-bb-list e))]
-                  #:when (within-vertical-range? bb top bottom))
-        #t))
+      (cond
+        [(>= (element-ypos e) bottom) #f]
+        [(>= (element-ypos e) top) #t]
+        [else
+         ;(define w (box 0))
+         (define h (box 0))
+         (send (element-snip e) get-extent dc (element-xpos e) (element-ypos e) #f h)
+         (if (>= (+ (element-ypos e) (unbox h)) top)
+             #t
+             #f)]))
     
     (define/public (set-visible-elements!)
       (define-values (dw dh) (get-drawable-size))
@@ -208,56 +198,16 @@
                 (set-visible-elements!)))
         #;(printf "update-visible-elements: # visible = ~a~n" (dlist-length visible-elements))))
     
-    ;; iterate over all elements and calculate virtual size of canvas
-    #;(define (calculate-virtual-size)
-      (define-values (vw vh) (get-virtual-size))
-      ;; calculate the current scrollbar positions in 0.0-1.0 range for init-auto-scrollbars
-      (define-values (hscroll vscroll)
-        (let-values ([(x y) (get-view-start)])
-          (values (/ x vw)
-                  (/ y vh))))
-      (define max-linewidth 0)
-      (define snip-w (box 0))
-      (define snip-h (box 0))
-      ;; current drawing position
-      (define x 0)
-      (define y 0)
-      (for ([e (in-dlist elements)])
-        (set-element-x1! e x)
-        (set-element-y1! e y)
-        (send (element-snip e) get-extent dc x y snip-w snip-h #f #f #f #f)
-        (set! y (inexact->exact (+ y (unbox snip-h))))
-        (set-element-x2! e (inexact->exact (+ x (unbox snip-w))))
-        (set-element-y2! e y)
-        (when (> (element-x2 e) max-linewidth)
-          (set! max-linewidth (element-x2 e))))
-
-      (set! canvas-width max-linewidth)
-      
-      (when (or (not (equal? vw max-linewidth))
-                (not (equal? vh y)))
-        (define-values (cw ch) (get-client-size))
-        (define horz-pixels max-linewidth)
-        (define vert-pixels y)
-        (show-scrollbars (> horz-pixels cw) (> vert-pixels ch))
-        (init-auto-scrollbars horz-pixels vert-pixels hscroll vscroll)))
-
-    (define (calc-drawing-position previous-element)
+    (define (update-drawing-position previous-element left top right bottom)
       (if previous-element
-          (let ([end-bb
-                 (for/last ([bb (in-list (element-bb-list previous-element))])
-                   bb)])
-            ;; todo: check end-bb
-            (case mode
-              [(plaintext)
-               (if (element-end-of-line previous-element)
-                   (values 0 (bounding-box-bottom end-bb))
-                   (values (bounding-box-right end-bb)
-                           (bounding-box-top end-bb)))]
-              [else
-               (values (bounding-box-right end-bb)
-                       (bounding-box-top end-bb))]))
-          (values 0 0)))
+          (case mode
+            [(plaintext)
+             (if (element-end-of-line previous-element)
+                 (set!-values (place-x place-y) (values 0 bottom))
+                 (set!-values (place-x place-y) (values right top)))]
+            [else
+             (set!-values (place-x place-y) (values right top))])
+          (set!-values (place-x place-y) (values 0 0))))
     
     ;; places element on the virtual canvas and updates virtual size of canvas
     ;; e is the new element and must be the new tail of the element list
@@ -270,8 +220,8 @@
       (define snip-descent (box 0))
       (define snip-space (box 0))
       
-      ;; current drawing position
-      (define-values (x y) (calc-drawing-position previous))
+      ;; current drawing position (currently simplified)
+      (define-values (x y) (values (element-xpos e) (element-ypos e)))
 
       (send (element-snip e) get-extent dc x y snip-w snip-h snip-descent snip-space #f #f)
       ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
@@ -283,9 +233,9 @@
       (set! y (add1 (inexact->exact (+ y (unbox snip-h)))))
       (set! y2 y)
 
-      ;; just a list with a single element for now
-      (set-element-bb-list! e (list (bounding-box x1 y1 x2 y2)))
-      ;(printf "bb size = (~a,~a) (~a,~a)~n" x1 y1 x2 y2)
+      ;(printf "element bb = (~a,~a) (~a,~a)~n" x1 y1 x2 y2)
+      
+      (update-drawing-position e x1 y1 x2 y2)
       
       (when (> x2 canvas-width)
         (set! canvas-width x2))
@@ -316,6 +266,7 @@
     (define/override (on-paint)
       (define-values (cw ch) (get-client-size))
       (define-values (vw vh) (get-virtual-size))
+      ;; position of viewport in virtual canvas
       (define-values (left top) (values scroll-x scroll-y))
       (define-values (right bottom) (values (+ left cw) (+ top ch)))
 
@@ -334,23 +285,25 @@
           (clear-rectangle 0 0 cw ch)
           ;; only draw visible elements
           (for ([e (in-dlist visible-elements)])
-            ;; assume only one bounding box until we implement word wrap
-            (define bb (car (element-bb-list e)))
             ;; set the style if it has changed
             (when (not (eq? (send (element-snip e) get-style) current-style))
               (set! current-style (send (element-snip e) get-style))
               (send current-style switch-to dc #f))
-            (define-values (x y) (values (+ (- (bounding-box-left bb) left) xmargin)
-                                         (+ (- (bounding-box-top bb) top) ymargin)))
+            (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
+                                         (+ (- (element-ypos e) top) ymargin)))
             ;(printf "snip at ~ax~a (bb top=~a), text=~a~n" x y (bounding-box-top bb) (send (element-snip e) get-text 0 80))
+            (define w (box 0))
+            (define h (box 0))
+            (send (element-snip e) get-extent dc (element-xpos e) (element-ypos e) w h)
             (send (element-snip e)
                   draw dc
                   x y
                   x y
-                  (+ (- (bounding-box-right bb) left) xmargin) (+ (- (bounding-box-bottom bb) top) ymargin)
+                  (- cw xmargin) (- ch ymargin)
                   0 0 'no-caret))
-          ;; clear bottom vertical margin in case it was drawn to
-          (clear-rectangle left (- bottom ymargin) cw ymargin))
+          ;; clear bottom and right margins in case it was drawn to
+          (clear-rectangle 0 (- ch ymargin) cw ymargin)
+          (clear-rectangle (- cw xmargin) 0 xmargin ch))
         (lambda ()
           (send dc resume-flush))))
 
@@ -400,7 +353,7 @@
 
     ;;
     (define/public (append-snip s [end-of-line #f] [alignment 'left])
-      (define e (element s end-of-line alignment))
+      (define e (element s end-of-line alignment place-x place-y))
       (place-element e (dlist-tail-value elements))
       (dlist-append! elements e))
     
@@ -414,13 +367,13 @@
          (for ([line (in-lines p)])
            (define ss (make-object string-snip% line))
            (send ss set-style default-style)
-           (define e (element ss end-of-line alignment))
+           (define e (element ss end-of-line alignment place-x place-y))
            (place-element e (dlist-tail-value elements))
            (dlist-append! elements e))]
         [else
          (define ss (make-object string-snip% s))
          (send ss set-style default-style)
-         (define e (element ss end-of-line alignment))
+         (define e (element ss end-of-line alignment place-x place-y))
          (place-element e (dlist-tail-value elements))
          (dlist-append! elements e)]))
       
