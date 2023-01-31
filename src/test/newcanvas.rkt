@@ -76,15 +76,22 @@
     ;; replaces version from canvas% since we're using manual scrollbars
     (define (get-view-start)
       (values scroll-x scroll-y))
+
+    (struct text-extent
+      (w h descent space)
+      #:prefab)
     
     ;; an element is a snip with a horizontal alignment
     ;; alignment can be 'left, 'right, or 'center
     (struct element
-      ([snip #:mutable]
+      ([snip #:mutable] ; for strings this will be a raw string instead of a string-snip%
        [end-of-line #:mutable]
        [alignment #:mutable]
        [xpos #:mutable] ; position of top left corner of element
-       [ypos #:mutable])
+       [ypos #:mutable]
+       [text-style #:mutable #:auto] ; only used for strings since snips have their own style
+       [cached-text-extent #:mutable #:auto]
+       [line-breaks #:mutable #:auto])
       #:prefab #:auto-value #f)
 
     ;; list of all elements in order of insertion
@@ -99,6 +106,32 @@
     ;; this can be changed with set-default-style before appending a string to set its snip to this style
     (define default-style (send styles find-named-style "Standard"))
 
+    (define (get-extent e dc x y [w #f] [h #f] [descent #f] [space #f] [lspace #f] [rspace #f])
+      (if (string? (element-snip e))
+          (if (element-cached-text-extent e)
+              (let ([extent (element-cached-text-extent e)])
+                (when w (set-box! w (text-extent-w extent)))
+                (when h (set-box! h (text-extent-h extent)))
+                (when descent (set-box! descent (text-extent-descent extent)))
+                (when space (set-box! space (text-extent-space extent))))
+              (let ([style (or (element-text-style e) default-style)])
+                (define-values (tw th td ts) (send dc get-text-extent (element-snip e) (send style get-font)))
+                (when w (set-box! w tw))
+                (when h (set-box! h th))
+                (when descent (set-box! descent td))
+                (when space (set-box! space ts))
+                (set-element-cached-text-extent! e (text-extent tw th td ts))))
+          (send (element-snip e) get-extent dc x y w h descent space lspace rspace)))
+
+    (define (draw e dc x y left top right bottom dx dy)
+      (if (string? (element-snip e))
+          (send dc draw-text (element-snip e) x y)
+          (send (element-snip e) draw dc x y left top right bottom dx dy 'no-caret)))
+
+    (define (get-style e)
+      (or (element-text-style e)
+          (send (element-snip e) get-style)))
+    
     (define (element-visible? e top bottom)
       (cond
         [(>= (element-ypos e) bottom) #f]
@@ -106,7 +139,7 @@
         [else
          ;(define w (box 0))
          (define h (box 0))
-         (send (element-snip e) get-extent dc (element-xpos e) (element-ypos e) #f h)
+         (get-extent e dc (element-xpos e) (element-ypos e) #f h)
          (if (>= (+ (element-ypos e) (unbox h)) top)
              #t
              #f)]))
@@ -223,7 +256,7 @@
       ;; current drawing position (currently simplified)
       (define-values (x y) (values (element-xpos e) (element-ypos e)))
 
-      (send (element-snip e) get-extent dc x y snip-w snip-h snip-descent snip-space #f #f)
+      (get-extent e dc x y snip-w snip-h snip-descent snip-space #f #f)
       ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
       
       ;; coordinates for element bounding region
@@ -286,21 +319,17 @@
           ;; only draw visible elements
           (for ([e (in-dlist visible-elements)])
             ;; set the style if it has changed
-            (when (not (eq? (send (element-snip e) get-style) current-style))
-              (set! current-style (send (element-snip e) get-style))
+            (when (not (eq? (get-style e) current-style))
+              (set! current-style (get-style e))
               (send current-style switch-to dc #f))
             (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                          (+ (- (element-ypos e) top) ymargin)))
             ;(printf "snip at ~ax~a (bb top=~a), text=~a~n" x y (bounding-box-top bb) (send (element-snip e) get-text 0 80))
-            (define w (box 0))
-            (define h (box 0))
-            (send (element-snip e) get-extent dc (element-xpos e) (element-ypos e) w h)
-            (send (element-snip e)
-                  draw dc
+            (draw e dc
                   x y
                   x y
                   (- cw xmargin) (- ch ymargin)
-                  0 0 'no-caret))
+                  0 0))
           ;; clear bottom and right margins in case it was drawn to
           (clear-rectangle 0 (- ch ymargin) cw ymargin)
           (clear-rectangle (- cw xmargin) 0 xmargin ch))
@@ -358,22 +387,20 @@
       (dlist-append! elements e))
     
     ;; append string using the default stlye
-    (define/public (append-string s [end-of-line #t] [alignment 'left])
+    (define/public (append-string s [style #f] [end-of-line #t] [alignment 'left])
       (case mode
         [(plaintext)
          ;; for plaintext mode, insert each line in string as an element
          ;; default to adding newline after each line/element
          (define p (open-input-string s))
          (for ([line (in-lines p)])
-           (define ss (make-object string-snip% line))
-           (send ss set-style default-style)
-           (define e (element ss end-of-line alignment place-x place-y))
+           (define e (element line end-of-line alignment place-x place-y))
+           (set-element-text-style! e (or style default-style))
            (place-element e (dlist-tail-value elements))
            (dlist-append! elements e))]
         [else
-         (define ss (make-object string-snip% s))
-         (send ss set-style default-style)
-         (define e (element ss end-of-line alignment place-x place-y))
+         (define e (element s end-of-line alignment place-x place-y))
+         (set-element-text-style! e (or style default-style))
          (place-element e (dlist-tail-value elements))
          (dlist-append! elements e)]))
       
@@ -445,29 +472,19 @@
     (send (send c get-style-list) find-named-style "Link"))
 
   (define (insert-menu-item c type-text display-text)
-    (define type-snip (new string-snip%))
-    (define link-snip (new string-snip%))
-  
-    ;; insert text for type indication
-    (send type-snip set-style standard-style)
-    (send type-snip insert type-text (string-length type-text))
-    (send c append-snip type-snip #f)
-    
-    ;(define link-start-pos (send c last-position))
-    (send link-snip set-style link-style)
-    (send link-snip insert display-text (string-length display-text))
-    (send c append-snip link-snip #t))
+    (send c append-string type-text standard-style #f)
+    (send c append-string display-text link-style #t))
 
   (insert-menu-item c " (DIR) " "Directory 1")
   (insert-menu-item c " (DIR) " "Directory 2")
   (insert-menu-item c " (DIR) " "Directory 3")
-  (send c append-string "       " #f)
+  (send c append-string "       " #f #f)
   (send c append-string "\n")
-  (send c append-string "       " #f)
+  (send c append-string "       " #f #f)
   (send c append-string "Here is some informational text.")
-  (send c append-string "       " #f)
+  (send c append-string "       " #f #f)
   (send c append-string "There are a few text files below:")
-  (send c append-string "       " #f)
+  (send c append-string "       " #f #f)
   (send c append-string "\n")
   (insert-menu-item c "(TEXT) " "Read about Foo")
   (insert-menu-item c "(TEXT) " "Read about Bar"))
