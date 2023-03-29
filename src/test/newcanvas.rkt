@@ -8,7 +8,19 @@
          mred/private/wx
          mred/private/wxcanvas
          (prefix-in wx: mred/private/wxme/text))
-
+#|
+    ;; copy outside class for testing
+    (struct element
+      ([snip #:mutable] ; for strings this will be a raw string instead of a string-snip%
+       [end-of-line #:mutable]
+       [alignment #:mutable]
+       [xpos #:mutable] ; position of top left corner of element
+       [ypos #:mutable]
+       [text-style #:mutable #:auto] ; only used for strings since snips have their own style
+       [cached-text-extent #:mutable #:auto]
+       [words #:mutable #:auto])
+      #:prefab #:auto-value #f)
+|#
 
 (define frame 
   (new (class frame% (super-new))
@@ -33,7 +45,7 @@
              flush
              get-canvas-background)
 
-    ;; tentative mode options: 'plaintext, 'columnar, 'layout
+    ;; tentative mode options: 'plaintext, 'wrapped, 'layout, 'columns
     (define mode 'plaintext)
 
     ;; 
@@ -80,6 +92,10 @@
     (struct text-extent
       (w h descent space)
       #:prefab)
+
+    (struct word
+      (str width to-next)
+      #:prefab)
     
     ;; an element is a snip with a horizontal alignment
     ;; alignment can be 'left, 'right, or 'center
@@ -87,11 +103,11 @@
       ([snip #:mutable] ; for strings this will be a raw string instead of a string-snip%
        [end-of-line #:mutable]
        [alignment #:mutable]
-       [xpos #:mutable] ; position of top left corner of element
-       [ypos #:mutable]
+       [xpos #:mutable #:auto] ; position of top left corner of element, #f for hidden(hiding not implemented yet)
+       [ypos #:mutable #:auto]
        [text-style #:mutable #:auto] ; only used for strings since snips have their own style
        [cached-text-extent #:mutable #:auto]
-       [line-breaks #:mutable #:auto])
+       [words #:mutable #:auto])
       #:prefab #:auto-value #f)
 
     ;; list of all elements in order of insertion
@@ -105,6 +121,10 @@
     ;; style to use if no style is specified
     ;; this can be changed with set-default-style before appending a string to set its snip to this style
     (define default-style (send styles find-named-style "Standard"))
+    
+    (define (get-style e)
+      (or (element-text-style e)
+          (send (element-snip e) get-style)))
 
     (define (get-extent e dc x y [w #f] [h #f] [descent #f] [space #f] [lspace #f] [rspace #f])
       (if (string? (element-snip e))
@@ -123,15 +143,36 @@
                 (set-element-cached-text-extent! e (text-extent tw th td ts))))
           (send (element-snip e) get-extent dc x y w h descent space lspace rspace)))
 
+    (define (wrap-text?)
+      (or (equal? mode 'wrapped)
+          (equal? mode 'layout)))
+
+    (define (draw-wrapped-text e dc x y left top right bottom)
+      (define font (send (get-style e) get-font))
+      (define-values (width height descent space) (send dc get-text-extent "a" font)) ; only need height, so string doesn't matter
+      (define xpos x)
+      (define ypos y)
+      (for ([w (in-list (element-words e))])
+        (if (<= (+ xpos (word-width w)) right)
+            (begin 
+              (send dc draw-text (word-str w) xpos ypos)
+              (set! xpos (+ xpos (word-to-next w))))
+            (begin
+              (set! xpos left)
+              (set! ypos (+ ypos height 1))
+              (send dc draw-text (word-str w) xpos ypos)
+              (set! xpos (+ xpos (word-to-next w)))))
+        (when (>= xpos right)
+          (set! xpos left)
+          (set! ypos (+ ypos height 1)))))
+    
     (define (draw e dc x y left top right bottom dx dy)
       (if (string? (element-snip e))
-          (send dc draw-text (element-snip e) x y)
+          (if (wrap-text?)
+              (draw-wrapped-text e dc x y left top right bottom)
+              (send dc draw-text (element-snip e) x y))
           (send (element-snip e) draw dc x y left top right bottom dx dy 'no-caret)))
 
-    (define (get-style e)
-      (or (element-text-style e)
-          (send (element-snip e) get-style)))
-    
     (define (element-visible? e top bottom)
       (cond
         [(>= (element-ypos e) bottom) #f]
@@ -230,45 +271,143 @@
                 (adjust-visible-elements-back! visible-elements top bottom)
                 (set-visible-elements!)))
         #;(printf "update-visible-elements: # visible = ~a~n" (dlist-length visible-elements))))
-    
+
+    ;; update place-x and place-y with the location to place the next element
     (define (update-drawing-position previous-element left top right bottom)
       (if previous-element
           (case mode
-            [(plaintext)
+            [(plaintext wrapped)
              (if (element-end-of-line previous-element)
                  (set!-values (place-x place-y) (values 0 bottom))
                  (set!-values (place-x place-y) (values right top)))]
             [else
+             ;; this default probably doesn't make sense for any use case
              (set!-values (place-x place-y) (values right top))])
           (set!-values (place-x place-y) (values 0 0))))
+
+    (define (calc-word-extents e)
+      (define (line-break? c)
+        (or (char=? c #\space)
+            (char=? c #\newline)))
+      
+      (define (next-break-pos s pos)
+        (for/last ([c (in-string s pos)]
+                   [i (in-naturals pos)]
+                   #:final (line-break? c))
+          ;(printf "c[~a]=~a~n" i c)
+          (if (line-break? c)
+              i
+              #f)))
+      
+      (define (next-word-pos s pos)
+        (for/last ([c (in-string s pos)]
+                   [i (in-naturals pos)]
+                   #:final (not (line-break? c)))
+          (if (not (line-break? c))
+              i
+              #f)))
+      
+      (define font (send (get-style e) get-font))
+      (define text (element-snip e))
+      (let loop ([word-start 0]
+                 [words '()])
+        (define end-pos (next-break-pos text word-start))
+        (cond
+          [end-pos
+           (define s (substring text word-start end-pos))
+           (define next-pos (next-word-pos text end-pos))
+           (define-values (ww wh wd ws) (send dc get-text-extent s font))
+           (cond
+             [next-pos
+              (define-values (nw nh nd ns) (send dc get-text-extent (substring text word-start next-pos) font))
+              (loop next-pos
+                    (cons (word s ww nw) words))]
+             [else
+              (set-element-words! e (reverse (cons (word s ww ww) words)))])]
+          [else
+           (define s (substring text word-start))
+           (define-values (ww wh wd ws) (send dc get-text-extent s font))
+           (set-element-words! e (reverse (cons (word s ww ww) words)))])))
     
     ;; places element on the virtual canvas and updates virtual size of canvas
     ;; e is the new element and must be the new tail of the element list
-    ;; previous is the previous tail of the element list
-    (define (place-element e previous)
-      (define-values (cw ch) (get-client-size))
+    ;; x,y is position of element's upper left corner in canvas
+    (define (place-element e x y)
+      (define-values (dw dh) (get-drawable-size))
       (define-values (vw vh) (get-virtual-size))
-      (define snip-w (box 0))
-      (define snip-h (box 0))
-      (define snip-descent (box 0))
-      (define snip-space (box 0))
       
-      ;; current drawing position (currently simplified)
-      (define-values (x y) (values (element-xpos e) (element-ypos e)))
-
-      (get-extent e dc x y snip-w snip-h snip-descent snip-space #f #f)
-      ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
+      ;; set the element's position
+      (set-element-xpos! e x)
+      (set-element-ypos! e y)
       
-      ;; coordinates for element bounding region
-      (define-values (x1 y1 x2 y2) (values x y (inexact->exact (+ x (unbox snip-w))) 0))
+      ;; coordinates for element bounding region (x2, y2 need to be set below)
+      (define-values (x1 y1 x2 y2) (values x y 0 0))
 
-      ;; add 1 pixel to line height to match what the standard editor canvas appears to do
-      (set! y (add1 (inexact->exact (+ y (unbox snip-h)))))
-      (set! y2 y)
-
+      ;; cause get-extent to recalculate text extents by deleting cached value
+      (set-element-cached-text-extent! e #f)
+      
+      ;; get extent of element
+      (if (string? (element-snip e))
+          ;; if snip is actually a string type
+          (case mode
+            [(wrapped)
+             ;; calculate the extent of individual words
+             ;; only have to do this once
+             (when (not (element-words e))
+               (calc-word-extents e))
+             ;; calculate the extent of the text with word wrapping
+             (define font (send (get-style e) get-font))
+             (define-values (width height descent space) (send dc get-text-extent "a" font)) ; only need height, so string doesn't matter
+             (define xpos x)
+             (define ypos y)
+             (for ([w (in-list (element-words e))])
+               (if (< (+ xpos (word-to-next w)) dw)
+                   (set! xpos (+ xpos (word-to-next w)))
+                   (begin
+                     ;; wrap to next line, but first check if w fits on the current line
+                     (if (<= (+ xpos (word-width w)) dw)
+                         (set! xpos 0)
+                         (set! xpos (word-to-next w)))
+                     (set! ypos (+ ypos height 1)))))
+             ;; if more than one line, then set x bounds full width
+             (if (= y ypos)
+                 (set! x2 xpos)
+                 (set! x2 dw))
+             (set! y2 (+ ypos height 1))
+             ;; set position for adding next element
+             (if (element-end-of-line e)
+                 (begin
+                   (set! place-x 0)
+                   (set! place-y y2))
+                 (begin
+                   (set! place-x xpos)
+                   (set! place-y ypos)))
+             ;(printf "element extent is ~ax~a - ~ax~a~n" x1 y1 x2 y2)
+             ;(printf "next element at ~ax~a~n" place-x place-y)
+             ;; not really a text extent in this case
+             (set-element-cached-text-extent! e (text-extent (- x2 x1) (- y2 y1) descent space))]
+            [else
+             (define snip-w (box 0))
+             (define snip-h (box 0))
+             (define snip-descent (box 0))
+             (define snip-space (box 0))
+             (get-extent e dc x y snip-w snip-h snip-descent snip-space #f #f)
+             ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
+             (set! x2 (inexact->exact (+ x (unbox snip-w))))
+             (set! y2 (add1 (inexact->exact (+ y (unbox snip-h)))))
+             (update-drawing-position e x1 y1 x2 y2)])
+          ;; if an actual snip%
+          (let ([snip-w (box 0)]
+                [snip-h (box 0)]
+                [snip-descent (box 0)]
+                [snip-space (box 0)])
+            (get-extent e dc x y snip-w snip-h snip-descent snip-space #f #f)
+            ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
+            (set! x2 (inexact->exact (+ x (unbox snip-w))))
+            (set! y2 (add1 (inexact->exact (+ y (unbox snip-h)))))
+            (update-drawing-position e x1 y1 x2 y2)))
+      
       ;(printf "element bb = (~a,~a) (~a,~a)~n" x1 y1 x2 y2)
-      
-      (update-drawing-position e x1 y1 x2 y2)
       
       (when (> x2 canvas-width)
         (set! canvas-width x2))
@@ -278,7 +417,7 @@
       
       (when (or (> (+ canvas-width (* xmargin 2)) vw)
                 (> (+ canvas-height (* ymargin 2)) vh))
-        ;(printf "place-element virtual size: ~ax~a to ~ax~a~n" vw vh canvas-width y)
+        ;(printf "place-element virtual size: ~ax~a to ~ax~a~n" vw vh canvas-width canvas-height)
         (define-values (cw ch) (get-client-size))
         (define horz-pixels (+ canvas-width (* xmargin 2)))
         (define vert-pixels (+ canvas-height (* ymargin 2)))
@@ -324,7 +463,7 @@
               (send current-style switch-to dc #f))
             (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                          (+ (- (element-ypos e) top) ymargin)))
-            ;(printf "snip at ~ax~a (bb top=~a), text=~a~n" x y (bounding-box-top bb) (send (element-snip e) get-text 0 80))
+            ;(printf "snip at ~ax~a, text=~a~n" x y  (element-snip e))
             (draw e dc
                   x y
                   x y
@@ -360,8 +499,19 @@
       (define-values (right bottom) (values (+ left dw) (+ top dh)))
 
       (define-values (w h) (get-size))
-      ;(printf "on-size client=~ax~a window=~ax~a new=~ax~a~n" cw ch w h width height)
+      ;(printf "on-size client=~ax~a window=~ax~a canvas=~ax~a~n" cw ch w h dw dh)
 
+      ;; reposition all elements
+      (when (wrap-text?)
+        (printf "on-size canvas ~ax~a " canvas-width canvas-height)
+        (set! canvas-width 10)
+        (set! canvas-height 10)
+        (set! place-x 0)
+        (set! place-y 0)
+        (for ([e (in-dlist elements)])
+          (place-element e place-x place-y))
+        (printf "-> ~ax~a~n" canvas-width canvas-height))
+      
       ;; update visible elements if window height changes
       (if (> ch cached-client-height)
           (adjust-visible-elements-forward! visible-elements top bottom)
@@ -381,27 +531,37 @@
                        (> canvas-height dh)))
 
     ;;
+    (define/public (set-mode m)
+      (set! mode m)
+      (set! canvas-width 10)
+      (set! canvas-height 10)
+      (set! place-x 0)
+      (set! place-y 0)
+      (for ([e (in-dlist elements)])
+        (place-element e place-x place-y)))
+    
+    ;;
     (define/public (append-snip s [end-of-line #f] [alignment 'left])
-      (define e (element s end-of-line alignment place-x place-y))
-      (place-element e (dlist-tail-value elements))
+      (define e (element s end-of-line alignment))
+      (place-element e place-x place-y)
       (dlist-append! elements e))
     
     ;; append string using the default stlye
     (define/public (append-string s [style #f] [end-of-line #t] [alignment 'left])
       (case mode
-        [(plaintext)
-         ;; for plaintext mode, insert each line in string as an element
+        [(plaintext wrapped)
+         ;; for text modes, insert each line in string as an element
          ;; default to adding newline after each line/element
          (define p (open-input-string s))
          (for ([line (in-lines p)])
-           (define e (element line end-of-line alignment place-x place-y))
+           (define e (element line end-of-line alignment))
            (set-element-text-style! e (or style default-style))
-           (place-element e (dlist-tail-value elements))
+           (place-element e place-x place-y)
            (dlist-append! elements e))]
         [else
-         (define e (element s end-of-line alignment place-x place-y))
+         (define e (element s end-of-line alignment))
          (set-element-text-style! e (or style default-style))
-         (place-element e (dlist-tail-value elements))
+         (place-element e place-x place-y)
          (dlist-append! elements e)]))
       
     (define/public (get-style-list) styles)
@@ -492,6 +652,7 @@
 
 (init-styles (send canvas get-style-list))
 (send canvas set-canvas-background canvas-bg-color)
+(send canvas set-mode 'wrapped)
 
 (send frame show #t)
 
@@ -510,6 +671,6 @@
 (send canvas append-string "\n\n")
 (send canvas append-string "text\nwith lots\nof\nnewlines")
 (add-gopher-menu canvas)
-(let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
+#;(let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
   (send canvas append-string (port->string (gopher-response-data-port response))))
 (printf "append finished~n")
