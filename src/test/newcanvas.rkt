@@ -8,19 +8,6 @@
          mred/private/wx
          mred/private/wxcanvas
          (prefix-in wx: mred/private/wxme/text))
-#|
-    ;; copy outside class for testing
-    (struct element
-      ([snip #:mutable] ; for strings this will be a raw string instead of a string-snip%
-       [end-of-line #:mutable]
-       [alignment #:mutable]
-       [xpos #:mutable] ; position of top left corner of element
-       [ypos #:mutable]
-       [text-style #:mutable #:auto] ; only used for strings since snips have their own style
-       [cached-text-extent #:mutable #:auto]
-       [words #:mutable #:auto])
-      #:prefab #:auto-value #f)
-|#
 
 (define frame 
   (new (class frame% (super-new))
@@ -43,6 +30,7 @@
              suspend-flush
              resume-flush
              flush
+             refresh
              get-canvas-background)
 
     ;; tentative mode options: 'plaintext, 'wrapped, 'layout, 'columns
@@ -395,7 +383,10 @@
              ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
              (set! x2 (inexact->exact (+ x (unbox snip-w))))
              (set! y2 (add1 (inexact->exact (+ y (unbox snip-h)))))
-             (update-drawing-position e x1 y1 x2 y2)])
+             ;; set position for adding next element
+             (if (element-end-of-line e)
+                 (set!-values (place-x place-y) (values 0 y2))
+                 (set!-values (place-x place-y) (values x2 y1)))])
           ;; if an actual snip%
           (let ([snip-w (box 0)]
                 [snip-h (box 0)]
@@ -405,7 +396,10 @@
             ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
             (set! x2 (inexact->exact (+ x (unbox snip-w))))
             (set! y2 (add1 (inexact->exact (+ y (unbox snip-h)))))
-            (update-drawing-position e x1 y1 x2 y2)))
+            ;; set position for adding next element
+            (if (element-end-of-line e)
+                (set!-values (place-x place-y) (values 0 y2))
+                (set!-values (place-x place-y) (values x2 y1)))))
       
       ;(printf "element bb = (~a,~a) (~a,~a)~n" x1 y1 x2 y2)
       
@@ -490,7 +484,7 @@
                 (update-visible-elements! change top bottom)))
           (set! scroll-x (send event get-position)))
             
-      (on-paint))
+      (refresh))
     
     (define/override (on-size width height)
       (define-values (cw ch) (get-client-size))
@@ -502,7 +496,7 @@
       ;(printf "on-size client=~ax~a window=~ax~a canvas=~ax~a~n" cw ch w h dw dh)
 
       ;; reposition all elements
-      (when (wrap-text?)
+      (when (and (wrap-text?) (not (= cached-client-width cw)))
         (printf "on-size canvas ~ax~a " canvas-width canvas-height)
         (set! canvas-width 10)
         (set! canvas-height 10)
@@ -510,6 +504,7 @@
         (set! place-y 0)
         (for ([e (in-dlist elements)])
           (place-element e place-x place-y))
+        (set-visible-elements!)
         (printf "-> ~ax~a~n" canvas-width canvas-height))
       
       ;; update visible elements if window height changes
@@ -533,12 +528,15 @@
     ;;
     (define/public (set-mode m)
       (set! mode m)
-      (set! canvas-width 10)
-      (set! canvas-height 10)
-      (set! place-x 0)
-      (set! place-y 0)
-      (for ([e (in-dlist elements)])
-        (place-element e place-x place-y)))
+      (unless (dlist-empty? elements)
+        (set! canvas-width 10)
+        (set! canvas-height 10)
+        (set! place-x 0)
+        (set! place-y 0)
+        (for ([e (in-dlist elements)])
+          (place-element e place-x place-y))
+        (set-visible-elements!)
+        (refresh)))
     
     ;;
     (define/public (append-snip s [end-of-line #f] [alignment 'left])
@@ -671,6 +669,6 @@
 (send canvas append-string "\n\n")
 (send canvas append-string "text\nwith lots\nof\nnewlines")
 (add-gopher-menu canvas)
-#;(let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
+(let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
   (send canvas append-string (port->string (gopher-response-data-port response))))
 (printf "append finished~n")
