@@ -260,6 +260,16 @@
                 (set-visible-elements!)))
         #;(printf "update-visible-elements: # visible = ~a~n" (dlist-length visible-elements))))
 
+    ;; update the manual scrollbars range and hide/unhide them
+    ;; new width and height are in pixels
+    (define (update-scrollbars new-width new-height)
+      (define-values (cw ch) (get-client-size))
+      (set-scroll-range 'horizontal (max 0 (- new-width cw)))
+      (set-scroll-range 'vertical (max 0 (- new-height ch)))
+      (set-scroll-page 'horizontal cw)
+      (set-scroll-page 'vertical ch)
+      (show-scrollbars (> new-width cw) (> new-height ch)))
+    
     ;; update place-x and place-y with the location to place the next element
     (define (update-drawing-position previous-element left top right bottom)
       (if previous-element
@@ -407,18 +417,8 @@
         (set! canvas-width x2))
 
       (when (> y2 canvas-height)
-        (set! canvas-height y2))
+        (set! canvas-height y2)))
       
-      (when (or (> (+ canvas-width (* xmargin 2)) vw)
-                (> (+ canvas-height (* ymargin 2)) vh))
-        ;(printf "place-element virtual size: ~ax~a to ~ax~a~n" vw vh canvas-width canvas-height)
-        (define-values (cw ch) (get-client-size))
-        (define horz-pixels (+ canvas-width (* xmargin 2)))
-        (define vert-pixels (+ canvas-height (* ymargin 2)))
-        (set-scroll-range 'horizontal (max 0 (- horz-pixels cw)))
-        (set-scroll-range 'vertical (max 0 (- vert-pixels ch)))
-        (show-scrollbars (> horz-pixels cw) (> vert-pixels ch))))
-
     (define (clear-rectangle x y width height)
       ;(printf "clear-rectangle ~a,~a  ~ax~a~n" x y width height)
       (define old-brush (send dc get-brush))
@@ -516,14 +516,7 @@
       (set! cached-client-height ch)
 
       ;; need to update the scroll range when the client size changes
-      (define horz-pixels (+ canvas-width (* xmargin 2)))
-      (define vert-pixels (+ canvas-height (* ymargin 2)))
-      (set-scroll-range 'horizontal (max 0 (- horz-pixels cw)))
-      (set-scroll-range 'vertical (max 0 (- vert-pixels ch)))
-      (set-scroll-page 'horizontal cw)
-      (set-scroll-page 'vertical ch)
-      (show-scrollbars (> canvas-width dw)
-                       (> canvas-height dh)))
+      (call-with-values get-virtual-size update-scrollbars))
 
     ;;
     (define/public (set-mode m)
@@ -536,12 +529,14 @@
         (for ([e (in-dlist elements)])
           (place-element e place-x place-y))
         (set-visible-elements!)
+        (call-with-values get-virtual-size update-scrollbars)
         (refresh)))
     
     ;;
     (define/public (append-snip s [end-of-line #f] [alignment 'left])
       (define e (element s end-of-line alignment))
       (place-element e place-x place-y)
+      (call-with-values get-virtual-size update-scrollbars)
       (dlist-append! elements e))
     
     ;; append string using the default stlye
@@ -555,11 +550,13 @@
            (define e (element line end-of-line alignment))
            (set-element-text-style! e (or style default-style))
            (place-element e place-x place-y)
+           (call-with-values get-virtual-size update-scrollbars)
            (dlist-append! elements e))]
         [else
          (define e (element s end-of-line alignment))
          (set-element-text-style! e (or style default-style))
          (place-element e place-x place-y)
+         (call-with-values get-virtual-size update-scrollbars)
          (dlist-append! elements e)]))
       
     (define/public (get-style-list) styles)
