@@ -321,7 +321,10 @@
               (loop next-pos
                     (cons (word s ww nw) words))]
              [else
-              (set-element-words! e (reverse (cons (word s ww ww) words)))])]
+              ; calculate next position using all the remaining text in the string, which will account
+              ; for whitespace at the end of the string
+              (define-values (nw nh nd ns) (send dc get-text-extent (substring text word-start) font))
+              (set-element-words! e (reverse (cons (word s ww nw) words)))])]
           [else
            (define s (substring text word-start))
            (define-values (ww wh wd ws) (send dc get-text-extent s font))
