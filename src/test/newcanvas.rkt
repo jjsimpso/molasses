@@ -39,7 +39,8 @@
     ;; 
     (define xmargin horiz-margin)
     (define ymargin vert-margin)
-
+    (define snip-xmargin 3)
+    
     ;; initially hide both scrollbars 
     (init-manual-scrollbars #f #f (* xmargin 2) (* ymargin 2) 0 0)
     
@@ -86,7 +87,7 @@
       #:prefab)
     
     ;; an element is a snip with a horizontal alignment
-    ;; alignment can be 'left, 'right, or 'center
+    ;; alignment can be 'left, 'right, 'center, or 'unaligned
     (struct element
       ([snip #:mutable] ; for strings this will be a raw string instead of a string-snip%
        [end-of-line #:mutable]
@@ -131,6 +132,16 @@
                 (set-element-cached-text-extent! e (text-extent tw th td ts))))
           (send (element-snip e) get-extent dc x y w h descent space lspace rspace)))
 
+    (define (get-element-width e)
+      (define w (box 0))
+      (get-extent e dc w)
+      (unbox w))
+    
+    (define (get-element-height e)
+      (define h (box 0))
+      (get-extent e dc #f h)
+      (unbox h))
+    
     (define (wrap-text?)
       (or (equal? mode 'wrapped)
           (equal? mode 'layout)))
@@ -269,19 +280,6 @@
       (set-scroll-page 'horizontal cw)
       (set-scroll-page 'vertical ch)
       (show-scrollbars (> new-width cw) (> new-height ch)))
-    
-    ;; update place-x and place-y with the location to place the next element
-    (define (update-drawing-position previous-element left top right bottom)
-      (if previous-element
-          (case mode
-            [(plaintext wrapped)
-             (if (element-end-of-line previous-element)
-                 (set!-values (place-x place-y) (values 0 bottom))
-                 (set!-values (place-x place-y) (values right top)))]
-            [else
-             ;; this default probably doesn't make sense for any use case
-             (set!-values (place-x place-y) (values right top))])
-          (set!-values (place-x place-y) (values 0 0))))
 
     (define (calc-word-extents e)
       (define (line-break? c)
@@ -329,6 +327,109 @@
            (define s (substring text word-start))
            (define-values (ww wh wd ws) (send dc get-text-extent s font))
            (set-element-words! e (reverse (cons (word s ww ww) words)))])))
+
+    ;; state that needs to be maintained while adding elements in layout mode
+    (define layout-left-elements '())
+    (define layout-right-elements '())
+    (define layout-unaligned-elements '())
+    (define layout-left-width 0)
+    (define layout-right-width 0)
+    (define layout-unaligned-width 0)
+    (define layout-baseline-pos 0)
+    
+    ;; calculate the horizontal space available for placing an element, i.e. the left and right bounds
+    ;; vis-elements is a dlist of the relevant elements that could affect the span
+    ;; y is the y position the span should be calculated at
+    (define (horizontal-span vis-elements y x0 x1)
+      (define left x0)
+      (define right x1)
+      (for ([e (in-dlist vis-elements)])
+        (define xpos (element-xpos e))
+        (if (<= xpos left)
+            ; check left edge
+            (let ([w (box 0)])
+              (get-extent e dc xpos (element-ypos e) w)
+              (when (> (+ xpos (unbox w)) left)
+                (set! left (+ xpos (unbox w)))))
+            ; check right edge
+            (when (< xpos right)
+              (set! right xpos)))
+      (values left right)))
+
+    (define (adjust-elements-ypos! elist ydelta)
+      (for ([e (in-list layout-unaligned-elements)])
+        (set-element-ypos! e (+ (element-ypos e) ydelta))))
+
+    ;; pop elements from the layout alignment lists that don't extend to the new y value
+    ;; stop at first element that does extend to the new y value
+    (define (adjust-layout-lists! new-y)
+      void)
+    
+    (define (layout-goto-new-line new-y)
+      (set! place-x 0) ; place-x value isn't currently used in layout mode
+      (set! place-y new-y)
+      (adjust-layout-lists! new-y))
+    
+    (define (layout-element e total-width x y ew eh)
+      (if (< (- total-width (+ layout-left-width layout-right-width layout-unaligned-width))
+             ew)
+          ; we don't have room for this element on the current line/y-position
+          (begin
+            (error "not implemented yet")
+            (layout-element e total-width x y))
+          ; we do have room
+          (case (element-alignment e)
+            [(left)
+             (error "invalid alignment!")]
+            [(right)
+             (error "invalid alignment!")]
+            [(center)
+             (error "invalid alignment!")]
+            [(unaligned)
+             (printf "layout unaligned element~n")
+             (if (empty? layout-unaligned-elements)
+                 (begin
+                   (set! layout-unaligned-elements (cons e layout-unaligned-elements))
+                   (set! layout-unaligned-width (+ ew snip-xmargin))
+                   (set! layout-baseline-pos (+ y eh))
+                   (values layout-left-width y (+ layout-left-width ew) (+ y eh)))
+                 (let ([x1 (+ layout-left-width layout-unaligned-width)]
+                       [y1 y]
+                       [x2 (+ layout-left-width layout-unaligned-width ew)]
+                       [y2 (+ y eh)])
+                   (when (> y2 layout-baseline-pos)
+                     (define diff (- y2 layout-baseline-pos))
+                     (adjust-elements-ypos! layout-unaligned-elements diff)
+                     (set! layout-baseline-pos y2))
+                   (when (< y2 layout-baseline-pos)
+                     (define diff (- layout-baseline-pos y2))
+                     (set! y1 (+ y1 diff))
+                     (set! y2 (+ y2 diff)))
+                   (set! layout-unaligned-elements (cons e layout-unaligned-elements))
+                   (set! layout-unaligned-width (+ layout-unaligned-width ew snip-xmargin))
+                   ; adjust y position to touch the baseline
+                   (values x1 y1 x2 y2)))]
+            [else
+             (error "invalid alignment!")])))
+
+    (define (reset-layout)
+      (printf "resetting layout~n")
+      (set! canvas-width 10)
+      (set! canvas-height 10)
+      (set! place-x 0)
+      (set! place-y 0)
+      
+      (set! layout-left-elements '())
+      (set! layout-right-elements '())
+      (set! layout-unaligned-elements '())
+      (set! layout-left-width 0)
+      (set! layout-right-width 0)
+      (set! layout-unaligned-width 0)
+      (set! layout-baseline-pos 0)
+      
+      (for ([e (in-dlist elements)])
+        (place-element e place-x place-y))
+      (set-visible-elements!))
     
     ;; places element on the virtual canvas and updates virtual size of canvas
     ;; e is the new element and must be the new tail of the element list
@@ -337,11 +438,9 @@
       (define-values (dw dh) (get-drawable-size))
       (define-values (vw vh) (get-virtual-size))
       
-      ;; set the element's position
-      (set-element-xpos! e x)
-      (set-element-ypos! e y)
-      
-      ;; coordinates for element bounding region (x2, y2 need to be set below)
+      ;; coordinates for element bounding region
+      ;; x2, y2 need to be set below
+      ;; x1, y1 may be changed below (in the case of the layout mode)
       (define-values (x1 y1 x2 y2) (values x y 0 0))
 
       ;; cause get-extent to recalculate text extents by deleting cached value
@@ -387,6 +486,8 @@
              ;(printf "next element at ~ax~a~n" place-x place-y)
              ;; not really a text extent in this case
              (set-element-cached-text-extent! e (text-extent (- x2 x1) (- y2 y1) descent space))]
+            [(layout)
+             void]
             [else
              (define snip-w (box 0))
              (define snip-h (box 0))
@@ -406,16 +507,27 @@
                 [snip-descent (box 0)]
                 [snip-space (box 0)])
             (get-extent e dc x y snip-w snip-h snip-descent snip-space #f #f)
-            ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
-            (set! x2 (inexact->exact (+ x (unbox snip-w))))
-            (set! y2 (add1 (inexact->exact (+ y (unbox snip-h)))))
-            ;; set position for adding next element
-            (if (element-end-of-line e)
-                (set!-values (place-x place-y) (values 0 y2))
-                (set!-values (place-x place-y) (values x2 y1)))))
-      
+            (case mode
+              [(layout)
+               (set!-values (x1 y1 x2 y2) (layout-element e dw x y (unbox snip-w) (unbox snip-h)))
+               ; set position for adding next element
+               (if (element-end-of-line e)
+                   void
+                   void)]
+              [else
+               ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
+               (set! x2 (inexact->exact (+ x (unbox snip-w))))
+               (set! y2 (add1 (inexact->exact (+ y (unbox snip-h)))))
+               ;; set position for adding next element
+               (if (element-end-of-line e)
+                   (set!-values (place-x place-y) (values 0 y2))
+                   (set!-values (place-x place-y) (values x2 y1)))])))     
       ;(printf "element bb = (~a,~a) (~a,~a)~n" x1 y1 x2 y2)
-      
+
+      ;; set the element's position
+      (set-element-xpos! e x1)
+      (set-element-ypos! e y1)
+
       (when (> x2 canvas-width)
         (set! canvas-width x2))
 
@@ -501,13 +613,7 @@
       ;; reposition all elements
       (when (and (wrap-text?) (not (= cached-client-width cw)))
         (printf "on-size canvas ~ax~a " canvas-width canvas-height)
-        (set! canvas-width 10)
-        (set! canvas-height 10)
-        (set! place-x 0)
-        (set! place-y 0)
-        (for ([e (in-dlist elements)])
-          (place-element e place-x place-y))
-        (set-visible-elements!)
+        (reset-layout)
         (printf "-> ~ax~a~n" canvas-width canvas-height))
       
       ;; update visible elements if window height changes
@@ -525,25 +631,19 @@
     (define/public (set-mode m)
       (set! mode m)
       (unless (dlist-empty? elements)
-        (set! canvas-width 10)
-        (set! canvas-height 10)
-        (set! place-x 0)
-        (set! place-y 0)
-        (for ([e (in-dlist elements)])
-          (place-element e place-x place-y))
-        (set-visible-elements!)
+        (reset-layout)
         (call-with-values get-virtual-size update-scrollbars)
         (refresh)))
     
     ;;
-    (define/public (append-snip s [end-of-line #f] [alignment 'left])
+    (define/public (append-snip s [end-of-line #f] [alignment 'unaligned])
       (define e (element s end-of-line alignment))
       (place-element e place-x place-y)
       (call-with-values get-virtual-size update-scrollbars)
       (dlist-append! elements e))
     
     ;; append string using the default stlye
-    (define/public (append-string s [style #f] [end-of-line #t] [alignment 'left])
+    (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned])
       (case mode
         [(plaintext wrapped)
          ;; for text modes, insert each line in string as an element
@@ -650,7 +750,11 @@
 
 (init-styles (send canvas get-style-list))
 (send canvas set-canvas-background canvas-bg-color)
-(send canvas set-mode 'wrapped)
+
+(define layout-test #t)
+(if layout-test
+    (send canvas set-mode 'layout)
+    (send canvas set-mode 'wrapped))
 
 (send frame show #t)
 
@@ -659,16 +763,24 @@
 ;(define test-selector "/media/floppies.txt")
 ;(define test-selector ".")
 
-(let ([response (gopher-fetch "gopher.endangeredsoft.org" "games/9.png" #\0 70)])
-  (send canvas append-snip
-        (make-object image-snip%
-                     (gopher-response-data-port response)
-                     'unknown)
-        #t))
-(send canvas append-string highlander-text)
-(send canvas append-string "\n\n")
-(send canvas append-string "text\nwith lots\nof\nnewlines")
-(add-gopher-menu canvas)
-(let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
-  (send canvas append-string (port->string (gopher-response-data-port response))))
+(if layout-test
+    (let ([crackdummies (make-object image-snip% "cracdumm.gif")]
+          [smallavatar (make-object image-snip% "small_avatar.png")])
+      (send canvas append-snip crackdummies)
+      (send canvas append-snip smallavatar)
+      (send canvas append-snip crackdummies))
+    (begin
+      (let ([response (gopher-fetch "gopher.endangeredsoft.org" "games/9.png" #\0 70)])
+        (send canvas append-snip
+              (make-object image-snip%
+                           (gopher-response-data-port response)
+                           'unknown)
+              #t))
+      (send canvas append-string highlander-text)
+      (send canvas append-string "\n\n")
+      (send canvas append-string "text\nwith lots\nof\nnewlines")
+      (add-gopher-menu canvas)
+      (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
+        (send canvas append-string (port->string (gopher-response-data-port response))))))
+
 (printf "append finished~n")
