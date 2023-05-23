@@ -134,12 +134,12 @@
 
     (define (get-element-width e)
       (define w (box 0))
-      (get-extent e dc w)
+      (get-extent e dc (element-xpos e) (element-ypos e) w)
       (unbox w))
     
     (define (get-element-height e)
       (define h (box 0))
-      (get-extent e dc #f h)
+      (get-extent e dc (element-xpos e) (element-ypos e) #f h)
       (unbox h))
     
     (define (wrap-text?)
@@ -337,46 +337,54 @@
     (define layout-unaligned-width 0)
     (define layout-baseline-pos 0)
     
-    ;; calculate the horizontal space available for placing an element, i.e. the left and right bounds
-    ;; vis-elements is a dlist of the relevant elements that could affect the span
-    ;; y is the y position the span should be calculated at
-    (define (horizontal-span vis-elements y x0 x1)
-      (define left x0)
-      (define right x1)
-      (for ([e (in-dlist vis-elements)])
-        (define xpos (element-xpos e))
-        (if (<= xpos left)
-            ; check left edge
-            (let ([w (box 0)])
-              (get-extent e dc xpos (element-ypos e) w)
-              (when (> (+ xpos (unbox w)) left)
-                (set! left (+ xpos (unbox w)))))
-            ; check right edge
-            (when (< xpos right)
-              (set! right xpos)))
-      (values left right)))
-
     (define (adjust-elements-ypos! elist ydelta)
-      (for ([e (in-list layout-unaligned-elements)])
+      (for ([e (in-list elist)])
         (set-element-ypos! e (+ (element-ypos e) ydelta))))
 
-    ;; pop elements from the layout alignment lists that don't extend to the new y value
+    ;; pop elements from the list of elements 'll' that don't extend to the new y value
+    ;; 'lwidth' is the width of the items in 'll'
     ;; stop at first element that does extend to the new y value
-    (define (adjust-layout-lists! new-y)
-      void)
+    ;; returns the new list and the width in pixels of the items in that list
+    (define (pop-layout-list ll lwidth new-y)
+      (printf "pop-layout-list~n")
+      (if (empty? ll)
+          (values ll lwidth)
+          (let ([w (box 0)]
+                [h (box 0)]
+                [e (car ll)])
+            (get-extent e dc (element-xpos e) (element-ypos e) w h)
+            (if (< (+ (element-ypos e) (unbox h))
+                   new-y)
+                (pop-layout-list (cdr ll) (- lwidth (unbox w)) new-y)
+                (values ll lwidth)))))
+
+    (define (next-line-y-pos)
+      (add1
+       (cond
+         [(not (empty? layout-unaligned-elements))
+          (+ (element-ypos (car layout-unaligned-elements))
+             (get-element-height (car layout-unaligned-elements)))]
+         [(not (empty? layout-left-elements))
+          (element-ypos (car layout-left-elements))]
+         [(not (empty? layout-right-elements))
+          ; need to verify this is correct
+          (element-ypos (car layout-right-elements))])))
     
     (define (layout-goto-new-line new-y)
+      (printf "layout-goto-new-line: ~a~n" new-y)
       (set! place-x 0) ; place-x value isn't currently used in layout mode
       (set! place-y new-y)
-      (adjust-layout-lists! new-y))
+      (set!-values (layout-left-elements layout-left-width) (pop-layout-list layout-left-elements layout-left-width new-y))
+      (set!-values (layout-right-elements layout-right-width) (pop-layout-list layout-right-elements layout-right-width new-y))
+      (set!-values (layout-unaligned-elements layout-unaligned-width) (pop-layout-list layout-unaligned-elements layout-unaligned-width new-y)))
     
     (define (layout-element e total-width x y ew eh)
       (if (< (- total-width (+ layout-left-width layout-right-width layout-unaligned-width))
              ew)
           ; we don't have room for this element on the current line/y-position
-          (begin
-            (error "not implemented yet")
-            (layout-element e total-width x y))
+          (let ([new-y (next-line-y-pos)])
+            (layout-goto-new-line new-y)
+            (layout-element e total-width x new-y ew eh))
           ; we do have room
           (case (element-alignment e)
             [(left)
@@ -510,10 +518,13 @@
             (case mode
               [(layout)
                (set!-values (x1 y1 x2 y2) (layout-element e dw x y (unbox snip-w) (unbox snip-h)))
+               ; layout-goto-new-line needs the element's position to be set, so set it early for now
+               (set-element-xpos! e x1)
+               (set-element-ypos! e y1)
                ; set position for adding next element
-               (if (element-end-of-line e)
-                   void
-                   void)]
+               ; should we allow left or right aligned elements be marked as end-of-line?
+               (when (element-end-of-line e)
+                 (layout-goto-new-line (add1 y2)))]
               [else
                ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
                (set! x2 (inexact->exact (+ x (unbox snip-w))))
@@ -768,6 +779,12 @@
           [smallavatar (make-object image-snip% "small_avatar.png")])
       (send canvas append-snip crackdummies)
       (send canvas append-snip smallavatar)
+      (send canvas append-snip crackdummies #t)
+      (send canvas append-snip crackdummies)
+      (send canvas append-snip crackdummies)
+      (send canvas append-snip crackdummies)
+      (send canvas append-snip crackdummies)
+      (send canvas append-snip crackdummies)
       (send canvas append-snip crackdummies))
     (begin
       (let ([response (gopher-fetch "gopher.endangeredsoft.org" "games/9.png" #\0 70)])
