@@ -39,7 +39,7 @@
     ;; 
     (define xmargin horiz-margin)
     (define ymargin vert-margin)
-    (define snip-xmargin 3)
+    (define snip-xmargin 5)
     
     ;; initially hide both scrollbars 
     (init-manual-scrollbars #f #f (* xmargin 2) (* ymargin 2) 0 0)
@@ -336,6 +336,10 @@
     (define layout-right-width 0)
     (define layout-unaligned-width 0)
     (define layout-baseline-pos 0)
+
+    (define (adjust-elements-xpos! elist xdelta)
+      (for ([e (in-list elist)])
+        (set-element-xpos! e (+ (element-xpos e) xdelta))))
     
     (define (adjust-elements-ypos! elist ydelta)
       (for ([e (in-list elist)])
@@ -346,7 +350,7 @@
     ;; stop at first element that does extend to the new y value
     ;; returns the new list and the width in pixels of the items in that list
     (define (pop-layout-list ll lwidth new-y)
-      (printf "pop-layout-list~n")
+      ;(printf "pop-layout-list~n")
       (if (empty? ll)
           (values ll lwidth)
           (let ([w (box 0)]
@@ -355,20 +359,33 @@
             (get-extent e dc (element-xpos e) (element-ypos e) w h)
             (if (< (+ (element-ypos e) (unbox h))
                    new-y)
-                (pop-layout-list (cdr ll) (- lwidth (unbox w)) new-y)
+                (pop-layout-list (cdr ll) (- lwidth (unbox w) snip-xmargin) new-y)
                 (values ll lwidth)))))
 
-    (define (next-line-y-pos)
+    (define (next-line-y-pos original)
+      (define (bottom-edge-of-elements ll)
+        (if (not (empty? ll))
+            (+ (element-ypos (car ll))
+               (get-element-height (car ll)))
+            (error "empty list")))
+
       (add1
        (cond
          [(not (empty? layout-unaligned-elements))
-          (+ (element-ypos (car layout-unaligned-elements))
-             (get-element-height (car layout-unaligned-elements)))]
+          (if (empty? layout-right-elements)
+              (bottom-edge-of-elements layout-unaligned-elements)
+              (min (bottom-edge-of-elements layout-unaligned-elements)
+                   (bottom-edge-of-elements layout-right-elements)))]
          [(not (empty? layout-left-elements))
-          (element-ypos (car layout-left-elements))]
+          (if (empty? layout-right-elements)
+              (bottom-edge-of-elements layout-left-elements)
+              (min (bottom-edge-of-elements layout-left-elements)
+                   (bottom-edge-of-elements layout-right-elements)))]
          [(not (empty? layout-right-elements))
-          ; need to verify this is correct
-          (element-ypos (car layout-right-elements))])))
+          (bottom-edge-of-elements layout-right-elements)]
+         [else
+          (printf "next-line-y-pos: all layout lists are empty")
+          original])))
     
     (define (layout-goto-new-line new-y)
       (printf "layout-goto-new-line: ~a~n" new-y)
@@ -382,15 +399,47 @@
       (if (< (- total-width (+ layout-left-width layout-right-width layout-unaligned-width))
              ew)
           ; we don't have room for this element on the current line/y-position
-          (let ([new-y (next-line-y-pos)])
-            (layout-goto-new-line new-y)
-            (layout-element e total-width x new-y ew eh))
+          (let ([new-y (next-line-y-pos y)])
+            (if (not (= y new-y))
+                (begin
+                  (layout-goto-new-line new-y)
+                  (layout-element e total-width x new-y ew eh))
+                ; we have advanced the current y position as far as we can and it still doesn't fit
+                (printf "force draw not implemented yet~n")))
           ; we do have room
           (case (element-alignment e)
             [(left)
-             (error "invalid alignment!")]
+             (printf "layout left aligned element~n")
+             (if (empty? layout-left-elements)
+                 (begin
+                   (set! layout-left-elements (cons e layout-left-elements))
+                   (set! layout-left-width (+ ew snip-xmargin))
+                   ; shift unaligned elements over since we inserted this element to the left
+                   (adjust-elements-xpos! layout-unaligned-elements (+ ew snip-xmargin))
+                   (values 0 y ew (+ y eh)))
+                 (let ([x1 layout-left-width]
+                       [y1 y]
+                       [x2 (+ layout-left-width ew)]
+                       [y2 (+ y eh)])
+                   (set! layout-left-elements (cons e layout-left-elements))
+                   (set! layout-left-width (+ layout-left-width ew snip-xmargin))
+                   ; shift unaligned elements over since we inserted this element to the left
+                   (adjust-elements-xpos! layout-unaligned-elements (+ ew snip-xmargin))
+                   (values x1 y1 x2 y2)))]
             [(right)
-             (error "invalid alignment!")]
+             (printf "layout right aligned element~n")
+             (if (empty? layout-right-elements)
+                 (begin
+                   (set! layout-right-elements (cons e layout-right-elements))
+                   (set! layout-right-width (+ ew snip-xmargin))
+                   (values (- total-width ew) y total-width (+ y eh)))
+                 (let ([x1 (- total-width layout-right-width ew)]
+                       [y1 y]
+                       [x2 (- total-width layout-right-width)]
+                       [y2 (+ y eh)])
+                   (set! layout-right-elements (cons e layout-right-elements))
+                   (set! layout-right-width (+ layout-right-width ew snip-xmargin))
+                   (values x1 y1 x2 y2)))]
             [(center)
              (error "invalid alignment!")]
             [(unaligned)
@@ -410,12 +459,12 @@
                      (adjust-elements-ypos! layout-unaligned-elements diff)
                      (set! layout-baseline-pos y2))
                    (when (< y2 layout-baseline-pos)
+                     ; adjust y position to touch the baseline
                      (define diff (- layout-baseline-pos y2))
                      (set! y1 (+ y1 diff))
                      (set! y2 (+ y2 diff)))
                    (set! layout-unaligned-elements (cons e layout-unaligned-elements))
                    (set! layout-unaligned-width (+ layout-unaligned-width ew snip-xmargin))
-                   ; adjust y position to touch the baseline
                    (values x1 y1 x2 y2)))]
             [else
              (error "invalid alignment!")])))
@@ -780,12 +829,16 @@
       (send canvas append-snip crackdummies)
       (send canvas append-snip smallavatar)
       (send canvas append-snip crackdummies #t)
+
+      (send canvas append-snip crackdummies #f 'right)
+      (send canvas append-snip smallavatar #f 'left)
+      (send canvas append-snip smallavatar #f 'left)
+      (send canvas append-snip smallavatar #f 'left)
       (send canvas append-snip crackdummies)
       (send canvas append-snip crackdummies)
       (send canvas append-snip crackdummies)
-      (send canvas append-snip crackdummies)
-      (send canvas append-snip crackdummies)
-      (send canvas append-snip crackdummies))
+      (send canvas append-snip crackdummies #f 'right)
+      (send canvas append-snip smallavatar))
     (begin
       (let ([response (gopher-fetch "gopher.endangeredsoft.org" "games/9.png" #\0 70)])
         (send canvas append-snip
