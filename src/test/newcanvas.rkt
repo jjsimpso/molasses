@@ -384,8 +384,8 @@
          [(not (empty? layout-right-elements))
           (bottom-edge-of-elements layout-right-elements)]
          [else
-          (printf "next-line-y-pos: all layout lists are empty")
-          original])))
+          (printf "next-line-y-pos: all layout lists are empty~n")
+          (sub1 original)])))
     
     (define (layout-goto-new-line new-y)
       (printf "layout-goto-new-line: ~a~n" new-y)
@@ -405,7 +405,18 @@
                   (layout-goto-new-line new-y)
                   (layout-element e total-width x new-y ew eh))
                 ; we have advanced the current y position as far as we can and it still doesn't fit
-                (printf "force draw not implemented yet~n")))
+                (begin
+                  (case (element-alignment e)
+                    [(left)
+                     (set! layout-left-elements (cons e layout-left-elements))
+                     (set! layout-left-width (+ ew snip-xmargin))]
+                    [(right)
+                     (set! layout-right-elements (cons e layout-right-elements))
+                     (set! layout-right-width (+ ew snip-xmargin))]
+                    [else
+                     (set! layout-unaligned-elements (cons e layout-unaligned-elements))
+                     (set! layout-unaligned-width (+ ew snip-xmargin))])
+                  (values 0 y ew (+ y eh)))))
           ; we do have room
           (case (element-alignment e)
             [(left)
@@ -825,10 +836,13 @@
 
 (if layout-test
     (let ([crackdummies (make-object image-snip% "cracdumm.gif")]
+          [thg (make-object image-snip% "thg.png")]
           [smallavatar (make-object image-snip% "small_avatar.png")])
       (send canvas append-snip crackdummies)
       (send canvas append-snip smallavatar)
       (send canvas append-snip crackdummies #t)
+      
+      (send canvas append-snip thg)
 
       (send canvas append-snip crackdummies #f 'right)
       (send canvas append-snip smallavatar #f 'left)
@@ -839,6 +853,8 @@
       (send canvas append-snip crackdummies)
       (send canvas append-snip crackdummies #f 'right)
       (send canvas append-snip smallavatar))
+
+      
     (begin
       (let ([response (gopher-fetch "gopher.endangeredsoft.org" "games/9.png" #\0 70)])
         (send canvas append-snip
