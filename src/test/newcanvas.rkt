@@ -835,24 +835,28 @@
 ;(define test-selector ".")
 
 (if layout-test
-    (let ([crackdummies (make-object image-snip% "cracdumm.gif")]
-          [thg (make-object image-snip% "thg.png")]
-          [smallavatar (make-object image-snip% "small_avatar.png")])
-      (send canvas append-snip crackdummies)
-      (send canvas append-snip smallavatar)
-      (send canvas append-snip crackdummies #t)
+    (let ([square (make-object image-snip% "square.png")]
+          [square-left (make-object image-snip% "square-left.png")]
+          [square-right (make-object image-snip% "square-right.png")]
+          ;[thg (make-object image-snip% "thg.png")]
+          [tall (make-object image-snip% "tall.png")]
+          [tall-left (make-object image-snip% "tall-left.png")]
+          [tall-right (make-object image-snip% "tall-right.png")])
+      (send canvas append-snip square)
+      (send canvas append-snip tall)
+      (send canvas append-snip square #t)
       
-      (send canvas append-snip thg)
+      ;(send canvas append-snip thg)
 
-      (send canvas append-snip crackdummies #f 'right)
-      (send canvas append-snip smallavatar #f 'left)
-      (send canvas append-snip smallavatar #f 'left)
-      (send canvas append-snip smallavatar #f 'left)
-      (send canvas append-snip crackdummies)
-      (send canvas append-snip crackdummies)
-      (send canvas append-snip crackdummies)
-      (send canvas append-snip crackdummies #f 'right)
-      (send canvas append-snip smallavatar))
+      (send canvas append-snip square-right #f 'right)
+      (send canvas append-snip tall-left #f 'left)
+      (send canvas append-snip tall-left #f 'left)
+      (send canvas append-snip tall-left #f 'left)
+      (send canvas append-snip square)
+      (send canvas append-snip square)
+      (send canvas append-snip square)
+      (send canvas append-snip square-right #f 'right)
+      (send canvas append-snip tall))
 
       
     (begin
