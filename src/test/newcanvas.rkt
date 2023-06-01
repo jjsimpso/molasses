@@ -40,6 +40,7 @@
     (define xmargin horiz-margin)
     (define ymargin vert-margin)
     (define snip-xmargin 5)
+    (define snip-ymargin 3)
     
     ;; initially hide both scrollbars 
     (init-manual-scrollbars #f #f (* xmargin 2) (* ymargin 2) 0 0)
@@ -345,6 +346,38 @@
       (for ([e (in-list elist)])
         (set-element-ypos! e (+ (element-ypos e) ydelta))))
 
+    ; add contract checking ll for not empty
+    (define (highest-element ll)
+      (define highest-y (element-ypos (car ll)))
+      (define highest-e (car ll))
+      (for ([e (in-list ll)])
+        (when (< (element-ypos e) highest-y)
+          (set! highest-y (element-ypos e))
+          (set! highest-e e)))
+      highest-e)
+        
+    ; calculate the amount that unaligned elements can be shifted to the right
+    ; this can be different than the available width because there may not be a right-aligned
+    ; element on the current line but one further up could still block shifting
+    (define (unaligned-right-wiggle-room total-width)
+      (if (empty? layout-unaligned-elements)
+          (- total-width layout-right-width layout-left-width)
+          (let* ([hue (highest-element layout-unaligned-elements)]
+                 [ystart (element-ypos hue)]
+                 [yend (+ ystart (get-element-height hue))])
+            (define uedge (car layout-unaligned-elements))
+            (define xend (+ (element-xpos uedge) (get-element-width uedge) snip-xmargin))
+            (define wiggle-room (- total-width xend))
+            (for ([e (in-dlist elements)]
+                  #:when (and (eq? (element-alignment e) 'right)
+                              (<= (element-ypos e) yend)
+                              (>= (+ (element-ypos e) (get-element-height e)) ystart)))
+              (define space-on-right (- (element-xpos e) xend))
+              (when (< space-on-right wiggle-room)
+                (set! wiggle-room space-on-right)))
+            (printf "wiggle room = ~a~n" wiggle-room)
+            wiggle-room)))
+    
     ;; pop elements from the list of elements 'll' that don't extend to the new y value
     ;; 'lwidth' is the width of the items in 'll'
     ;; stop at first element that does extend to the new y value
@@ -372,10 +405,7 @@
       (add1
        (cond
          [(not (empty? layout-unaligned-elements))
-          (if (empty? layout-right-elements)
-              (bottom-edge-of-elements layout-unaligned-elements)
-              (min (bottom-edge-of-elements layout-unaligned-elements)
-                   (bottom-edge-of-elements layout-right-elements)))]
+          (bottom-edge-of-elements layout-unaligned-elements)]
          [(not (empty? layout-left-elements))
           (if (empty? layout-right-elements)
               (bottom-edge-of-elements layout-left-elements)
@@ -396,8 +426,7 @@
       (set!-values (layout-unaligned-elements layout-unaligned-width) (pop-layout-list layout-unaligned-elements layout-unaligned-width new-y)))
     
     (define (layout-element e total-width x y ew eh)
-      (if (< (- total-width (+ layout-left-width layout-right-width layout-unaligned-width))
-             ew)
+      (if (< (- total-width (+ layout-left-width layout-right-width layout-unaligned-width)) ew)
           ; we don't have room for this element on the current line/y-position
           (let ([new-y (next-line-y-pos y)])
             (if (not (= y new-y))
@@ -420,7 +449,7 @@
           ; we do have room
           (case (element-alignment e)
             [(left)
-             (printf "layout left aligned element~n")
+             ;(printf "layout left aligned element~n")
              (if (empty? layout-left-elements)
                  (begin
                    (set! layout-left-elements (cons e layout-left-elements))
@@ -438,7 +467,7 @@
                    (adjust-elements-xpos! layout-unaligned-elements (+ ew snip-xmargin))
                    (values x1 y1 x2 y2)))]
             [(right)
-             (printf "layout right aligned element~n")
+             ;(printf "layout right aligned element~n")
              (if (empty? layout-right-elements)
                  (begin
                    (set! layout-right-elements (cons e layout-right-elements))
@@ -454,7 +483,7 @@
             [(center)
              (error "invalid alignment!")]
             [(unaligned)
-             (printf "layout unaligned element~n")
+             ;(printf "layout unaligned element~n")
              (if (empty? layout-unaligned-elements)
                  (begin
                    (set! layout-unaligned-elements (cons e layout-unaligned-elements))
@@ -578,6 +607,7 @@
             (case mode
               [(layout)
                (set!-values (x1 y1 x2 y2) (layout-element e dw x y (unbox snip-w) (unbox snip-h)))
+               (printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
                ; layout-goto-new-line needs the element's position to be set, so set it early for now
                (set-element-xpos! e x1)
                (set-element-ypos! e y1)
@@ -845,7 +875,15 @@
       (send canvas append-snip square)
       (send canvas append-snip tall)
       (send canvas append-snip square #t)
+
+      (send canvas append-snip square-left #f 'left)
+      (send canvas append-snip square-left #f 'left)
+      (send canvas append-snip square-left #f 'left)
+      (send canvas append-snip tall)
+      (send canvas append-snip tall)
+      (send canvas append-snip tall)
       
+      #|
       ;(send canvas append-snip thg)
 
       (send canvas append-snip square-right #f 'right)
@@ -856,9 +894,9 @@
       (send canvas append-snip square)
       (send canvas append-snip square)
       (send canvas append-snip square-right #f 'right)
-      (send canvas append-snip tall))
-
-      
+      (send canvas append-snip tall)
+|#
+      )
     (begin
       (let ([response (gopher-fetch "gopher.endangeredsoft.org" "games/9.png" #\0 70)])
         (send canvas append-snip
