@@ -481,7 +481,19 @@
                    (set! layout-right-width (+ layout-right-width ew snip-xmargin))
                    (values x1 y1 x2 y2)))]
             [(center)
-             (error "invalid alignment!")]
+             (let* ([space-available (- total-width layout-left-width layout-right-width)]
+                    [margin (/ (- space-available ew) 2)])
+               (printf "layout center aligned element: space=~a, margin=~a~n" space-available margin)
+               (if (empty? layout-unaligned-elements)
+                   (values (+ layout-left-width margin) y (+ layout-left-width margin ew) (+ y eh))
+                   ; centered elements are on a line by themselves
+                   (let ([new-y (next-line-y-pos y)])
+                     (if (not (= y new-y))
+                         (begin
+                           (layout-goto-new-line new-y)
+                           (layout-element e total-width x new-y ew eh))
+                         ; we have advanced the current y position as far as we can and it still doesn't fit
+                         (values 0 y ew (+ y eh))))))]
             [(unaligned)
              ;(printf "layout unaligned element~n")
              (if (empty? layout-unaligned-elements)
@@ -613,7 +625,8 @@
                (set-element-ypos! e y1)
                ; set position for adding next element
                ; should we allow left or right aligned elements be marked as end-of-line?
-               (when (element-end-of-line e)
+               (when (or (element-end-of-line e)
+                         (eq? (element-alignment e) 'center))
                  (layout-goto-new-line (add1 y2)))]
               [else
                ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
@@ -868,21 +881,27 @@
     (let ([square (make-object image-snip% "square.png")]
           [square-left (make-object image-snip% "square-left.png")]
           [square-right (make-object image-snip% "square-right.png")]
+          [square-center (make-object image-snip% "square-center.png")]
           ;[thg (make-object image-snip% "thg.png")]
           [tall (make-object image-snip% "tall.png")]
           [tall-left (make-object image-snip% "tall-left.png")]
           [tall-right (make-object image-snip% "tall-right.png")])
-      (send canvas append-snip square)
-      (send canvas append-snip tall)
-      (send canvas append-snip square #t)
+      ;(send canvas append-snip square)
+      ;(send canvas append-snip tall)
+      ;(send canvas append-snip square #t)
 
-      (send canvas append-snip square-left #f 'left)
-      (send canvas append-snip square-left #f 'left)
-      (send canvas append-snip square-left #f 'left)
-      (send canvas append-snip tall)
-      (send canvas append-snip tall)
-      (send canvas append-snip tall)
+      (send canvas append-snip square-center #f 'center)
       
+      (send canvas append-snip tall-left #f 'left)
+      (send canvas append-snip square)
+      (send canvas append-snip square-center #f 'center)
+
+      (send canvas append-snip square-right #f 'right)
+      (send canvas append-snip tall-left #f 'left)
+      (send canvas append-snip square-center #f 'center)
+      (send canvas append-snip square-center #f 'center)
+      (send canvas append-snip square)
+      (send canvas append-snip square)
       #|
       ;(send canvas append-snip thg)
 
