@@ -425,14 +425,14 @@
       (set!-values (layout-right-elements layout-right-width) (pop-layout-list layout-right-elements layout-right-width new-y))
       (set!-values (layout-unaligned-elements layout-unaligned-width) (pop-layout-list layout-unaligned-elements layout-unaligned-width new-y)))
     
-    (define (layout-element e total-width x y ew eh)
+    (define (layout-snip e total-width y ew eh)
       (if (< (- total-width (+ layout-left-width layout-right-width layout-unaligned-width)) ew)
           ; we don't have room for this element on the current line/y-position
           (let ([new-y (next-line-y-pos y)])
             (if (not (= y new-y))
                 (begin
                   (layout-goto-new-line new-y)
-                  (layout-element e total-width x new-y ew eh))
+                  (layout-snip e total-width new-y ew eh))
                 ; we have advanced the current y position as far as we can and it still doesn't fit
                 (begin
                   (case (element-alignment e)
@@ -491,7 +491,7 @@
                      (if (not (= y new-y))
                          (begin
                            (layout-goto-new-line new-y)
-                           (layout-element e total-width x new-y ew eh))
+                           (layout-snip e total-width new-y ew eh))
                          ; we have advanced the current y position as far as we can and it still doesn't fit
                          (values 0 y ew (+ y eh))))))]
             [(unaligned)
@@ -618,7 +618,7 @@
             (get-extent e dc x y snip-w snip-h snip-descent snip-space #f #f)
             (case mode
               [(layout)
-               (set!-values (x1 y1 x2 y2) (layout-element e dw x y (unbox snip-w) (unbox snip-h)))
+               (set!-values (x1 y1 x2 y2) (layout-snip e dw y (unbox snip-w) (unbox snip-h)))
                (printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
                ; layout-goto-new-line needs the element's position to be set, so set it early for now
                (set-element-xpos! e x1)
