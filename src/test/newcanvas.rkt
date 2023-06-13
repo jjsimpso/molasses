@@ -84,9 +84,9 @@
       #:prefab)
 
     (struct word
-      (str width to-next)
+      (str width to-next pos end-pos)
       #:prefab)
-    
+
     ;; an element is a snip with a horizontal alignment
     ;; alignment can be 'left, 'right, 'center, or 'unaligned
     (struct element
@@ -97,9 +97,13 @@
        [ypos #:mutable #:auto]
        [text-style #:mutable #:auto] ; only used for strings since snips have their own style
        [cached-text-extent #:mutable #:auto]
-       [words #:mutable #:auto])
+       [words #:mutable #:auto]
+       [lines #:mutable #:auto]) ; list of '(start-pos end-pos x y)
       #:prefab #:auto-value #f)
 
+    (define (make-line start-pos end-pos x y)
+      (list start-pos end-pos x y))
+    
     ;; list of all elements in order of insertion
     (define elements (dlist-new))
 
@@ -147,7 +151,7 @@
       (or (equal? mode 'wrapped)
           (equal? mode 'layout)))
 
-    (define (draw-wrapped-text e dc x y left top right bottom)
+    (define (draw-wrapped-text-old e dc x y left top right bottom)
       (define font (send (get-style e) get-font))
       (define-values (width height descent space) (send dc get-text-extent "a" font)) ; only need height, so string doesn't matter
       (define xpos x)
@@ -165,12 +169,15 @@
         (when (>= xpos right)
           (set! xpos left)
           (set! ypos (+ ypos height 1)))))
+
+    (define (draw-wrapped-text e dc left top)
+      (for ([line (in-list (element-lines e))])
+        ;(printf "draw-wrapped-text: (~a,~a) ~a~n" (third line) (fourth line) (substring (element-snip e) (first line) (second line)))
+        (send/apply dc draw-text `(,(substring (element-snip e) (first line) (second line)) ,(+ (- (third line) left) xmargin) ,(+ (- (fourth line) top) ymargin)))))
     
     (define (draw e dc x y left top right bottom dx dy)
       (if (string? (element-snip e))
-          (if (wrap-text?)
-              (draw-wrapped-text e dc x y left top right bottom)
-              (send dc draw-text (element-snip e) x y))
+          (send dc draw-text (element-snip e) x y)
           (send (element-snip e) draw dc x y left top right bottom dx dy 'no-caret)))
 
     (define (element-visible? e top bottom)
@@ -306,6 +313,7 @@
       
       (define font (send (get-style e) get-font))
       (define text (element-snip e))
+      (define last-pos (string-length text))
       (let loop ([word-start 0]
                  [words '()])
         (define end-pos (next-break-pos text word-start))
@@ -318,16 +326,16 @@
              [next-pos
               (define-values (nw nh nd ns) (send dc get-text-extent (substring text word-start next-pos) font))
               (loop next-pos
-                    (cons (word s ww nw) words))]
+                    (cons (word s ww nw word-start next-pos) words))]
              [else
               ; calculate next position using all the remaining text in the string, which will account
               ; for whitespace at the end of the string
               (define-values (nw nh nd ns) (send dc get-text-extent (substring text word-start) font))
-              (set-element-words! e (reverse (cons (word s ww nw) words)))])]
+              (set-element-words! e (reverse (cons (word s ww nw word-start last-pos) words)))])]
           [else
            (define s (substring text word-start))
            (define-values (ww wh wd ws) (send dc get-text-extent s font))
-           (set-element-words! e (reverse (cons (word s ww ww) words)))])))
+           (set-element-words! e (reverse (cons (word s ww ww word-start last-pos) words)))])))
 
     ;; state that needs to be maintained while adding elements in layout mode
     (define layout-left-elements '())
@@ -424,6 +432,55 @@
       (set!-values (layout-left-elements layout-left-width) (pop-layout-list layout-left-elements layout-left-width new-y))
       (set!-values (layout-right-elements layout-right-width) (pop-layout-list layout-right-elements layout-right-width new-y))
       (set!-values (layout-unaligned-elements layout-unaligned-width) (pop-layout-list layout-unaligned-elements layout-unaligned-width new-y)))
+
+    (define (layout-string e total-width y)
+      (define (get-x-start)
+        (+ layout-left-width layout-unaligned-width))
+      
+      ;; calculate the extent of the text with word wrapping
+      (define font (send (get-style e) get-font))
+      (define-values (width height descent space) (send dc get-text-extent "a" font)) ; only need height, so string doesn't matter
+
+      (case (element-alignment e)
+        [(right)
+         (error "right alignment not implemented!~n")]
+        [(center)
+         (error "center alignment not implemented!~n")]
+        [else
+         (define x (get-x-start))
+         (define right-margin (- total-width layout-right-width))
+         (define xpos x)
+         (define ypos y)
+         (define lines '())
+         (define start-pos 0)
+         (for ([w (in-list (element-words e))])
+           (if (< (+ xpos (word-to-next w)) right-margin)
+               (set! xpos (+ xpos (word-to-next w)))
+               (begin
+                 ;; wrap to next line, but first check if w fits on the current line
+                 (if (<= (+ xpos (word-width w)) right-margin)
+                     (begin
+                       (set! lines (cons (make-line start-pos (word-end-pos w) x ypos) lines))
+                       (set! start-pos (word-end-pos w))
+                       (set! xpos 0))
+                     (begin
+                       (set! lines (cons (make-line start-pos (word-pos w) x ypos) lines))
+                       (set! start-pos (word-pos w))
+                       (set! xpos (word-to-next w))))
+                 (set! ypos (+ ypos height 1)))))
+         ;; add last line of element
+         (when (< start-pos (string-length (element-snip e)))
+           (set! lines (cons (make-line start-pos (string-length (element-snip e)) x ypos) lines)))
+         ;; set the element's lines field and put the lines in order
+         (set-element-lines! e (reverse lines))
+         ;;
+         (if (eq? (element-alignment e) 'unaligned)
+             (begin
+               (set! layout-unaligned-elements (cons e layout-unaligned-elements))
+               (set! layout-unaligned-width (+ layout-unaligned-width (- xpos x))))
+             (begin
+               void))
+         (values x y xpos ypos)]))
     
     (define (layout-snip e total-width y ew eh)
       (if (< (- total-width (+ layout-left-width layout-right-width layout-unaligned-width)) ew)
@@ -560,6 +617,7 @@
           ;; if snip is actually a string type
           (case mode
             [(wrapped)
+             ;(printf "place-element ~a~n" (element-snip e))
              ;; calculate the extent of individual words
              ;; only have to do this once
              (when (not (element-words e))
@@ -569,15 +627,28 @@
              (define-values (width height descent space) (send dc get-text-extent "a" font)) ; only need height, so string doesn't matter
              (define xpos x)
              (define ypos y)
+             (define lines '())
+             (define start-pos 0)
              (for ([w (in-list (element-words e))])
                (if (< (+ xpos (word-to-next w)) dw)
                    (set! xpos (+ xpos (word-to-next w)))
                    (begin
                      ;; wrap to next line, but first check if w fits on the current line
                      (if (<= (+ xpos (word-width w)) dw)
-                         (set! xpos 0)
-                         (set! xpos (word-to-next w)))
+                         (begin
+                           (set! lines (cons (make-line start-pos (word-end-pos w) x ypos) lines))
+                           (set! start-pos (word-end-pos w))
+                           (set! xpos 0))
+                         (begin
+                           (set! lines (cons (make-line start-pos (word-pos w) x ypos) lines))
+                           (set! start-pos (word-pos w))
+                           (set! xpos (word-to-next w))))
                      (set! ypos (+ ypos height 1)))))
+             ;; add last line of element
+             (when (< start-pos (string-length (element-snip e)))
+               (set! lines (cons (make-line start-pos (string-length (element-snip e)) x ypos) lines)))
+             ;; set the element's lines field and put the lines in order
+             (set-element-lines! e (reverse lines))
              ;; if more than one line, then set x bounds full width
              (if (= y ypos)
                  (set! x2 xpos)
@@ -596,7 +667,13 @@
              ;; not really a text extent in this case
              (set-element-cached-text-extent! e (text-extent (- x2 x1) (- y2 y1) descent space))]
             [(layout)
-             void]
+             ;; calculate the extent of individual words
+             ;; only have to do this once
+             (when (not (element-words e))
+               (calc-word-extents e))
+             (set!-values (x1 y1 x2 y2) (layout-string e dw y))
+             (printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
+             ]
             [else
              (define snip-w (box 0))
              (define snip-h (box 0))
@@ -687,11 +764,13 @@
             (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                          (+ (- (element-ypos e) top) ymargin)))
             ;(printf "snip at ~ax~a, text=~a~n" x y  (element-snip e))
-            (draw e dc
-                  x y
-                  x y
-                  (- cw xmargin) (- ch ymargin)
-                  0 0))
+            (if (and (wrap-text?) (string? (element-snip e)))
+                (draw-wrapped-text e dc left top)
+                (draw e dc
+                      x y
+                      x y
+                      (- cw xmargin) (- ch ymargin)
+                      0 0)))
           ;; clear bottom and right margins in case it was drawn to
           (clear-rectangle 0 (- ch ymargin) cw ymargin)
           (clear-rectangle (- cw xmargin) 0 xmargin ch))
@@ -865,7 +944,7 @@
 (init-styles (send canvas get-style-list))
 (send canvas set-canvas-background canvas-bg-color)
 
-(define layout-test #t)
+(define layout-test #f)
 (if layout-test
     (send canvas set-mode 'layout)
     (send canvas set-mode 'wrapped))
@@ -882,14 +961,14 @@
           [square-left (make-object image-snip% "square-left.png")]
           [square-right (make-object image-snip% "square-right.png")]
           [square-center (make-object image-snip% "square-center.png")]
-          ;[thg (make-object image-snip% "thg.png")]
+          [thg (make-object image-snip% "thg.png")]
           [tall (make-object image-snip% "tall.png")]
           [tall-left (make-object image-snip% "tall-left.png")]
           [tall-right (make-object image-snip% "tall-right.png")])
-      ;(send canvas append-snip square)
-      ;(send canvas append-snip tall)
-      ;(send canvas append-snip square #t)
-
+      (send canvas append-snip square)
+      (send canvas append-snip tall)
+      (send canvas append-snip square #t)
+#|
       (send canvas append-snip square-center #f 'center)
       
       (send canvas append-snip tall-left #f 'left)
@@ -902,8 +981,9 @@
       (send canvas append-snip square-center #f 'center)
       (send canvas append-snip square)
       (send canvas append-snip square)
-      #|
-      ;(send canvas append-snip thg)
+|#
+
+      (send canvas append-snip thg)
 
       (send canvas append-snip square-right #f 'right)
       (send canvas append-snip tall-left #f 'left)
@@ -914,7 +994,7 @@
       (send canvas append-snip square)
       (send canvas append-snip square-right #f 'right)
       (send canvas append-snip tall)
-|#
+
       )
     (begin
       (let ([response (gopher-fetch "gopher.endangeredsoft.org" "games/9.png" #\0 70)])
