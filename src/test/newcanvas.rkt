@@ -87,6 +87,10 @@
       (str width to-next pos end-pos)
       #:prefab)
 
+    (struct wrapped-line
+      (start-pos end-pos x y)
+      #:prefab)
+    
     ;; an element is a snip with a horizontal alignment
     ;; alignment can be 'left, 'right, 'center, or 'unaligned
     (struct element
@@ -98,12 +102,9 @@
        [text-style #:mutable #:auto] ; only used for strings since snips have their own style
        [cached-text-extent #:mutable #:auto]
        [words #:mutable #:auto]
-       [lines #:mutable #:auto]) ; list of '(start-pos end-pos x y)
+       [lines #:mutable #:auto]) ; list of wrapped-line's
       #:prefab #:auto-value #f)
 
-    (define (make-line start-pos end-pos x y)
-      (list start-pos end-pos x y))
-    
     ;; list of all elements in order of insertion
     (define elements (dlist-new))
 
@@ -151,29 +152,10 @@
       (or (equal? mode 'wrapped)
           (equal? mode 'layout)))
 
-    (define (draw-wrapped-text-old e dc x y left top right bottom)
-      (define font (send (get-style e) get-font))
-      (define-values (width height descent space) (send dc get-text-extent "a" font)) ; only need height, so string doesn't matter
-      (define xpos x)
-      (define ypos y)
-      (for ([w (in-list (element-words e))])
-        (if (<= (+ xpos (word-width w)) right)
-            (begin 
-              (send dc draw-text (word-str w) xpos ypos)
-              (set! xpos (+ xpos (word-to-next w))))
-            (begin
-              (set! xpos left)
-              (set! ypos (+ ypos height 1))
-              (send dc draw-text (word-str w) xpos ypos)
-              (set! xpos (+ xpos (word-to-next w)))))
-        (when (>= xpos right)
-          (set! xpos left)
-          (set! ypos (+ ypos height 1)))))
-
     (define (draw-wrapped-text e dc left top)
       (for ([line (in-list (element-lines e))])
-        ;(printf "draw-wrapped-text: (~a,~a) ~a~n" (third line) (fourth line) (substring (element-snip e) (first line) (second line)))
-        (send/apply dc draw-text `(,(substring (element-snip e) (first line) (second line)) ,(+ (- (third line) left) xmargin) ,(+ (- (fourth line) top) ymargin)))))
+        ;(printf "draw-wrapped-text: (~a,~a) ~a~n" (wrapped-line-x line) (wrapped-line-y line) (substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)))
+        (send/apply dc draw-text `(,(substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)) ,(+ (- (wrapped-line-x line) left) xmargin) ,(+ (- (wrapped-line-y line) top) ymargin)))))
     
     (define (draw e dc x y left top right bottom dx dy)
       (if (string? (element-snip e))
@@ -460,17 +442,17 @@
                  ;; wrap to next line, but first check if w fits on the current line
                  (if (<= (+ xpos (word-width w)) right-margin)
                      (begin
-                       (set! lines (cons (make-line start-pos (word-end-pos w) x ypos) lines))
+                       (set! lines (cons (wrapped-line start-pos (word-end-pos w) x ypos) lines))
                        (set! start-pos (word-end-pos w))
                        (set! xpos 0))
                      (begin
-                       (set! lines (cons (make-line start-pos (word-pos w) x ypos) lines))
+                       (set! lines (cons (wrapped-line start-pos (word-pos w) x ypos) lines))
                        (set! start-pos (word-pos w))
                        (set! xpos (word-to-next w))))
                  (set! ypos (+ ypos height 1)))))
          ;; add last line of element
          (when (< start-pos (string-length (element-snip e)))
-           (set! lines (cons (make-line start-pos (string-length (element-snip e)) x ypos) lines)))
+           (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) x ypos) lines)))
          ;; set the element's lines field and put the lines in order
          (set-element-lines! e (reverse lines))
          ;;
@@ -636,17 +618,17 @@
                      ;; wrap to next line, but first check if w fits on the current line
                      (if (<= (+ xpos (word-width w)) dw)
                          (begin
-                           (set! lines (cons (make-line start-pos (word-end-pos w) x ypos) lines))
+                           (set! lines (cons (wrapped-line start-pos (word-end-pos w) x ypos) lines))
                            (set! start-pos (word-end-pos w))
                            (set! xpos 0))
                          (begin
-                           (set! lines (cons (make-line start-pos (word-pos w) x ypos) lines))
+                           (set! lines (cons (wrapped-line start-pos (word-pos w) x ypos) lines))
                            (set! start-pos (word-pos w))
                            (set! xpos (word-to-next w))))
                      (set! ypos (+ ypos height 1)))))
              ;; add last line of element
              (when (< start-pos (string-length (element-snip e)))
-               (set! lines (cons (make-line start-pos (string-length (element-snip e)) x ypos) lines)))
+               (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) x ypos) lines)))
              ;; set the element's lines field and put the lines in order
              (set-element-lines! e (reverse lines))
              ;; if more than one line, then set x bounds full width
