@@ -88,7 +88,7 @@
       #:prefab)
 
     (struct wrapped-line
-      (start-pos end-pos x y)
+      (start-pos end-pos x y w h)
       #:prefab)
     
     ;; an element is a snip with a horizontal alignment
@@ -139,14 +139,18 @@
           (send (element-snip e) get-extent dc x y w h descent space lspace rspace)))
 
     (define (get-element-width e)
-      (define w (box 0))
-      (get-extent e dc (element-xpos e) (element-ypos e) w)
-      (unbox w))
+      (if (wrapped-line? e)
+          (wrapped-line-w e)
+          (let ([w (box 0)])
+            (get-extent e dc (element-xpos e) (element-ypos e) w)
+            (unbox w))))
     
     (define (get-element-height e)
-      (define h (box 0))
-      (get-extent e dc (element-xpos e) (element-ypos e) #f h)
-      (unbox h))
+      (if (wrapped-line? e)
+          (wrapped-line-h e)
+          (let ([h (box 0)])
+            (get-extent e dc (element-xpos e) (element-ypos e) #f h)
+            (unbox h))))
     
     (define (wrap-text?)
       (or (equal? mode 'wrapped)
@@ -376,14 +380,13 @@
       ;(printf "pop-layout-list~n")
       (if (empty? ll)
           (values ll lwidth)
-          (let ([w (box 0)]
-                [h (box 0)]
-                [e (car ll)])
-            (get-extent e dc (element-xpos e) (element-ypos e) w h)
-            (if (< (+ (element-ypos e) (unbox h))
-                   new-y)
-                (pop-layout-list (cdr ll) (- lwidth (unbox w) snip-xmargin) new-y)
-                (values ll lwidth)))))
+          (let ([e (car ll)])
+            (let ([w (get-element-width e)]
+                  [h (get-element-height e)])
+              (if (< (+ (element-ypos e) h)
+                     new-y)
+                  (pop-layout-list (cdr ll) (- lwidth w snip-xmargin) new-y)
+                  (values ll lwidth))))))
 
     (define (next-line-y-pos original)
       (define (bottom-edge-of-elements ll)
@@ -434,25 +437,26 @@
          (define xpos x)
          (define ypos y)
          (define lines '())
-         (define start-pos 0)
+         (define start-pos 0) ; line's starting position (an index into the string)
          (for ([w (in-list (element-words e))])
            (if (< (+ xpos (word-to-next w)) right-margin)
                (set! xpos (+ xpos (word-to-next w)))
-               (begin
+               (let ([w-end-x (+ xpos (word-width w))])
                  ;; wrap to next line, but first check if w fits on the current line
-                 (if (<= (+ xpos (word-width w)) right-margin)
+                 (if (<=  w-end-x right-margin)
                      (begin
-                       (set! lines (cons (wrapped-line start-pos (word-end-pos w) x ypos) lines))
+                       (set! lines (cons (wrapped-line start-pos (word-end-pos w) x ypos (- w-end-x x) height) lines))
                        (set! start-pos (word-end-pos w))
                        (set! xpos 0))
                      (begin
-                       (set! lines (cons (wrapped-line start-pos (word-pos w) x ypos) lines))
+                       (set! lines (cons (wrapped-line start-pos (word-pos w) x ypos (- xpos x) height) lines))
                        (set! start-pos (word-pos w))
                        (set! xpos (word-to-next w))))
                  (set! ypos (+ ypos height 1)))))
          ;; add last line of element
          (when (< start-pos (string-length (element-snip e)))
-           (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) x ypos) lines)))
+           (define-values (last-line-width unused-h unused-d unused-s) (send dc get-text-extent (substring (element-snip e) start-pos) font))
+           (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) x ypos last-line-width height) lines)))
          ;; set the element's lines field and put the lines in order
          (set-element-lines! e (reverse lines))
          ;;
@@ -610,25 +614,26 @@
              (define xpos x)
              (define ypos y)
              (define lines '())
-             (define start-pos 0)
+             (define start-pos 0) ; line's starting position (an index into the string)
              (for ([w (in-list (element-words e))])
                (if (< (+ xpos (word-to-next w)) dw)
                    (set! xpos (+ xpos (word-to-next w)))
-                   (begin
+                   (let ([w-end-x (+ xpos (word-width w))])
                      ;; wrap to next line, but first check if w fits on the current line
-                     (if (<= (+ xpos (word-width w)) dw)
+                     (if (<= w-end-x dw)
                          (begin
-                           (set! lines (cons (wrapped-line start-pos (word-end-pos w) x ypos) lines))
+                           (set! lines (cons (wrapped-line start-pos (word-end-pos w) x ypos (- w-end-x x) height) lines))
                            (set! start-pos (word-end-pos w))
                            (set! xpos 0))
                          (begin
-                           (set! lines (cons (wrapped-line start-pos (word-pos w) x ypos) lines))
+                           (set! lines (cons (wrapped-line start-pos (word-pos w) x ypos (- xpos x) height) lines))
                            (set! start-pos (word-pos w))
                            (set! xpos (word-to-next w))))
                      (set! ypos (+ ypos height 1)))))
              ;; add last line of element
              (when (< start-pos (string-length (element-snip e)))
-               (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) x ypos) lines)))
+               (define-values (last-line-width unused-h unused-d unused-s) (send dc get-text-extent (substring (element-snip e) start-pos) font))
+               (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) x ypos last-line-width height) lines)))
              ;; set the element's lines field and put the lines in order
              (set-element-lines! e (reverse lines))
              ;; if more than one line, then set x bounds full width
@@ -926,7 +931,7 @@
 (init-styles (send canvas get-style-list))
 (send canvas set-canvas-background canvas-bg-color)
 
-(define layout-test #f)
+(define layout-test #t)
 (if layout-test
     (send canvas set-mode 'layout)
     (send canvas set-mode 'wrapped))
@@ -964,7 +969,7 @@
       (send canvas append-snip square)
       (send canvas append-snip square)
 |#
-
+#|
       (send canvas append-snip thg)
 
       (send canvas append-snip square-right #f 'right)
@@ -976,7 +981,7 @@
       (send canvas append-snip square)
       (send canvas append-snip square-right #f 'right)
       (send canvas append-snip tall)
-
+|#
       )
     (begin
       (let ([response (gopher-fetch "gopher.endangeredsoft.org" "games/9.png" #\0 70)])
