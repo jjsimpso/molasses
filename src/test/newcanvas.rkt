@@ -88,7 +88,12 @@
       #:prefab)
 
     (struct wrapped-line
-      (start-pos end-pos x y w h)
+      (start-pos
+       end-pos
+       [x #:mutable]
+       [y #:mutable]
+       w
+       h)
       #:prefab)
     
     ;; an element is a snip with a horizontal alignment
@@ -151,6 +156,16 @@
           (let ([h (box 0)])
             (get-extent e dc (element-xpos e) (element-ypos e) #f h)
             (unbox h))))
+
+    (define (get-element-x e)
+      (if (wrapped-line? e)
+          (wrapped-line-x e)
+          (element-xpos e)))
+
+    (define (get-element-y e)
+      (if (wrapped-line? e)
+          (wrapped-line-y e)
+          (element-ypos e)))
     
     (define (wrap-text?)
       (or (equal? mode 'wrapped)
@@ -334,22 +349,26 @@
 
     (define (adjust-elements-xpos! elist xdelta)
       (for ([e (in-list elist)])
-        (set-element-xpos! e (+ (element-xpos e) xdelta))))
+        (if (wrapped-line? e)
+            (set-wrapped-line-x! e (+ (wrapped-line-x e) xdelta))
+            (set-element-xpos! e (+ (element-xpos e) xdelta)))))
     
     (define (adjust-elements-ypos! elist ydelta)
       (for ([e (in-list elist)])
-        (set-element-ypos! e (+ (element-ypos e) ydelta))))
+        (if (wrapped-line? e)
+            (set-wrapped-line-y! e (+ (wrapped-line-y e) ydelta))
+            (set-element-ypos! e (+ (element-ypos e) ydelta)))))
 
     ; add contract checking ll for not empty
     (define (highest-element ll)
-      (define highest-y (element-ypos (car ll)))
+      (define highest-y (get-element-y (car ll)))
       (define highest-e (car ll))
       (for ([e (in-list ll)])
-        (when (< (element-ypos e) highest-y)
-          (set! highest-y (element-ypos e))
+        (when (< (get-element-y e) highest-y)
+          (set! highest-y (get-element-y e))
           (set! highest-e e)))
       highest-e)
-        
+    
     ; calculate the amount that unaligned elements can be shifted to the right
     ; this can be different than the available width because there may not be a right-aligned
     ; element on the current line but one further up could still block shifting
@@ -357,16 +376,16 @@
       (if (empty? layout-unaligned-elements)
           (- total-width layout-right-width layout-left-width)
           (let* ([hue (highest-element layout-unaligned-elements)]
-                 [ystart (element-ypos hue)]
+                 [ystart (get-element-y hue)]
                  [yend (+ ystart (get-element-height hue))])
             (define uedge (car layout-unaligned-elements))
-            (define xend (+ (element-xpos uedge) (get-element-width uedge) snip-xmargin))
+            (define xend (+ (get-element-x uedge) (get-element-width uedge) snip-xmargin))
             (define wiggle-room (- total-width xend))
             (for ([e (in-dlist elements)]
                   #:when (and (eq? (element-alignment e) 'right)
-                              (<= (element-ypos e) yend)
-                              (>= (+ (element-ypos e) (get-element-height e)) ystart)))
-              (define space-on-right (- (element-xpos e) xend))
+                              (<= (get-element-y e) yend)
+                              (>= (+ (get-element-y e) (get-element-height e)) ystart)))
+              (define space-on-right (- (get-element-x e) xend))
               (when (< space-on-right wiggle-room)
                 (set! wiggle-room space-on-right)))
             (printf "wiggle room = ~a~n" wiggle-room)
@@ -383,7 +402,7 @@
           (let ([e (car ll)])
             (let ([w (get-element-width e)]
                   [h (get-element-height e)])
-              (if (< (+ (element-ypos e) h)
+              (if (< (+ (get-element-y e) h)
                      new-y)
                   (pop-layout-list (cdr ll) (- lwidth w snip-xmargin) new-y)
                   (values ll lwidth))))))
@@ -391,7 +410,7 @@
     (define (next-line-y-pos original)
       (define (bottom-edge-of-elements ll)
         (if (not (empty? ll))
-            (+ (element-ypos (car ll))
+            (+ (get-element-y (car ll))
                (get-element-height (car ll)))
             (error "empty list")))
 
@@ -414,14 +433,12 @@
       (printf "layout-goto-new-line: ~a~n" new-y)
       (set! place-x 0) ; place-x value isn't currently used in layout mode
       (set! place-y new-y)
+      (set! layout-baseline-pos new-y)
       (set!-values (layout-left-elements layout-left-width) (pop-layout-list layout-left-elements layout-left-width new-y))
       (set!-values (layout-right-elements layout-right-width) (pop-layout-list layout-right-elements layout-right-width new-y))
       (set!-values (layout-unaligned-elements layout-unaligned-width) (pop-layout-list layout-unaligned-elements layout-unaligned-width new-y)))
 
     (define (layout-string e total-width y)
-      (define (get-x-start)
-        (+ layout-left-width layout-unaligned-width))
-      
       ;; calculate the extent of the text with word wrapping
       (define font (send (get-style e) get-font))
       (define-values (width height descent space) (send dc get-text-extent "a" font)) ; only need height, so string doesn't matter
@@ -431,11 +448,22 @@
          (error "right alignment not implemented!~n")]
         [(center)
          (error "center alignment not implemented!~n")]
-        [else
-         (define x (get-x-start))
+        [(left)
+         (error "left alignment not implemented!~n")]
+        [(unaligned)
+         (define x (+ layout-left-width layout-unaligned-width))
+         (define line-x x) ; starting x value of current line
+         (define max-width 0)
          (define right-margin (- total-width layout-right-width))
          (define xpos x)
          (define ypos y)
+         (define baseline (+ ypos height))
+         (if (> baseline layout-baseline-pos)
+             (when (not (empty? layout-unaligned-elements))
+               (define diff (- baseline layout-baseline-pos))
+               (adjust-elements-ypos! layout-unaligned-elements diff))
+             (let ([diff (- layout-baseline-pos baseline)])
+               (set! ypos (+ ypos diff))))
          (define lines '())
          (define start-pos 0) ; line's starting position (an index into the string)
          (for ([w (in-list (element-words e))])
@@ -447,26 +475,44 @@
                      (begin
                        (set! lines (cons (wrapped-line start-pos (word-end-pos w) x ypos (- w-end-x x) height) lines))
                        (set! start-pos (word-end-pos w))
-                       (set! xpos 0))
+                       (when (> w-end-x max-width)
+                         (set! max-width w-end-x))
+                       ;; advance to the new line
+                       (set! ypos (+ ypos height 1))
+                       (layout-goto-new-line ypos)
+                       (set! right-margin (- total-width layout-right-width))
+                       (set! line-x layout-left-width)
+                       (set! xpos line-x)
+                       (when (< line-x x)
+                         (set! x line-x)))
                      (begin
                        (set! lines (cons (wrapped-line start-pos (word-pos w) x ypos (- xpos x) height) lines))
                        (set! start-pos (word-pos w))
-                       (set! xpos (word-to-next w))))
-                 (set! ypos (+ ypos height 1)))))
+                       (when (> xpos max-width)
+                         (set! max-width xpos))
+                       ;; advance to the new line
+                       (set! ypos (+ ypos height 1))
+                       (layout-goto-new-line ypos)
+                       (set! right-margin (- total-width layout-right-width))
+                       (set! line-x layout-left-width)
+                       (set! xpos (+ line-x (word-to-next w)))
+                       (when (< line-x x)
+                         (set! x line-x)))))))
          ;; add last line of element
          (when (< start-pos (string-length (element-snip e)))
            (define-values (last-line-width unused-h unused-d unused-s) (send dc get-text-extent (substring (element-snip e) start-pos) font))
-           (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) x ypos last-line-width height) lines)))
+           (when (> last-line-width max-width)
+             (set! max-width last-line-width))
+           (printf "adding last line of element (~a,~a) ~ax~a~n" line-x ypos last-line-width height)
+           (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) line-x ypos last-line-width height) lines)))
+         ;; update the baseline position after all lines are placed
+         (set! layout-baseline-pos (+ ypos height))
+         ;; add last line to layout list
+         (set! layout-unaligned-elements (cons (car lines) layout-unaligned-elements))
+         (set! layout-unaligned-width (+ layout-unaligned-width (- xpos line-x)))
          ;; set the element's lines field and put the lines in order
          (set-element-lines! e (reverse lines))
-         ;;
-         (if (eq? (element-alignment e) 'unaligned)
-             (begin
-               (set! layout-unaligned-elements (cons e layout-unaligned-elements))
-               (set! layout-unaligned-width (+ layout-unaligned-width (- xpos x))))
-             (begin
-               void))
-         (values x y xpos ypos)]))
+         (values x y max-width (+ ypos height))]))
     
     (define (layout-snip e total-width y ew eh)
       (if (< (- total-width (+ layout-left-width layout-right-width layout-unaligned-width)) ew)
@@ -660,7 +706,9 @@
                (calc-word-extents e))
              (set!-values (x1 y1 x2 y2) (layout-string e dw y))
              (printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
-             ]
+             ;; set position for adding next element
+             (when (element-end-of-line e)
+                 (layout-goto-new-line (add1 y2)))]
             [else
              (define snip-w (box 0))
              (define snip-h (box 0))
@@ -952,9 +1000,16 @@
           [tall (make-object image-snip% "tall.png")]
           [tall-left (make-object image-snip% "tall-left.png")]
           [tall-right (make-object image-snip% "tall-right.png")])
+
       (send canvas append-snip square)
-      (send canvas append-snip tall)
-      (send canvas append-snip square #t)
+      (send canvas append-snip square-left #f 'left)
+      (send canvas append-string highlander-text #f #f)
+      (send canvas append-snip square)
+
+      ;(send canvas append-snip square)
+      ;(send canvas append-snip tall)
+      ;(send canvas append-snip square #t)
+
 #|
       (send canvas append-snip square-center #f 'center)
       
