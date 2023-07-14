@@ -342,9 +342,11 @@
     (define layout-left-elements '())
     (define layout-right-elements '())
     (define layout-unaligned-elements '())
+    (define layout-center-elements '())
     (define layout-left-width 0)
     (define layout-right-width 0)
     (define layout-unaligned-width 0)
+    (define layout-center-width 0)
     (define layout-baseline-pos 0)
 
     (define (adjust-elements-xpos! elist xdelta)
@@ -418,6 +420,8 @@
        (cond
          [(not (empty? layout-unaligned-elements))
           (bottom-edge-of-elements layout-unaligned-elements)]
+         [(not (empty? layout-center-elements))
+          (bottom-edge-of-elements layout-center-elements)]
          [(not (empty? layout-left-elements))
           (if (empty? layout-right-elements)
               (bottom-edge-of-elements layout-left-elements)
@@ -436,6 +440,7 @@
       (set! layout-baseline-pos new-y)
       (set!-values (layout-left-elements layout-left-width) (pop-layout-list layout-left-elements layout-left-width new-y))
       (set!-values (layout-right-elements layout-right-width) (pop-layout-list layout-right-elements layout-right-width new-y))
+      (set!-values (layout-center-elements layout-center-width) (pop-layout-list layout-center-elements layout-center-width new-y))
       (set!-values (layout-unaligned-elements layout-unaligned-width) (pop-layout-list layout-unaligned-elements layout-unaligned-width new-y)))
 
     (define (layout-string e total-width y)
@@ -513,9 +518,15 @@
          ;; set the element's lines field and put the lines in order
          (set-element-lines! e (reverse lines))
          (values x y max-width (+ ypos height))]))
+
+    (define (unaligned-or-center-width)
+      (cond
+        [(> layout-unaligned-width 0) layout-unaligned-width]
+        [(> layout-center-width 0) layout-center-width]
+        [else 0]))
     
     (define (layout-snip e total-width y ew eh)
-      (if (< (- total-width (+ layout-left-width layout-right-width layout-unaligned-width)) ew)
+      (if (< (- total-width (+ layout-left-width layout-right-width (unaligned-or-center-width))) ew)
           ; we don't have room for this element on the current line/y-position
           (let ([new-y (next-line-y-pos y)])
             (if (not (= y new-y))
@@ -570,19 +581,24 @@
                    (set! layout-right-width (+ layout-right-width ew snip-xmargin))
                    (values x1 y1 x2 y2)))]
             [(center)
-             (let* ([space-available (- total-width layout-left-width layout-right-width)]
-                    [margin (/ (- space-available ew) 2)])
-               (printf "layout center aligned element: space=~a, margin=~a~n" space-available margin)
-               (if (empty? layout-unaligned-elements)
-                   (values (+ layout-left-width margin) y (+ layout-left-width margin ew) (+ y eh))
-                   ; centered elements are on a line by themselves
-                   (let ([new-y (next-line-y-pos y)])
-                     (if (not (= y new-y))
-                         (begin
-                           (layout-goto-new-line new-y)
-                           (layout-snip e total-width new-y ew eh))
-                         ; we have advanced the current y position as far as we can and it still doesn't fit
-                         (values 0 y ew (+ y eh))))))]
+             (printf "layout center aligned element~n")
+             ; we assume that center and unaligned elements are mutually exclusive on the same line
+             ; the canvas user must end a line before adding an element with the other alignment
+             ; otherwise, behavior is undefined
+             (if (empty? layout-center-elements)
+                 (let ([margin (/ (- total-width layout-left-width layout-right-width ew) 2)])
+                   (set! layout-center-elements (cons e layout-center-elements))
+                   (set! layout-center-width (+ ew snip-xmargin))
+                   (values (+ layout-left-width margin) y (+ layout-left-width margin ew) (+ y eh)))
+                 (let* ([margin (/ (- total-width layout-left-width layout-right-width layout-center-width ew) 2)]
+                        [pos (+ layout-left-width margin)])
+                   ; reposition each centered element on the line
+                   (for ([e (in-list layout-center-elements)])
+                     (set-element-xpos! e pos)
+                     (set! pos (+ pos (get-element-width e) snip-xmargin)))
+                   (set! layout-center-elements (cons e layout-center-elements))
+                   (set! layout-center-width (+ layout-center-width ew snip-xmargin))
+                   (values pos y (+ pos ew) (+ y eh))))]
             [(unaligned)
              ;(printf "layout unaligned element~n")
              (if (empty? layout-unaligned-elements)
@@ -620,9 +636,11 @@
       (set! layout-left-elements '())
       (set! layout-right-elements '())
       (set! layout-unaligned-elements '())
+      (set! layout-center-elements '())
       (set! layout-left-width 0)
       (set! layout-right-width 0)
       (set! layout-unaligned-width 0)
+      (set! layout-center-width 0)
       (set! layout-baseline-pos 0)
       
       (for ([e (in-dlist elements)])
@@ -737,8 +755,7 @@
                (set-element-ypos! e y1)
                ; set position for adding next element
                ; should we allow left or right aligned elements be marked as end-of-line?
-               (when (or (element-end-of-line e)
-                         (eq? (element-alignment e) 'center))
+               (when (element-end-of-line e)
                  (layout-goto-new-line (add1 y2)))]
               [else
                ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
@@ -1000,30 +1017,31 @@
           [tall (make-object image-snip% "tall.png")]
           [tall-left (make-object image-snip% "tall-left.png")]
           [tall-right (make-object image-snip% "tall-right.png")])
-
+#|
       (send canvas append-snip square)
       (send canvas append-snip square-left #f 'left)
       (send canvas append-string highlander-text #f #f)
       (send canvas append-snip square)
-
+|#
       ;(send canvas append-snip square)
       ;(send canvas append-snip tall)
       ;(send canvas append-snip square #t)
 
-#|
-      (send canvas append-snip square-center #f 'center)
-      
+
+      (send canvas append-snip square-center #t 'center)
       (send canvas append-snip tall-left #f 'left)
-      (send canvas append-snip square)
+      (send canvas append-snip square #t)
       (send canvas append-snip square-center #f 'center)
+      (send canvas append-snip square-center #f 'center)
+      (send canvas append-snip square-center #t 'center)
 
       (send canvas append-snip square-right #f 'right)
       (send canvas append-snip tall-left #f 'left)
-      (send canvas append-snip square-center #f 'center)
-      (send canvas append-snip square-center #f 'center)
+      (send canvas append-snip square-center #t 'center)
+      (send canvas append-snip square-center #t 'center)
       (send canvas append-snip square)
       (send canvas append-snip square)
-|#
+
 #|
       (send canvas append-snip thg)
 
