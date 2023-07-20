@@ -1,13 +1,8 @@
 #lang racket/gui
 
-(require "../dlist.rkt"
-         "../gopher.rkt"
-         "../config.rkt")
-
-#;(require mred/private/mrcanvas
-         mred/private/wx
-         mred/private/wxcanvas
-         (prefix-in wx: mred/private/wxme/text))
+(require "dlist.rkt"
+         "gopher.rkt"
+         "config.rkt")
 
 (define frame 
   (new (class frame% (super-new))
@@ -1170,14 +1165,14 @@
 ;(define test-selector ".")
 
 (if layout-test
-    (let ([square (make-object image-snip% "square.png")]
-          [square-left (make-object image-snip% "square-left.png")]
-          [square-right (make-object image-snip% "square-right.png")]
-          [square-center (make-object image-snip% "square-center.png")]
-          [thg (make-object image-snip% "thg.png")]
-          [tall (make-object image-snip% "tall.png")]
-          [tall-left (make-object image-snip% "tall-left.png")]
-          [tall-right (make-object image-snip% "tall-right.png")])
+    (let ([square (make-object image-snip% "test/square.png")]
+          [square-left (make-object image-snip% "test/square-left.png")]
+          [square-right (make-object image-snip% "test/square-right.png")]
+          [square-center (make-object image-snip% "test/square-center.png")]
+          [thg (make-object image-snip% "test/thg.png")]
+          [tall (make-object image-snip% "test/tall.png")]
+          [tall-left (make-object image-snip% "test/tall-left.png")]
+          [tall-right (make-object image-snip% "test/tall-right.png")])
 
       (case layout-test
         [(text1)
