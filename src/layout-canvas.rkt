@@ -4,11 +4,7 @@
          "gopher.rkt"
          "config.rkt")
 
-(define frame 
-  (new (class frame% (super-new))
-       [label "Layout canvas test"]
-       [width 800]
-       [height 600]))
+(provide layout-canvas%)
 
 (define layout-canvas%
   (class canvas% (super-new)
@@ -1072,174 +1068,183 @@
           #f))    
 ))
 
-(define canvas
-  (new layout-canvas% (parent frame)
-       (style '(hscroll vscroll resize-corner))
-       (horiz-margin 5)
-       (vert-margin 5)
-       ))
-
-(define (init-styles style-list)
-  (define standard (send style-list find-named-style "Standard"))
-  (define standard-delta (make-object style-delta%))
-  (send* standard-delta
-    (set-family 'modern)
-    ;(set-face font-name)
-    (set-delta 'change-size 12)
-    (set-delta-foreground text-fg-color)
-    (set-delta-background canvas-bg-color))
-  (send standard set-delta standard-delta)
-
-  (define (make-color-style name color)
-    ;; Each style created with this procedure copies "Standard" style
-    ;; and creates a new style by name 'name' and with the foreground
-    ;; color 'color'.
-    (send (send style-list new-named-style name standard)
-          set-delta (send* (make-object style-delta%)
-                      (copy standard-delta)
-                      (set-delta-foreground color))))
-
-  (define (make-header-style name size)
-    ;; Each style created with this procedure copies "Standard" style
-    ;; and creates a new style by name 'name' and with the size 'size'.
-    (send (send style-list new-named-style name standard)
-          set-delta (send* (make-object style-delta%)
-                      (copy standard-delta)
-                      (set-delta 'change-weight 'bold)
-                      (set-delta 'change-size size))))
-  
-  (make-color-style "Link" link-color)
-  (make-color-style "Link Highlight" link-highlight-color)
-  (make-header-style "Header1" 24)
-  (make-header-style "Header2" 18)
-  (make-header-style "Header3" 14)
-
-  ;; create default html style
-  (define html-standard (send style-list new-named-style "Html Standard" standard))
-  (define html-standard-delta (make-object style-delta%))
-  (send* html-standard-delta
-    (set-family 'roman)
-    (set-delta 'change-size 12)
-    (set-delta-foreground html-text-fg-color)
-    (set-delta-background html-text-bg-color))
-  (send html-standard set-delta html-standard-delta))
-
-(define (add-gopher-menu c)
-  (define standard-style
-    (send (send c get-style-list) find-named-style "Standard"))
-  (define link-style
-    (send (send c get-style-list) find-named-style "Link"))
-
-  (define (insert-menu-item c type-text display-text)
-    (send c append-string type-text standard-style #f)
-    (send c append-string display-text link-style #t))
-
-  (insert-menu-item c " (DIR) " "Directory 1")
-  (insert-menu-item c " (DIR) " "Directory 2")
-  (insert-menu-item c " (DIR) " "Directory 3")
-  (send c append-string "       " #f #f)
-  (send c append-string "\n")
-  (send c append-string "       " #f #f)
-  (send c append-string "Here is some informational text.")
-  (send c append-string "       " #f #f)
-  (send c append-string "There are a few text files below:")
-  (send c append-string "       " #f #f)
-  (send c append-string "\n")
-  (insert-menu-item c "(TEXT) " "Read about Foo")
-  (insert-menu-item c "(TEXT) " "Read about Bar"))
 
 
-(init-styles (send canvas get-style-list))
-(send canvas set-canvas-background canvas-bg-color)
+(module+ main  
+  (define frame 
+    (new (class frame% (super-new))
+         [label "Layout canvas test"]
+         [width 800]
+         [height 600]))
 
-(define layout-test 'text2)
-(if layout-test
-    (send canvas set-mode 'layout)
-    (send canvas set-mode 'wrapped))
+  (define canvas
+    (new layout-canvas% (parent frame)
+         (style '(hscroll vscroll resize-corner))
+         (horiz-margin 5)
+         (vert-margin 5)
+         ))
 
-(send frame show #t)
+  (define (init-styles style-list)
+    (define standard (send style-list find-named-style "Standard"))
+    (define standard-delta (make-object style-delta%))
+    (send* standard-delta
+      (set-family 'modern)
+      ;(set-face font-name)
+      (set-delta 'change-size 12)
+      (set-delta-foreground text-fg-color)
+      (set-delta-background canvas-bg-color))
+    (send standard set-delta standard-delta)
 
-(define highlander-text "He is immortal. Born in the highlands of Scotland 400 years ago, there are others like him. Some good, some evil. For centuries he has battled the forces of darkness with holy ground his only refuge. He cannot die unless you take his head and with it his power. There can be only one. He is Duncan Macleod, the Highlander!\n")
-(define test-selector "gamefaqs-archive/ps2/final-fantasy-xii/FAQ_Walkthrough-by--Berserker.txt")
-;(define test-selector "/media/floppies.txt")
-;(define test-selector ".")
+    (define (make-color-style name color)
+      ;; Each style created with this procedure copies "Standard" style
+      ;; and creates a new style by name 'name' and with the foreground
+      ;; color 'color'.
+      (send (send style-list new-named-style name standard)
+            set-delta (send* (make-object style-delta%)
+                        (copy standard-delta)
+                        (set-delta-foreground color))))
 
-(if layout-test
-    (let ([square (make-object image-snip% "test/square.png")]
-          [square-left (make-object image-snip% "test/square-left.png")]
-          [square-right (make-object image-snip% "test/square-right.png")]
-          [square-center (make-object image-snip% "test/square-center.png")]
-          [thg (make-object image-snip% "test/thg.png")]
-          [tall (make-object image-snip% "test/tall.png")]
-          [tall-left (make-object image-snip% "test/tall-left.png")]
-          [tall-right (make-object image-snip% "test/tall-right.png")])
+    (define (make-header-style name size)
+      ;; Each style created with this procedure copies "Standard" style
+      ;; and creates a new style by name 'name' and with the size 'size'.
+      (send (send style-list new-named-style name standard)
+            set-delta (send* (make-object style-delta%)
+                        (copy standard-delta)
+                        (set-delta 'change-weight 'bold)
+                        (set-delta 'change-size size))))
+    
+    (make-color-style "Link" link-color)
+    (make-color-style "Link Highlight" link-highlight-color)
+    (make-header-style "Header1" 24)
+    (make-header-style "Header2" 18)
+    (make-header-style "Header3" 14)
 
-      (case layout-test
-        [(text1)
-         (send canvas append-snip square)
-         (send canvas append-snip square-left #f 'left)
-         (send canvas append-string "Testing, testing. " #f #f)
-         (send canvas append-string highlander-text #f #f)
-         (send canvas append-snip square)]
-        
-        [(text2)
-         (send canvas append-snip tall-left #f 'left)
-         (send canvas append-string "Here is some left aligned text. Here is some left aligned text. Here is some left aligned text." #f #t 'left)
-         (send canvas append-string "\n")
-         (send canvas append-string "Here is some unaligned text. Here is some unaligned text. Here is some unaligned text." #f #t)
-         (send canvas append-string "\n")
-         (send canvas append-string "Here is some right aligned text. Here is some right aligned text. Here is some right aligned text." #f #t 'right)
-         (send canvas append-string "\n")
-         (send canvas append-string "Here is some centered text. Here is some centered text. Here is some centered text." #f #t 'center)
-         (send canvas append-string "\n")
-         (send canvas append-snip square-left #f 'left)
-         (send canvas append-snip square-right #f 'right)
-         (send canvas append-snip square)
-         (send canvas append-snip square)
-         (send canvas append-snip tall #t)]
-        [(center)
-         (send canvas append-snip square-center #t 'center)
-         (send canvas append-snip tall-left #f 'left)
-         (send canvas append-snip square #t)
-         (send canvas append-snip square-center #f 'center)
-         (send canvas append-snip square-center #f 'center)
-         (send canvas append-snip square-center #t 'center)
-         
-         (send canvas append-snip square-right #f 'right)
-         (send canvas append-snip tall-left #f 'left)
-         (send canvas append-snip square-center #t 'center)
-         (send canvas append-snip square-center #t 'center)
-         (send canvas append-snip square)
-         (send canvas append-snip square)]
-        [(large)
-         ;(send canvas append-snip square)
-         ;(send canvas append-snip tall)
-         ;(send canvas append-snip square #t)
-         (send canvas append-snip thg)
-         
-         (send canvas append-snip square-right #f 'right)
-         (send canvas append-snip tall-left #f 'left)
-         (send canvas append-snip tall-left #f 'left)
-         (send canvas append-snip tall-left #f 'left)
-         (send canvas append-snip square)
-         (send canvas append-snip square)
-         (send canvas append-snip square)
-         (send canvas append-snip square-right #f 'right)
-         (send canvas append-snip tall)]
+    ;; create default html style
+    (define html-standard (send style-list new-named-style "Html Standard" standard))
+    (define html-standard-delta (make-object style-delta%))
+    (send* html-standard-delta
+      (set-family 'roman)
+      (set-delta 'change-size 12)
+      (set-delta-foreground html-text-fg-color)
+      (set-delta-background html-text-bg-color))
+    (send html-standard set-delta html-standard-delta))
+
+  (define (add-gopher-menu c)
+    (define standard-style
+      (send (send c get-style-list) find-named-style "Standard"))
+    (define link-style
+      (send (send c get-style-list) find-named-style "Link"))
+
+    (define (insert-menu-item c type-text display-text)
+      (send c append-string type-text standard-style #f)
+      (send c append-string display-text link-style #t))
+
+    (insert-menu-item c " (DIR) " "Directory 1")
+    (insert-menu-item c " (DIR) " "Directory 2")
+    (insert-menu-item c " (DIR) " "Directory 3")
+    (send c append-string "       " #f #f)
+    (send c append-string "\n")
+    (send c append-string "       " #f #f)
+    (send c append-string "Here is some informational text.")
+    (send c append-string "       " #f #f)
+    (send c append-string "There are a few text files below:")
+    (send c append-string "       " #f #f)
+    (send c append-string "\n")
+    (insert-menu-item c "(TEXT) " "Read about Foo")
+    (insert-menu-item c "(TEXT) " "Read about Bar"))
+
+
+  (init-styles (send canvas get-style-list))
+  (send canvas set-canvas-background canvas-bg-color)
+
+  (define layout-test 'text2)
+  (if layout-test
+      (send canvas set-mode 'layout)
+      (send canvas set-mode 'wrapped))
+
+  (send frame show #t)
+
+  (define highlander-text "He is immortal. Born in the highlands of Scotland 400 years ago, there are others like him. Some good, some evil. For centuries he has battled the forces of darkness with holy ground his only refuge. He cannot die unless you take his head and with it his power. There can be only one. He is Duncan Macleod, the Highlander!\n")
+  (define test-selector "gamefaqs-archive/ps2/final-fantasy-xii/FAQ_Walkthrough-by--Berserker.txt")
+  ;(define test-selector "/media/floppies.txt")
+  ;(define test-selector ".")
+
+  (if layout-test
+      (let ([square (make-object image-snip% "test/square.png")]
+            [square-left (make-object image-snip% "test/square-left.png")]
+            [square-right (make-object image-snip% "test/square-right.png")]
+            [square-center (make-object image-snip% "test/square-center.png")]
+            [thg (make-object image-snip% "test/thg.png")]
+            [tall (make-object image-snip% "test/tall.png")]
+            [tall-left (make-object image-snip% "test/tall-left.png")]
+            [tall-right (make-object image-snip% "test/tall-right.png")])
+
+        (case layout-test
+          [(text1)
+           (send canvas append-snip square)
+           (send canvas append-snip square-left #f 'left)
+           (send canvas append-string "Testing, testing. " #f #f)
+           (send canvas append-string highlander-text #f #f)
+           (send canvas append-snip square)]
+          
+          [(text2)
+           (send canvas append-snip tall-left #f 'left)
+           (send canvas append-string "Here is some left aligned text. Here is some left aligned text. Here is some left aligned text." #f #t 'left)
+           (send canvas append-string "\n")
+           (send canvas append-string "Here is some unaligned text. Here is some unaligned text. Here is some unaligned text." #f #t)
+           (send canvas append-string "\n")
+           (send canvas append-string "Here is some right aligned text. Here is some right aligned text. Here is some right aligned text." #f #t 'right)
+           (send canvas append-string "\n")
+           (send canvas append-string "Here is some centered text. Here is some centered text. Here is some centered text." #f #t 'center)
+           (send canvas append-string "\n")
+           (send canvas append-snip square-left #f 'left)
+           (send canvas append-snip square-right #f 'right)
+           (send canvas append-snip square)
+           (send canvas append-snip square)
+           (send canvas append-snip tall #t)]
+          [(center)
+           (send canvas append-snip square-center #t 'center)
+           (send canvas append-snip tall-left #f 'left)
+           (send canvas append-snip square #t)
+           (send canvas append-snip square-center #f 'center)
+           (send canvas append-snip square-center #f 'center)
+           (send canvas append-snip square-center #t 'center)
+           
+           (send canvas append-snip square-right #f 'right)
+           (send canvas append-snip tall-left #f 'left)
+           (send canvas append-snip square-center #t 'center)
+           (send canvas append-snip square-center #t 'center)
+           (send canvas append-snip square)
+           (send canvas append-snip square)]
+          [(large)
+           ;(send canvas append-snip square)
+           ;(send canvas append-snip tall)
+           ;(send canvas append-snip square #t)
+           (send canvas append-snip thg)
+           
+           (send canvas append-snip square-right #f 'right)
+           (send canvas append-snip tall-left #f 'left)
+           (send canvas append-snip tall-left #f 'left)
+           (send canvas append-snip tall-left #f 'left)
+           (send canvas append-snip square)
+           (send canvas append-snip square)
+           (send canvas append-snip square)
+           (send canvas append-snip square-right #f 'right)
+           (send canvas append-snip tall)]
+          )
         )
-      )
-    (begin
-      (let ([response (gopher-fetch "gopher.endangeredsoft.org" "games/9.png" #\0 70)])
-        (send canvas append-snip
-              (make-object image-snip%
-                           (gopher-response-data-port response)
-                           'unknown)
-              #t))
-      (send canvas append-string highlander-text)
-      (send canvas append-string "\n\n")
-      (send canvas append-string "text\nwith lots\nof\nnewlines")
-      (add-gopher-menu canvas)
-      (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
-        (send canvas append-string (port->string (gopher-response-data-port response))))))
+      (begin
+        (let ([response (gopher-fetch "gopher.endangeredsoft.org" "games/9.png" #\0 70)])
+          (send canvas append-snip
+                (make-object image-snip%
+                             (gopher-response-data-port response)
+                             'unknown)
+                #t))
+        (send canvas append-string highlander-text)
+        (send canvas append-string "\n\n")
+        (send canvas append-string "text\nwith lots\nof\nnewlines")
+        (add-gopher-menu canvas)
+        (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
+          (send canvas append-string (port->string (gopher-response-data-port response))))))
 
-(printf "append finished~n")
+  (printf "append finished~n"))
