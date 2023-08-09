@@ -1024,6 +1024,42 @@
       ;; need to update the scroll range when the client size changes
       (call-with-values get-virtual-size update-scrollbars))
 
+    (define (select-element x y)
+      (for/last ([e (in-dlist visible-elements)]
+                 #:when (and (>= y (element-ypos e))
+                             (>= x (element-xpos e))))                             
+        (define w (box 0))
+        (define h (box 0))
+        (get-extent e dc (element-xpos e) (element-ypos e) w h)
+        (define hit? (and (<= y (+ (element-ypos e) (unbox h)))
+                          (<= x (+ (element-xpos e) (unbox w)))))
+        #:final hit?
+        (if hit?
+            e
+            #f)))
+    
+    (define/override (on-event event)
+      (case (send event get-event-type)
+        [(left-down middle-down right-down)
+         (define-values (left top) (get-view-start))
+         (define-values (ex ey) (values (send event get-x)
+                                        (send event get-y)))
+         (define-values (x y) (values (- (+ ex left) xmargin)
+                                      (- (+ ey top) ymargin)))
+         (define e (select-element x y))
+         (when (and e (is-a? (element-snip e) snip%))
+           (printf "on-event: button down event at ~ax~a, canvas:~ax~a, element at ~ax~a~n"
+                   (send event get-x) (send event get-y) x y (element-xpos e) (element-ypos e))
+           (send (element-snip e) on-event
+                 dc
+                 (+ (- (element-xpos e) left) xmargin)
+                 (+ (- (element-ypos e) top) ymargin)
+                 (+ (- (element-xpos e) left) xmargin)
+                 (+ (- (element-ypos e) top) ymargin)
+                 event))]
+        [else
+         void]))
+    
     ;;
     (define/public (set-mode m)
       (set! mode m)
@@ -1129,6 +1165,19 @@
       (set-delta-background html-text-bg-color))
     (send html-standard set-delta html-standard-delta))
 
+  (define menu-item-snip%
+    (class string-snip%
+      (init-field [dir-entity #f])
+      (inherit get-flags set-flags)
+      (super-new)
+      (set-flags (cons 'handles-all-mouse-events (get-flags)))
+      ;(set-flags (cons 'handles-events (get-flags)))
+      
+      (define/override (on-event dc x y editorx editory e)
+        (when (send e button-down? 'left)
+          (printf "menu-item on-event: ~a~n" (send this get-text 0 30))))
+      ))
+
   (define (add-gopher-menu c)
     (define standard-style
       (send (send c get-style-list) find-named-style "Standard"))
@@ -1136,8 +1185,17 @@
       (send (send c get-style-list) find-named-style "Link"))
 
     (define (insert-menu-item c type-text display-text)
-      (send c append-string type-text standard-style #f)
-      (send c append-string display-text link-style #t))
+      (define type-snip (new string-snip%))
+      (define link-snip (new menu-item-snip% (dir-entity #f)))
+  
+      ;; insert text for type indication
+      (send type-snip set-style standard-style)
+      (send type-snip insert type-text (string-length type-text))
+      (send c append-snip type-snip)
+      
+      (send link-snip set-style link-style)
+      (send link-snip insert display-text (string-length display-text)) ;(send link-snip get-count))
+      (send c append-snip link-snip #t))
 
     (insert-menu-item c " (DIR) " "Directory 1")
     (insert-menu-item c " (DIR) " "Directory 2")
@@ -1157,7 +1215,7 @@
   (init-styles (send canvas get-style-list))
   (send canvas set-canvas-background canvas-bg-color)
 
-  (define layout-test 'text2)
+  (define layout-test #f)
   (if layout-test
       (send canvas set-mode 'layout)
       (send canvas set-mode 'wrapped))
@@ -1244,7 +1302,7 @@
         (send canvas append-string "\n\n")
         (send canvas append-string "text\nwith lots\nof\nnewlines")
         (add-gopher-menu canvas)
-        (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
+        #;(let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
           (send canvas append-string (port->string (gopher-response-data-port response))))))
 
   (printf "append finished~n"))
