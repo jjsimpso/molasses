@@ -7,7 +7,9 @@
 (provide layout-canvas%)
 
 (define layout-canvas%
-  (class canvas% (super-new)
+  (class canvas%
+    (super-new
+     (style '(hscroll vscroll resize-corner)))
     (init [horiz-margin 5]
           [vert-margin 5])
     (inherit get-dc
@@ -1025,18 +1027,15 @@
       (call-with-values get-virtual-size update-scrollbars))
 
     (define (select-element x y)
-      (for/last ([e (in-dlist visible-elements)]
-                 #:when (and (>= y (element-ypos e))
-                             (>= x (element-xpos e))))                             
+      (for/or ([e (in-dlist visible-elements)]
+               #:when (and (>= y (element-ypos e))
+                           (>= x (element-xpos e))))                             
         (define w (box 0))
         (define h (box 0))
         (get-extent e dc (element-xpos e) (element-ypos e) w h)
-        (define hit? (and (<= y (+ (element-ypos e) (unbox h)))
-                          (<= x (+ (element-xpos e) (unbox w)))))
-        #:final hit?
-        (if hit?
-            e
-            #f)))
+        (and (<= y (+ (element-ypos e) (unbox h)))
+             (<= x (+ (element-xpos e) (unbox w)))
+             e)))
     
     (define/override (on-event event)
       (case (send event get-event-type)
@@ -1115,10 +1114,8 @@
 
   (define canvas
     (new layout-canvas% (parent frame)
-         (style '(hscroll vscroll resize-corner))
          (horiz-margin 5)
-         (vert-margin 5)
-         ))
+         (vert-margin 5)))
 
   (define (init-styles style-list)
     (define standard (send style-list find-named-style "Standard"))
