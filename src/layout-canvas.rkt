@@ -12,13 +12,16 @@
      (style '(hscroll vscroll resize-corner)))
     (init [horiz-margin 5]
           [vert-margin 5])
+    (init-field [wheel-step 5])
     (inherit get-dc
              get-size
              get-client-size
              show-scrollbars
              init-manual-scrollbars
              set-scroll-page
+             get-scroll-pos
              set-scroll-pos
+             get-scroll-range
              set-scroll-range
              suspend-flush
              resume-flush
@@ -37,6 +40,8 @@
     
     ;; initially hide both scrollbars 
     (init-manual-scrollbars #f #f (* xmargin 2) (* ymargin 2) 0 0)
+
+    ;(send this wheel-event-mode 'integer)
     
     ;; store the drawing context for efficiency
     (define dc (get-dc))
@@ -1036,6 +1041,30 @@
         (and (<= y (+ (element-ypos e) (unbox h)))
              (<= x (+ (element-xpos e) (unbox w)))
              e)))
+
+    (define/override (on-char ch)
+      (define key-code (send ch get-key-code))
+      (when (or (eq? key-code 'wheel-up)
+                (eq? key-code 'wheel-down))
+
+        (define-values (cw ch) (get-client-size))
+        (define max-scroll (get-scroll-range 'vertical))
+        (define scroll-pos (get-scroll-pos 'vertical))
+        (define new-scroll-pos
+          (if (eq? key-code 'wheel-up)
+              (max 0 (- scroll-pos wheel-step))
+              (min max-scroll (+ scroll-pos wheel-step))))
+
+        (when (not (= new-scroll-pos scroll-pos))
+          (set! scroll-y new-scroll-pos)
+          (set-scroll-pos 'vertical new-scroll-pos)
+        
+          (if (not visible-elements)
+              (set-visible-elements!)
+              (update-visible-elements! (- new-scroll-pos scroll-pos) scroll-y (+ scroll-y ch)))
+
+          (printf "new scroll-y ~a, max ~a~n" scroll-y (get-scroll-range 'vertical))
+          (refresh))))
     
     (define/override (on-event event)
       (case (send event get-event-type)
