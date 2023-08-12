@@ -1095,6 +1095,15 @@
         (reset-layout)
         (call-with-values get-virtual-size update-scrollbars)
         (refresh)))
+
+    ;; clear the canvas contents
+    (define/public (clear)
+      (set! elements (dlist-new))
+      (set! visible-elements #f)
+      (set! scroll-x 0)
+      (set! scroll-y 0)
+      (reset-layout)
+      (refresh))
     
     ;;
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned])
@@ -1129,9 +1138,13 @@
       (define style (send styles find-named-style style-name))
       (if style
           (set! default-style style)
-          #f))    
-))
+          #f))
 
+    (define/public (begin-edit-sequence)
+      void)
+
+    (define/public (end-edit-sequence)
+      void)))
 
 
 (module+ main  
@@ -1241,7 +1254,7 @@
   (init-styles (send canvas get-style-list))
   (send canvas set-canvas-background canvas-bg-color)
 
-  (define layout-test #f)
+  (define layout-test '#f)
   (if layout-test
       (send canvas set-mode 'layout)
       (send canvas set-mode 'wrapped))
@@ -1287,6 +1300,7 @@
            (send canvas append-snip square)
            (send canvas append-snip tall #t)]
           [(center)
+           (send canvas append-string "Layout Test" (send (send canvas get-style-list) find-named-style "Header1") #t 'center)
            (send canvas append-snip square-center #t 'center)
            (send canvas append-snip tall-left #f 'left)
            (send canvas append-snip square #t)
@@ -1328,7 +1342,7 @@
         (send canvas append-string "\n\n")
         (send canvas append-string "text\nwith lots\nof\nnewlines")
         (add-gopher-menu canvas)
-        #;(let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
+        (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
           (send canvas append-string (port->string (gopher-response-data-port response))))))
 
   (printf "append finished~n"))
