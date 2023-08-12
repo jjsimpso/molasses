@@ -1097,13 +1097,33 @@
         (refresh)))
 
     ;; clear the canvas contents
-    (define/public (clear)
+    (define/public (erase)
       (set! elements (dlist-new))
       (set! visible-elements #f)
       (set! scroll-x 0)
       (set! scroll-y 0)
       (reset-layout)
       (refresh))
+
+    (define/public (scroll-to y)
+      (define-values (cw ch) (get-client-size))
+      (define max-scroll (get-scroll-range 'vertical))
+      (define old-scroll-pos scroll-y)
+      (define new-scroll-pos
+        (if (> y max-scroll)
+            max-scroll
+            (if (< y 0)
+                0
+                y)))
+      
+      (when (not (= new-scroll-pos old-scroll-pos))
+        (set! scroll-y new-scroll-pos)
+        (set-scroll-pos 'vertical new-scroll-pos)
+        
+        (if (not visible-elements)
+            (set-visible-elements!)
+            (update-visible-elements! (- new-scroll-pos old-scroll-pos) scroll-y (+ scroll-y ch)))
+        (refresh)))
     
     ;;
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned])
