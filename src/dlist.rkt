@@ -6,6 +6,7 @@
 (require (for-syntax syntax/parse))
 
 (provide dlist
+         dlink
          dlist-head
          dlist-tail
          set-dlist-head!
