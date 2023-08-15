@@ -151,25 +151,17 @@
               (send page-text go (url->request (send item get-value)))
               (send page-canvas focus))))))
 
-  (define page-text
-    (new browser-text%))
-
   (define page-canvas
     (new browser-canvas% (parent tab-contents)
-         (editor page-text)
          (tab-id tab-id)
          (default-bg-color canvas-bg-color)
          (update-status-cb update-status)
          (update-address-cb update-address)
-         (style '(auto-hscroll auto-vscroll))
-         (wheel-step 3)))
+         #;(wheel-step 3)))
 
-  (init-styles (send page-text get-style-list))
-
-  (send page-text set-max-undo-history 0)
-  (send page-text set-styles-sticky #f)
+  (init-styles (send page-canvas get-style-list))
   
-  (send* page-canvas
+  #;(send* page-canvas
     (force-display-focus #t)
     (lazy-refresh #t))
 
