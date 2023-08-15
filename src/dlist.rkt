@@ -75,6 +75,14 @@
       (dlink-prev (dlist-tail dl))
       #f))
 
+;; returns a dlink or #f
+;; ideally i'd like this to throw an exception instead of returning #f, as list-ref does
+(define (dlist-ref dl index)
+  (for/or ([node (in-dlist dl)]
+           [i (in-naturals)]
+           #:when (= i index))
+    node))
+
 (define (dlist-append! dl value)
   (define old-tail (dlist-tail dl))
   (cond
@@ -320,6 +328,9 @@
   (check-equal? (dlist-length a-dlist) 5)
   (check-equal? (for/list ([v (in-dlist a-dlist)]) v) '(1 2 3 4 5))
   (check-equal? (for/list ([v (in-dlist-reverse a-dlist)]) v) '(5 4 3 2 1))
+  (check-equal? (dlist-ref a-dlist 0) 1)
+  (check-equal? (dlist-ref a-dlist 4) 5)
+  (check-equal? (dlist-ref a-dlist 5) #f)
   
   ;;; cursor tests
   (define cursor (dlist-cursor a-dlist))
