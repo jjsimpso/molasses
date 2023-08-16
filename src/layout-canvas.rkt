@@ -1124,7 +1124,14 @@
             (set-visible-elements!)
             (update-visible-elements! (- new-scroll-pos old-scroll-pos) scroll-y (+ scroll-y ch)))
         (refresh)))
-    
+
+    ;; layout-canvas% users don't have direct access to the elements, so they may need to
+    ;; find an element's position using the snip(or string) that they added to the canvas
+    (define/public (lookup-snip-position s)
+      (for/first ([e (in-dlist elements)]
+                  #:when (eq? (element-snip e) s))
+        (values (element-xpos e)
+                (element-ypos e))))
     ;;
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned])
       (define e (element s end-of-line alignment))
