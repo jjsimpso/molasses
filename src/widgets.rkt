@@ -6,6 +6,7 @@
 (require "gemini.rkt")
 (require "download.rkt")
 (require "html.rkt")
+(require "dlist.rkt")
 (require "layout-canvas.rkt")
 
 (provide browser-canvas%
@@ -237,17 +238,17 @@
 
 (define gemini-pre-re #px"^```.*")
 
-(define (insert-gemini-text text-widget data-port base-url)
+(define (insert-gemini-text canvas data-port base-url)
   (define standard-style
-    (send (send text-widget get-style-list) find-named-style "Standard"))
+    (send (send canvas get-style-list) find-named-style "Standard"))
   (define link-style
-    (send (send text-widget get-style-list) find-named-style "Link"))
+    (send (send canvas get-style-list) find-named-style "Link"))
   (define header1-style
-    (send (send text-widget get-style-list) find-named-style "Header1"))
+    (send (send canvas get-style-list) find-named-style "Header1"))
   (define header2-style
-    (send (send text-widget get-style-list) find-named-style "Header2"))
+    (send (send canvas get-style-list) find-named-style "Header2"))
   (define header3-style
-    (send (send text-widget get-style-list) find-named-style "Header3"))
+    (send (send canvas get-style-list) find-named-style "Header3"))
   
   ; We'll just display them as bold text
   (define (line->header line)  
@@ -257,24 +258,19 @@
               3
               2)
           1))
-    (define text-snip (new string-snip%))
-    (send text-snip set-style
-          (case octothorpe-count
-            [(1) header1-style]
-            [(2) header2-style]
-            [(3) header3-style]))
+    (define header-style
+      (case octothorpe-count
+        [(1) header1-style]
+        [(2) header2-style]
+        [(3) header3-style]))
     ;; skip the mandatory space character after the last '#'
     (define header-string (substring line (add1 octothorpe-count)))
-    (send text-snip insert header-string (string-length header-string))
-    text-snip)
+    (send canvas append-string header-string header-style))
   
   ; Plain text lines are anything else
-  (define (line->text text)
-    (define text-snip (new string-snip%))
-    (send text-snip set-style standard-style)
-    (send text-snip insert text (string-length text))
-    text-snip)
-
+  (define (line->text line)
+    (send canvas append-string line standard-style #t))
+  
   (define (make-link text url)
     (define link-snip (new gemini-link-snip% (url url)))
     (send link-snip set-style link-style)
@@ -324,11 +320,10 @@
     (match line
       [(regexp gemini-link-re)
        (define-values (link-url link-name) (parse-link line))
-       (define link-start-pos (send text-widget last-position))
        (eprintf "link url=~a, name=~a~n" link-url link-name)
-       (send text-widget insert (make-link link-name link-url))
+       (send canvas append-snip (make-link link-name link-url) #t)
        ;; add clickback to link region
-       (send text-widget set-clickback
+       #;(send text-widget set-clickback
              link-start-pos
              (send text-widget last-position)
              (lambda (text-widget start end)
@@ -351,34 +346,31 @@
                                          (if (equal? (string-ref link-url 0) #\/)
                                              link-url
                                              (replace-final-path-element (request-path/selector base-req) link-url))]))))))]
-
       [(regexp gemini-header-re)
-       (send text-widget insert (line->header line))]
+       (line->header line)]
       [(regexp gemini-pre-re)
        ;; read preformatted text until we read another "```". technically should create
        ;; a style for this that has a fixed width font, but our default font already
        ;; is fixed width.
        (let loop ([line (read-line data-port)])
          (unless (or (regexp-match gemini-pre-re line) (equal? line eof))
-           (send text-widget insert (line->text line))
-           (send text-widget insert "\n")
+           (line->text line)
            (loop (read-line data-port))))]
-      [_ (send text-widget insert (line->text line))])
-    (send text-widget insert "\n")))
+      [_ (line->text line)])))
 
 ;; unlike goto-gopher, goto-gemini returns a request
 ;; the initial request can be forwaded to a new request for queries
 ;; 
-(define (goto-gemini req page-text)
+(define (goto-gemini req canvas)
   (eprintf "goto-gemini: ~a, ~a~n" (request-host req) (request-path/selector req))
 
   (define (show-gemini-error msg)
-    ;; this flag is used to signal the main thread that text% updates have begun
-    (set-field! editor-busy? page-text #t)
+    ;; this flag is used to signal the main thread that canvas updates have begun
+    (set-field! editor-busy? canvas #t)
     
-    (send page-text begin-edit-sequence)
-    (send page-text insert msg)
-    (send page-text end-edit-sequence)
+    (send canvas begin-edit-sequence)
+    (send canvas append-string msg)
+    (send canvas end-edit-sequence)
     (close-input-port (gemini-response-data-port resp)))
   
   (define resp (gemini-fetch (request-host req)
@@ -395,52 +387,49 @@
      (define query-string (get-text-from-user "Input required" (gemini-response-meta resp)))
      (if query-string
          (let ([query-request (url->request (string-append (gemini-response-from-url resp) "?" query-string))])
-           (goto-gemini query-request page-text))
+           (goto-gemini query-request canvas))
          (void))]
     [(20 21)
      ;; this flag is used to signal the main thread that text% updates have begun
-     (set-field! editor-busy? page-text #t)
+     (set-field! editor-busy? canvas #t)
      
      (let ([data-port (gemini-response-data-port resp)]
            [mimetype (gemini-response-meta resp)]
            [from-url (gemini-response-from-url resp)])
        (cond
          [(string-prefix? mimetype "text/gemini")
-          (send page-text begin-edit-sequence)
-          (insert-gemini-text page-text data-port from-url)
-          (send page-text set-position 0)
-          (send page-text end-edit-sequence)]
+          (send canvas begin-edit-sequence)
+          (insert-gemini-text canvas data-port from-url)
+          (send canvas end-edit-sequence)]
          [(string-prefix? mimetype "text/")
-          (send page-text begin-edit-sequence)
+          (send canvas begin-edit-sequence)
           ;; this isn't ideal but is still a lot faster than inserting one line at a time
           ;; (text% treats #\return as a newline so DOS formatted files have extra newlines)
-          (send page-text insert (string-replace
-                                  (port->string data-port)
-                                  "\r\n"
-                                  "\n"))
-          (send page-text set-position 0)
-          (send page-text end-edit-sequence)]
+          (send canvas append-string (string-replace
+                                      (port->string data-port)
+                                      "\r\n"
+                                      "\n"))
+          (send canvas end-edit-sequence)]
          [(string-prefix? mimetype "image/")
           (define img (make-object image-snip% data-port 'unknown))
-          (send page-text begin-edit-sequence)
-          (send page-text insert img)
-          (send page-text set-position 0)
-          (send page-text end-edit-sequence)]
+          (send canvas begin-edit-sequence)
+          (send canvas append-snip img #t)
+          (send canvas end-edit-sequence)]
          [else
-          (send page-text begin-edit-sequence)
-          (send page-text insert (format "unknown mimetype: ~a~n" mimetype))
-          (send page-text insert (format "Initiating download of ~a~n" (request-path/selector req)))
-          (send page-text end-edit-sequence)
+          (send canvas begin-edit-sequence)
+          (send canvas append-string (format "unknown mimetype: ~a~n" mimetype))
+          (send canvas append-string (format "Initiating download of ~a~n" (request-path/selector req)))
+          (send canvas end-edit-sequence)
           (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]))
      (close-input-port (gemini-response-data-port resp))
      req]
     [(30 31)
      ;; this flag is used to signal the main thread that text% updates have begun
-     (set-field! editor-busy? page-text #t)
+     (set-field! editor-busy? canvas #t)
      ;; initiate a file download
-     (send page-text begin-edit-sequence)
-     (send page-text insert (format "Initiating download of ~a~n" (request-path/selector req)))
-     (send page-text end-edit-sequence)
+     (send canvas begin-edit-sequence)
+     (send canvas append-string (format "Initiating download of ~a~n" (request-path/selector req)))
+     (send canvas end-edit-sequence)
      (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]
     
     [(40) (show-gemini-error "Temporary failure")]
@@ -457,7 +446,7 @@
     
     [else (show-gemini-error "Unknown status code returned from server")]))
 
-(define browser-text%
+#;(define browser-text%
   (class text% (super-new)
     (init-field [selection #f]
                 [gopher-menu? #f]
@@ -933,6 +922,12 @@
                 [update-status-cb #f]
                 [update-address-cb #f])
     (inherit set-canvas-background
+             lookup-snip-position
+             get-client-size
+             get-style-list
+             begin-edit-sequence
+             end-edit-sequence
+             in-edit-sequence?
              scroll-to)
 
     (field [editor-busy? #f]
@@ -948,6 +943,9 @@
     ;; keep list of gopher menu entries
     (define menu-items (dlist-new))
 
+    (define/private (selection-snip selection)
+      (dlink-value (cdr selection)))
+    
     ;; return a pair representing the menu selection or #f
     (define/private (find-next-menu-item)
       (define node (and (cdr menu-selection)
@@ -982,12 +980,12 @@
 
     (define/override (append-snip s [end-of-line #f] [alignment 'unaligned])
       (when (is-a? s menu-item-snip%)
-        (dlist-append menu-items s))
-      (super s end-of-line alignment))
+        (dlist-append! menu-items s))
+      (super append-snip s end-of-line alignment))
 
     (define/override (erase)
       (set! menu-items (dlist-new))
-      (super))
+      (super erase))
     
     (set-canvas-background default-bg-color)
 
@@ -1034,19 +1032,16 @@
           (set! menu-selection (find-menu-item initial-selection-pos)) 
           (set! menu-selection (find-first-menu-item)))
       (when (cdr menu-selection)
+        (define snip (selection-snip menu-selection))
         (define new-style (send (get-style-list) find-named-style "Link Highlight"))
-        (send (dlink-value (cdr menu-selection)) set-style new-style)
+        (send snip set-style new-style)
         (if initial-selection-pos
-            ;; make the selection visible but don't adjust the screen so the selection isn't at
-            ;; the very bottom if the enter page won't fit
-            (scroll-to-position 0
-                                #f
-                                (line-start-position
-                                 (+ (position-line initial-selection-pos) 
-                                    (floor (/ (get-visible-line-count) 4))))
-                                'end)
+            ;; make the selection visible but not at the very top
+            (let-values ([(x y) (lookup-snip-position snip)]
+                         [(cw ch) (get-client-size)])
+              (scroll-to (- y (floor (/ ch 4)))))
             ;; scroll to the beginning
-            (scroll-to-position 0))))
+            (scroll-to 0))))
 
     (define/public (cancel-request)
       (when (custodian? thread-custodian)
@@ -1090,10 +1085,8 @@
       (set! editor-busy? #f)
       (set! thread-custodian (make-custodian))
 
-      (define update-history (make-history-updater current-url
-                                                   (if selection
-                                                       (get-snip-position selection)
-                                                       #f)))
+      (define update-history (make-history-updater current-url (and menu-selection (car menu-selection))))
+
       (update-status "Loading...")
       
       (parameterize ([current-custodian thread-custodian])
@@ -1176,7 +1169,8 @@
       void)
 
     (define/public (get-history)
-      void)))
+      (for/list ([item (in-list history)])
+        (browser-url-req item)))))
     
 (define menu-item-snip%
   (class string-snip%

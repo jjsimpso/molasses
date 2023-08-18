@@ -117,7 +117,7 @@
          (horiz-margin 0)
          (callback
           (lambda (item event)
-            (send page-text go-back)
+            (send page-canvas go-back)
             ;; set the focus back to the canvas
             (send page-canvas focus)))))
   
@@ -135,7 +135,7 @@
          (horiz-margin 0)
          (callback
           (lambda (item event)
-            (send page-text cancel-request)
+            (send page-canvas cancel-request)
             ;; set the focus back to the canvas
             (send page-canvas focus)))))
 
@@ -148,7 +148,7 @@
           (lambda (item event)
             (when (equal? (send event get-event-type)
                           'text-field-enter)
-              (send page-text go (url->request (send item get-value)))
+              (send page-canvas go (url->request (send item get-value)))
               (send page-canvas focus))))))
 
   (define page-canvas
@@ -177,15 +177,13 @@
 
 (define (goto-home-page tp)
   (define page-canvas (active-page-canvas tp))
-  (define page-text (send page-canvas get-editor))
-  (send page-text go (url->request home-page-url))
+  (send page-canvas go (url->request home-page-url))
   (send page-canvas focus))
 
 (define (goto-help-page tp)
   (define page-canvas (active-page-canvas tp))
-  (define page-text (send page-canvas get-editor))
-  (send page-text erase)
-  (send page-text insert #<<END
+  (send page-canvas erase)
+  (send page-canvas append-string #<<END
 This is Molasses, your browser for the Slow Internet. If you think of
 the Internet as an information super highway, then think of the Slow
 Internet as a country road. You can use Molasses to return to a
@@ -245,7 +243,7 @@ in the case of completed downloads, remove the entry from the download
 list.
 END
         )
-  (send page-text set-position 0)
+  (send page-canvas scroll-to 0)
   (send page-canvas focus))
 
 (define (next-tab tp)
