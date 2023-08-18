@@ -1167,11 +1167,16 @@
           (set! default-style style)
           #f))
 
+    (define in-edit-sequence #f)
+    
     (define/public (begin-edit-sequence)
-      void)
+      (set! in-edit-sequence #t))
 
+    (define/public (in-edit-sequence?)
+      in-edit-sequence)
+    
     (define/public (end-edit-sequence)
-      void)))
+      (set! in-edit-sequence #f))))
 
 
 (module+ main  
