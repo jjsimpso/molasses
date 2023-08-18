@@ -7,6 +7,9 @@
 
 (provide dlist
          dlink
+         dlink-next
+         dlink-prev
+         dlink-value
          dlist-head
          dlist-tail
          set-dlist-head!
@@ -17,6 +20,7 @@
          dlist-tail-value
          dlist-head-next
          dlist-tail-prev
+         dlist-ref
          dlist-append!
          dlist-push!
          dlist-pop!
