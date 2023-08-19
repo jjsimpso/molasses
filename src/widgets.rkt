@@ -76,7 +76,7 @@
            (insert-menu-item canvas dir-entity)
            (send canvas append-string "\n")]))
       ;; be permissive of blank lines
-      (send canvas insert "\n")))
+      (send canvas append-string "\n")))
 
 (define (goto-gopher req canvas [initial-selection-pos #f])
   (eprintf "goto-gopher: ~a, ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req) initial-selection-pos)
@@ -1162,7 +1162,11 @@
         (load-page req (browser-url-selection-pos prev-url) #:back? #t)))
     
     (define/public (load-restore-data list-of-data)
-      void)
+      (when (and (list? list-of-data)
+                 (= (length list-of-data) 2))
+        (set! history (cadr list-of-data))
+        (when (browser-url? (car list-of-data))
+          (go (browser-url-req (car list-of-data))))))
     
     ;; eventually this may need to handle multiple types of editors, but for now assume browser-text%
     (define/public (get-restore-data)
@@ -1170,7 +1174,14 @@
 
     (define/public (get-history)
       (for/list ([item (in-list history)])
-        (browser-url-req item)))))
+        (browser-url-req item)))
+
+    (define/override (on-event event)
+      (super on-event event))
+    
+    (define/override (on-char event)
+      (super on-char event))
+))
     
 (define menu-item-snip%
   (class string-snip%
