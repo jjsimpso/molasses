@@ -196,27 +196,31 @@
       (define-values (left top) (get-view-start))
       (define-values (right bottom) (values (+ left dw) (+ top dh)))
 
-      (define cursor (dlist-cursor elements))
-      ;; find first visible element
-      (for ([e (in-dlist cursor)]
-            #:break (element-visible? e top bottom))
-        (dlist-advance-head! cursor))
-      ;; set cursor's tail to element after first visible and advance tail until we reach the
-      ;; last visible elment
-      (set-dlist-tail! cursor (dlist-head-next cursor))
-      (let loop ([e (dlist-tail-value cursor)])
-        (cond
-          [(not e) void]
-          [(element-visible? e top bottom)
-           (when (dlist-advance-tail! cursor) ; returns false when tail can't advance any further
-             (loop (dlist-tail-value cursor)))]
-          [else
-           (if (eq? (dlist-tail-prev cursor)
-                    (dlist-head cursor))
-               (set-dlist-tail! cursor #f)
-               (set-dlist-tail! cursor (dlist-tail-prev cursor)))]))
-      (set! visible-elements cursor)
-      #;(printf "set-visible-elements ~a to ~a~n" (dlist-head-value visible-elements) (dlist-tail-value visible-elements)))
+      (printf "elements head value ~a~n" (dlist-head-value elements))
+
+      (when (> (dlist-length elements) 0)
+        (define cursor (dlist-cursor elements))
+        
+        ;; find first visible element
+        (for ([e (in-dlist cursor)]
+              #:break (element-visible? e top bottom))
+          (dlist-advance-head! cursor))
+        ;; set cursor's tail to element after first visible and advance tail until we reach the
+        ;; last visible elment
+        (set-dlist-tail! cursor (dlist-head-next cursor))
+        (let loop ([e (dlist-tail-value cursor)])
+          (cond
+            [(not e) void]
+            [(element-visible? e top bottom)
+             (when (dlist-advance-tail! cursor) ; returns false when tail can't advance any further
+               (loop (dlist-tail-value cursor)))]
+            [else
+             (if (eq? (dlist-tail-prev cursor)
+                      (dlist-head cursor))
+                 (set-dlist-tail! cursor #f)
+                 (set-dlist-tail! cursor (dlist-tail-prev cursor)))]))
+        (set! visible-elements cursor)
+        (printf "set-visible-elements ~a to ~a~n" (dlist-head-value visible-elements) (dlist-tail-value visible-elements))))
 
     (define (adjust-visible-elements-forward! cursor top bottom)
       ;; advance the tail to last visible element
@@ -804,7 +808,9 @@
       
       (for ([e (in-dlist elements)])
         (place-element e place-x place-y))
-      (set-visible-elements!))
+      
+      (when (> (dlist-length elements) 0)
+        (set-visible-elements!)))
     
     ;; places element on the virtual canvas and updates virtual size of canvas
     ;; e is the new element and must be the new tail of the element list
@@ -953,7 +959,7 @@
       (define-values (left top) (values scroll-x scroll-y))
       (define-values (right bottom) (values (+ left cw) (+ top ch)))
 
-      ;(printf "on-paint ~ax~a of ~ax~a at ~ax~a~n" cw ch vw vh left top)
+      (printf "on-paint ~ax~a of ~ax~a at ~ax~a~n" cw ch vw vh left top)
       
       (when (not visible-elements)
         (set-visible-elements!))
@@ -1012,18 +1018,22 @@
       (define-values (right bottom) (values (+ left dw) (+ top dh)))
 
       (define-values (w h) (get-size))
-      ;(printf "on-size client=~ax~a window=~ax~a canvas=~ax~a~n" cw ch w h dw dh)
+      (printf "on-size client=~ax~a window=~ax~a canvas=~ax~a~n" cw ch w h dw dh)
 
+      (when (not visible-elements)
+        (set-visible-elements!))
+      
       ;; reposition all elements
       (when (and (wrap-text?) (not (= cached-client-width cw)))
         (printf "on-size canvas ~ax~a " canvas-width canvas-height)
         (reset-layout)
         (printf "-> ~ax~a~n" canvas-width canvas-height))
-      
+
       ;; update visible elements if window height changes
-      (if (> ch cached-client-height)
-          (adjust-visible-elements-forward! visible-elements top bottom)
-          (adjust-visible-elements-back! visible-elements top bottom))
+      (when visible-elements
+        (if (> ch cached-client-height)
+            (adjust-visible-elements-forward! visible-elements top bottom)
+            (adjust-visible-elements-back! visible-elements top bottom)))
       ;(printf "on-size: # visible = ~a~n" (dlist-length visible-elements))
       (set! cached-client-width cw)
       (set! cached-client-height ch)
@@ -1360,9 +1370,7 @@
            (send canvas append-snip square)
            (send canvas append-snip square)
            (send canvas append-snip square-right #f 'right)
-           (send canvas append-snip tall)]
-          )
-        )
+           (send canvas append-snip tall)]))
       (begin
         (let ([response (gopher-fetch "gopher.endangeredsoft.org" "games/9.png" #\0 70)])
           (send canvas append-snip
@@ -1376,5 +1384,5 @@
         (add-gopher-menu canvas)
         (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
           (send canvas append-string (port->string (gopher-response-data-port response))))))
-
+  
   (printf "append finished~n"))
