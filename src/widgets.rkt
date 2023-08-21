@@ -56,7 +56,7 @@
   (send canvas append-snip link-snip #t))
 
 (define (insert-directory-line canvas line)
-  ;(eprintf "insert-directory-line: ~a~n" line)
+  (eprintf "insert-directory-line: ~a~n" line)
   (if (non-empty-string? line)
       (let ([dir-entity (parse-dir-entity line)])
         (cond
@@ -65,16 +65,15 @@
            void]
           ;; display error line
           [(equal? (gopher-dir-entity-type dir-entity) #\3)
-           (send canvas append-string (gopher-dir-entity-user-name dir-entity))
-           (send canvas append-string "\n")]
+           (send canvas append-string (gopher-dir-entity-user-name dir-entity))]
           ;; insert informational lines as plain text
           [(equal? (gopher-dir-entity-type dir-entity) #\i)
            (send canvas append-string "       " #f #f)  ; indent information text to line up with menu items
-           (send canvas append-string (gopher-dir-entity-user-name dir-entity))
-           (send canvas append-string "\n")]
+           (if (= (string-length (gopher-dir-entity-user-name dir-entity)) 0)
+               (send canvas append-string "\n")
+               (send canvas append-string (gopher-dir-entity-user-name dir-entity)))]
           [else
-           (insert-menu-item canvas dir-entity)
-           (send canvas append-string "\n")]))
+           (insert-menu-item canvas dir-entity)]))
       ;; be permissive of blank lines
       (send canvas append-string "\n")))
 

@@ -196,7 +196,7 @@
       (define-values (left top) (get-view-start))
       (define-values (right bottom) (values (+ left dw) (+ top dh)))
 
-      (printf "elements head value ~a~n" (dlist-head-value elements))
+      ;(printf "elements head value ~a~n" (dlist-head-value elements))
 
       (when (> (dlist-length elements) 0)
         (define cursor (dlist-cursor elements))
@@ -220,7 +220,7 @@
                  (set-dlist-tail! cursor #f)
                  (set-dlist-tail! cursor (dlist-tail-prev cursor)))]))
         (set! visible-elements cursor)
-        (printf "set-visible-elements ~a to ~a~n" (dlist-head-value visible-elements) (dlist-tail-value visible-elements))))
+        #;(printf "set-visible-elements ~a to ~a~n" (dlist-head-value visible-elements) (dlist-tail-value visible-elements))))
 
     (define (adjust-visible-elements-forward! cursor top bottom)
       ;; advance the tail to last visible element
@@ -959,7 +959,7 @@
       (define-values (left top) (values scroll-x scroll-y))
       (define-values (right bottom) (values (+ left cw) (+ top ch)))
 
-      (printf "on-paint ~ax~a of ~ax~a at ~ax~a~n" cw ch vw vh left top)
+      ;(printf "on-paint ~ax~a of ~ax~a at ~ax~a~n" cw ch vw vh left top)
       
       (when (not visible-elements)
         (set-visible-elements!))
@@ -1018,7 +1018,7 @@
       (define-values (right bottom) (values (+ left dw) (+ top dh)))
 
       (define-values (w h) (get-size))
-      (printf "on-size client=~ax~a window=~ax~a canvas=~ax~a~n" cw ch w h dw dh)
+      ;(printf "on-size client=~ax~a window=~ax~a canvas=~ax~a~n" cw ch w h dw dh)
 
       (when (not visible-elements)
         (set-visible-elements!))
@@ -1073,7 +1073,7 @@
               (set-visible-elements!)
               (update-visible-elements! (- new-scroll-pos scroll-pos) scroll-y (+ scroll-y ch)))
 
-          (printf "new scroll-y ~a, max ~a~n" scroll-y (get-scroll-range 'vertical))
+          ;(printf "new scroll-y ~a, max ~a~n" scroll-y (get-scroll-range 'vertical))
           (refresh))))
     
     (define/override (on-event event)
