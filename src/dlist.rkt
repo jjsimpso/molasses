@@ -79,7 +79,7 @@
       (dlink-prev (dlist-tail dl))
       #f))
 
-;; returns a dlink or #f
+;; returns the value of element at index or #f
 ;; ideally i'd like this to throw an exception instead of returning #f, as list-ref does
 (define (dlist-ref dl index)
   (for/or ([node (in-dlist dl)]
