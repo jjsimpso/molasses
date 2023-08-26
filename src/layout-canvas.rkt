@@ -63,18 +63,18 @@
     (define place-x 0)
     (define place-y 0)
     
-    (define (get-drawable-size)
+    (define/public (get-drawable-size)
       (define-values (cw ch) (get-client-size))
       (values (- cw (* 2 xmargin))
               (- ch (* 2 ymargin))))
 
     ;; replaces version from canvas% since we're using manual scrollbars
-    (define (get-virtual-size)
+    (define/override (get-virtual-size)
       (values (+ canvas-width (* xmargin 2))
               (+ canvas-height (* ymargin 2))))
 
     ;; replaces version from canvas% since we're using manual scrollbars
-    (define (get-view-start)
+    (define/override (get-view-start)
       (values scroll-x scroll-y))
 
     (struct text-extent
@@ -1039,7 +1039,8 @@
       (set! cached-client-height ch)
 
       ;; need to update the scroll range when the client size changes
-      (call-with-values get-virtual-size update-scrollbars))
+      (define-values (vx vy) (get-virtual-size))
+      (update-scrollbars vx vy))
 
     (define (select-element x y)
       (for/or ([e (in-dlist visible-elements)]
@@ -1103,7 +1104,8 @@
       (set! mode m)
       (unless (dlist-empty? elements)
         (reset-layout)
-        (call-with-values get-virtual-size update-scrollbars)
+        (let-values ([(x y) (get-virtual-size)])
+          (update-scrollbars x y))
         (refresh)))
 
     ;; clear the canvas contents
@@ -1138,15 +1140,21 @@
     ;; layout-canvas% users don't have direct access to the elements, so they may need to
     ;; find an element's position using the snip(or string) that they added to the canvas
     (define/public (lookup-snip-position s)
-      (for/first ([e (in-dlist elements)]
-                  #:when (eq? (element-snip e) s))
-        (values (element-xpos e)
-                (element-ypos e))))
+      (define elem
+        (for/first ([e (in-dlist elements)]
+                    #:when (eq? (element-snip e) s))
+          e))
+      (if elem
+          (values (element-xpos elem)
+                  (element-ypos elem))
+          (error "lookup-snip-position failed to find snip!")))
+    
     ;;
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned])
       (define e (element s end-of-line alignment))
       (place-element e place-x place-y)
-      (call-with-values get-virtual-size update-scrollbars)
+      (define-values (vx vy) (get-virtual-size))
+      (update-scrollbars vx vy)
       (dlist-append! elements e))
     
     ;; append string using the default stlye
@@ -1160,13 +1168,15 @@
            (define e (element line end-of-line alignment))
            (set-element-text-style! e (or style default-style))
            (place-element e place-x place-y)
-           (call-with-values get-virtual-size update-scrollbars)
+           (define-values (vx vy) (get-virtual-size))
+           (update-scrollbars vx vy)
            (dlist-append! elements e))]
         [else
          (define e (element s end-of-line alignment))
          (set-element-text-style! e (or style default-style))
          (place-element e place-x place-y)
-         (call-with-values get-virtual-size update-scrollbars)
+         (define-values (vx vy) (get-virtual-size))
+         (update-scrollbars vx vy)
          (dlist-append! elements e)]))
       
     (define/public (get-style-list) styles)
