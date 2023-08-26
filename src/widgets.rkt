@@ -923,10 +923,13 @@
     (inherit set-canvas-background
              lookup-snip-position
              get-client-size
+             get-drawable-size
+             get-view-start
              get-style-list
              begin-edit-sequence
              end-edit-sequence
              in-edit-sequence?
+             refresh
              scroll-to)
 
     (field [editor-busy? #f]
@@ -939,11 +942,35 @@
     (define history '())
     (define status-text "Ready")
 
-    ;; keep list of gopher menu entries
+    ;; keep dlist of gopher menu entries (menu-item-snip%'s)
     (define menu-items (dlist-new))
 
     (define/private (selection-snip selection)
-      (dlink-value (cdr selection)))
+      (if (pair? selection)
+          (dlink-value (cdr selection))
+          (error "selection-snip: invalid selection")))
+
+    (define/private (current-selection-visible?)
+      (define snip (selection-snip menu-selection))
+      (if snip
+          (let-values ([(x y) (lookup-snip-position snip)]
+                       [(w h) (get-drawable-size)]
+                       [(ox oy) (get-view-start)])
+            (if (and (>= y oy)
+                     (<= y (+ oy h)))
+                #t
+                #f))
+          #f))
+
+    (define (highlight selection)
+      (define snip (selection-snip menu-selection))
+      (define new-style (send (get-style-list) find-named-style "Link Highlight"))
+      (send snip set-style new-style))
+
+    (define (unhighlight selection)
+      (define snip (selection-snip menu-selection))
+      (define new-style (send (get-style-list) find-named-style "Link"))
+          (send snip set-style new-style))
     
     ;; return a pair representing the menu selection or #f
     (define/private (find-next-menu-item)
@@ -960,16 +987,19 @@
                         (dlink-prev (cdr menu-selection))))
       
       (if node
-          (cons (sub1 (car menu-selection) node))
+          (cons (sub1 (car menu-selection)) node)
           #f))
 
     ;; return a pair representing the menu selection or #f
     ;; index starts at 1, which maps to index 0 in our dlist
     (define/private (find-menu-item index)
-      (define node (dlist-ref menu-items (sub1 index)))
-      (if node
-          (cons index node)
-          #f))
+      (let loop ([node (dlist-head menu-items)]
+                 [i 1])
+        (cond
+          [(not node) #f]
+          [(= i index) (cons index node)]
+          [else
+           (loop (dlink-next node) (add1 i))])))
     
     ;; return a pair representing the menu selection or #f
     (define/public (find-first-menu-item)
@@ -1179,9 +1209,117 @@
       (super on-event event))
     
     (define/override (on-char event)
-      (super on-char event))
-))
-    
+      (if gopher-menu?
+          (case (send event get-key-code)
+            [(down)
+             (cond
+               [(or (not (cdr menu-selection)) (current-selection-visible?))
+                ;; change selection to the next menu snip
+                (define item (find-next-menu-item))
+                (when item
+                  (eprintf "browser-text on-char down: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
+                  (unhighlight menu-selection)
+                  (set! menu-selection item)
+                  (highlight menu-selection)
+                  (if (not (current-selection-visible?))
+                      (let-values ([(x y) (lookup-snip-position (selection-snip item))]
+                                   [(w h) (get-drawable-size)])
+                        (scroll-to (- y (/ h 4))))
+                      (refresh)))]
+               [else
+                ;; just scroll to make the selected menu snip visible
+                (define-values (x y) (lookup-snip-position (selection-snip menu-selection)))
+                (define-values (w h) (get-drawable-size))
+                (scroll-to (- y (/ h 4)))])]
+            [(up)
+             (define item (find-prev-menu-item))
+             (when item
+               (eprintf "browser-text on-char up: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
+               (unhighlight menu-selection)
+               (set! menu-selection item)
+               (highlight menu-selection)
+               (if (not (current-selection-visible?))
+                   ;; scroll up to show the previous page
+                   (let-values ([(x y) (lookup-snip-position (selection-snip item))]
+                                [(w h) (get-drawable-size)])
+                     (scroll-to (- y (* (/ h 4) 3))))
+                   (refresh)))]
+            [(left)
+             (go-back)]
+            [(right #\return)
+             (when menu-selection
+               (go (dir-entity->request (get-field dir-entity (selection-snip menu-selection)))))]
+            #;[(next)
+             (define start (box 0))
+             (define end (box 0))
+             (get-visible-line-range start end #f)
+             (define new-start (add1 (unbox end)))
+             (define new-end (+ (unbox end)
+                                (- (unbox end) (unbox start))))
+             (scroll-to-position (line-start-position new-start)
+                                 #f
+                                 (line-start-position new-end)
+                                 'end)
+             (when selection
+               (define item (find-next-menu-snip-in-region selection new-start new-end))
+               (when (and item (not (eq? item selection)))
+                 (define pos (get-snip-position item))
+                 (change-highlight selection item)
+                 (set! selection item)
+                 (set-position pos 'same #f #t 'default)))]
+            #;[(prior)
+             (define start (box 0))
+             (define end (box 0))
+             (get-visible-line-range start end #f)
+             (define new-start (max 0
+                                    (- (unbox start)
+                                       (- (unbox end) (unbox start)))))
+             (define new-end (max 0 (sub1 (unbox start))))
+             (scroll-to-position (line-start-position new-start)
+                                 #f
+                                 (line-start-position new-end)
+                                 'start)
+             (when selection
+               (define item (find-prev-menu-snip-in-region selection new-start new-end))
+               (when (and item (not (eq? item selection)))
+                 (define pos (get-snip-position item))
+                 (change-highlight selection item)
+                 (set! selection item)
+                 (set-position pos 'same #f #t 'default)))]
+            [else
+             (define key-code (send event get-key-code))
+             (eprintf "browser-canvas on-char: unhandled key ~a~n" key-code)
+             (void)])
+          (case (send event get-key-code)
+            [(left)
+             (go-back)]
+            #;[(right)
+             (void)]
+            #;[(up)
+             ;; scroll the screen up one line
+             (define start (box 0))
+             (define end (box 0))
+             (get-visible-line-range start end #f)
+             (define new-line (max 0 (sub1 (unbox start))))
+             ;(eprintf "range (~a,~a): new line = ~a~n" (unbox start) (unbox end) new-line)
+             (set-position (line-start-position new-line))]
+            #;[(down)
+             ;; scroll the screen one line
+             (define start (box 0))
+             (define end (box 0))
+             (get-visible-line-range start end #f)
+             ;; setting the position to the last line will scroll the screen by one
+             ;; don't have to actually set the position to the next visible line
+             (define new-line (min (position-line (last-position))
+                                   (unbox end)))
+             ;(eprintf "range (~a,~a): new line = ~a~n" (unbox start) (unbox end) new-line)
+             (set-position (line-start-position new-line))]
+            #;[(next prior home end)
+             (super on-char event)]
+            [else
+             (void)])))
+    ))
+
 (define menu-item-snip%
   (class string-snip%
     (init-field [dir-entity #f]
@@ -1191,6 +1329,9 @@
     (set-flags (cons 'handles-all-mouse-events (get-flags)))
     ;(set-flags (cons 'handles-events (get-flags)))
 
+    (define/public (get-item-label)
+      (gopher-dir-entity-user-name dir-entity))
+    
     (define (follow-link)
       ;(set-field! selection text-widget snip)
       (send browser-canvas go (dir-entity->request dir-entity)))
