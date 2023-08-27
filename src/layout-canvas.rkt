@@ -980,7 +980,7 @@
               (send current-style switch-to dc #f))
             (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                          (+ (- (element-ypos e) top) ymargin)))
-            ;(printf "snip at ~ax~a, text=~a~n" x y  (element-snip e))
+            ;(printf "  snip at ~ax~a, text=~a~n" x y  (element-snip e))
             (if (and (wrap-text?) (string? (element-snip e)))
                 (draw-wrapped-text e dc left top)
                 (draw e dc
@@ -1148,16 +1148,23 @@
           (values (element-xpos elem)
                   (element-ypos elem))
           (error "lookup-snip-position failed to find snip!")))
+
+    ;; add element e to the end of the elements dlist and update visible elements
+    (define (append-element e)
+      (define-values (cw ch) (get-client-size))
+      (dlist-append! elements e)
+      ; send a positive value to for change argument to trigger a check to expand tail of the visible-elements list
+      (update-visible-elements! 1 scroll-y (+ scroll-y ch)))
     
-    ;;
+    ;; append a snip. snips have their own style
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned])
       (define e (element s end-of-line alignment))
       (place-element e place-x place-y)
       (define-values (vx vy) (get-virtual-size))
       (update-scrollbars vx vy)
-      (dlist-append! elements e))
+      (append-element e))
     
-    ;; append string using the default stlye
+    ;; append a string using the default style and alignment (or provided style and alignment)
     (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned])
       (case mode
         [(plaintext wrapped)
@@ -1170,14 +1177,14 @@
            (place-element e place-x place-y)
            (define-values (vx vy) (get-virtual-size))
            (update-scrollbars vx vy)
-           (dlist-append! elements e))]
+           (append-element e))]
         [else
          (define e (element s end-of-line alignment))
          (set-element-text-style! e (or style default-style))
          (place-element e place-x place-y)
          (define-values (vx vy) (get-virtual-size))
          (update-scrollbars vx vy)
-         (dlist-append! elements e)]))
+         (append-element e)]))
       
     (define/public (get-style-list) styles)
 
