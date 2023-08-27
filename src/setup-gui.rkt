@@ -181,8 +181,7 @@
   (define (goto-bookmark url)
     (eprintf "opening bookmark to ~a~n" url)
     (define page-canvas (active-page-canvas tab-panel))
-    (define page-text (send page-canvas get-editor))
-    (send page-text go (url->request url))
+    (send page-canvas go (url->request url))
     (send page-canvas focus))
 
   (new menu-item%
