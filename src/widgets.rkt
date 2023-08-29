@@ -1109,7 +1109,8 @@
                          [(cw ch) (get-client-size)])
               (scroll-to (- y (floor (/ ch 4)))))
             ;; scroll to the beginning
-            (scroll-to 0))))
+            (scroll-to 0)))
+      (refresh))
 
     (define/public (cancel-request)
       (when (custodian? thread-custodian)
