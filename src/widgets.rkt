@@ -56,7 +56,7 @@
   (send canvas append-snip link-snip #t))
 
 (define (insert-directory-line canvas line)
-  (eprintf "insert-directory-line: ~a~n" line)
+  ;(eprintf "insert-directory-line: ~a~n" line)
   (if (non-empty-string? line)
       (let ([dir-entity (parse-dir-entity line)])
         (cond
@@ -950,8 +950,8 @@
           (dlink-value (cdr selection))
           (error "selection-snip: invalid selection")))
 
-    (define/private (current-selection-visible?)
-      (define snip (selection-snip menu-selection))
+    (define/private (selection-visible? selection)
+      (define snip (selection-snip selection))
       (if snip
           (let-values ([(x y) (lookup-snip-position snip)]
                        [(w h) (get-drawable-size)]
@@ -1007,6 +1007,44 @@
           (cons 1 (dlist-head menu-items))
           #f))
 
+    ;; return a pair representing the menu selection or #f
+    (define/private (find-next-visible-menu-item)
+      (define-values (w h) (get-drawable-size))
+      (define-values (ox oy) (get-view-start))
+      
+      (let loop ([index (car menu-selection)]
+                 [node (and (cdr menu-selection)
+                            (dlink-next (cdr menu-selection)))])
+        (if node
+            (let-values ([(x y) (lookup-snip-position (dlink-value node))])
+              (cond
+                [(< y oy)
+                 (loop (add1 index) (dlink-next node))]
+                [(> y (+ oy h))
+                 #f]
+                [else
+                 (cons index node)]))
+            #f)))
+
+    ;; return a pair representing the menu selection or #f
+    (define/private (find-prev-visible-menu-item)
+      (define-values (w h) (get-drawable-size))
+      (define-values (ox oy) (get-view-start))
+      
+      (let loop ([index (car menu-selection)]
+                 [node (and (cdr menu-selection)
+                            (dlink-prev (cdr menu-selection)))])
+        (if node
+            (let-values ([(x y) (lookup-snip-position (dlink-value node))])
+              (cond
+                [(< y oy)
+                 #f]
+                [(> y (+ oy h))
+                 (loop (sub1 index) (dlink-prev node))]
+                [else
+                 (cons index node)]))
+            #f)))
+
     (define/override (append-snip s [end-of-line #f] [alignment 'unaligned])
       (when (is-a? s menu-item-snip%)
         (dlist-append! menu-items s))
@@ -1061,6 +1099,7 @@
           (set! menu-selection (find-menu-item initial-selection-pos)) 
           (set! menu-selection (find-first-menu-item)))
       (when (cdr menu-selection)
+        (eprintf "highlight first menu item~n")
         (define snip (selection-snip menu-selection))
         (define new-style (send (get-style-list) find-named-style "Link Highlight"))
         (send snip set-style new-style)
@@ -1213,7 +1252,7 @@
           (case (send event get-key-code)
             [(down)
              (cond
-               [(or (not (cdr menu-selection)) (current-selection-visible?))
+               [(or (not (cdr menu-selection)) (selection-visible? menu-selection))
                 ;; change selection to the next menu snip
                 (define item (find-next-menu-item))
                 (when item
@@ -1221,7 +1260,7 @@
                   (unhighlight menu-selection)
                   (set! menu-selection item)
                   (highlight menu-selection)
-                  (if (not (current-selection-visible?))
+                  (if (not (selection-visible? menu-selection))
                       (let-values ([(x y) (lookup-snip-position (selection-snip item))]
                                    [(w h) (get-drawable-size)])
                         (scroll-to (- y (/ h 4))))
@@ -1238,7 +1277,7 @@
                (unhighlight menu-selection)
                (set! menu-selection item)
                (highlight menu-selection)
-               (if (not (current-selection-visible?))
+               (if (not (selection-visible? menu-selection))
                    ;; scroll up to show the previous page
                    (let-values ([(x y) (lookup-snip-position (selection-snip item))]
                                 [(w h) (get-drawable-size)])
@@ -1249,47 +1288,29 @@
             [(right #\return)
              (when menu-selection
                (go (dir-entity->request (get-field dir-entity (selection-snip menu-selection)))))]
-            #;[(next)
-             (define start (box 0))
-             (define end (box 0))
-             (get-visible-line-range start end #f)
-             (define new-start (add1 (unbox end)))
-             (define new-end (+ (unbox end)
-                                (- (unbox end) (unbox start))))
-             (scroll-to-position (line-start-position new-start)
-                                 #f
-                                 (line-start-position new-end)
-                                 'end)
-             (when selection
-               (define item (find-next-menu-snip-in-region selection new-start new-end))
-               (when (and item (not (eq? item selection)))
-                 (define pos (get-snip-position item))
-                 (change-highlight selection item)
-                 (set! selection item)
-                 (set-position pos 'same #f #t 'default)))]
-            #;[(prior)
-             (define start (box 0))
-             (define end (box 0))
-             (get-visible-line-range start end #f)
-             (define new-start (max 0
-                                    (- (unbox start)
-                                       (- (unbox end) (unbox start)))))
-             (define new-end (max 0 (sub1 (unbox start))))
-             (scroll-to-position (line-start-position new-start)
-                                 #f
-                                 (line-start-position new-end)
-                                 'start)
-             (when selection
-               (define item (find-prev-menu-snip-in-region selection new-start new-end))
-               (when (and item (not (eq? item selection)))
-                 (define pos (get-snip-position item))
-                 (change-highlight selection item)
-                 (set! selection item)
-                 (set-position pos 'same #f #t 'default)))]
+            [(next)
+             (define-values (x y) (get-view-start))
+             (define-values (w h) (get-drawable-size))
+             (scroll-to (+ y h))
+             (unless (selection-visible? menu-selection)
+               (define item (find-next-visible-menu-item))
+               (when item
+                 (unhighlight menu-selection)
+                 (set! menu-selection item)
+                 (highlight menu-selection)))]
+            [(prior)
+             (define-values (x y) (get-view-start))
+             (define-values (w h) (get-drawable-size))
+             (scroll-to (- y h))
+             (unless (selection-visible? menu-selection)
+               (define item (find-prev-visible-menu-item))
+               (when item
+                 (unhighlight menu-selection)
+                 (set! menu-selection item)
+                 (highlight menu-selection)))]            
             [else
              (define key-code (send event get-key-code))
-             (eprintf "browser-canvas on-char: unhandled key ~a~n" key-code)
-             (void)])
+             (super on-char event)])
           (case (send event get-key-code)
             [(left)
              (go-back)]
