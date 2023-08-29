@@ -1313,7 +1313,7 @@
   (init-styles (send canvas get-style-list))
   (send canvas set-canvas-background canvas-bg-color)
 
-  (define layout-test '#f)
+  (define layout-test 'large)
   (if layout-test
       (send canvas set-mode 'layout)
       (send canvas set-mode 'wrapped))
@@ -1330,7 +1330,7 @@
             [square-left (make-object image-snip% "test/square-left.png")]
             [square-right (make-object image-snip% "test/square-right.png")]
             [square-center (make-object image-snip% "test/square-center.png")]
-            [thg (make-object image-snip% "test/thg.png")]
+            [big (make-object image-snip% "test/big.png")]
             [tall (make-object image-snip% "test/tall.png")]
             [tall-left (make-object image-snip% "test/tall-left.png")]
             [tall-right (make-object image-snip% "test/tall-right.png")])
@@ -1377,7 +1377,7 @@
            ;(send canvas append-snip square)
            ;(send canvas append-snip tall)
            ;(send canvas append-snip square #t)
-           (send canvas append-snip thg)
+           (send canvas append-snip big)
            
            (send canvas append-snip square-right #f 'right)
            (send canvas append-snip tall-left #f 'left)
