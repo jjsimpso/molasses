@@ -1057,25 +1057,30 @@
       (define key-code (send event get-key-code))
       (case (send event get-key-code)
         [(wheel-up wheel-down)
-         (define-values (cw ch) (get-client-size))
          (define max-scroll (get-scroll-range 'vertical))
          (define scroll-pos (get-scroll-pos 'vertical))
          (define new-scroll-pos
            (if (eq? key-code 'wheel-up)
                (max 0 (- scroll-pos wheel-step))
                (min max-scroll (+ scroll-pos wheel-step))))
-         (when (not (= new-scroll-pos scroll-pos))
-           (set! scroll-y new-scroll-pos)
-           (set-scroll-pos 'vertical new-scroll-pos)
-           
-           (if (not visible-elements)
-               (set-visible-elements!)
-               (update-visible-elements! (- new-scroll-pos scroll-pos) scroll-y (+ scroll-y ch)))
-
-           ;(printf "new scroll-y ~a, max ~a~n" scroll-y (get-scroll-range 'vertical))
-           (refresh))]
+         (printf "new scroll-y ~a, max ~a~n" scroll-y max-scroll)
+         (scroll-to new-scroll-pos)]
         [(next)
-         void]))
+         (define-values (dw dh) (get-drawable-size))
+         (define-values (x y) (get-view-start))
+         (printf "page down to ~a~n" (+ y dh))
+         (scroll-to (+ y dh))]
+        [(prior)
+         (define-values (dw dh) (get-drawable-size))
+         (define-values (x y) (get-view-start))
+         (printf "page up to ~a~n" (- y dh))
+         (scroll-to (- y dh))]
+        [(home)
+         (scroll-to 0)]
+        [(end)
+         (define-values (vx vy) (get-virtual-size))
+         (define-values (dw dh) (get-drawable-size))
+         (scroll-to (- vy dh))]))
     
     (define/override (on-event event)
       (case (send event get-event-type)
@@ -1324,7 +1329,7 @@
   (init-styles (send canvas get-style-list))
   (send canvas set-canvas-background canvas-bg-color)
 
-  (define layout-test 'large)
+  (define layout-test #f)
   (if layout-test
       (send canvas set-mode 'layout)
       (send canvas set-mode 'wrapped))
