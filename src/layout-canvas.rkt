@@ -1053,29 +1053,29 @@
              (<= x (+ (element-xpos e) (unbox w)))
              e)))
 
-    (define/override (on-char ch)
-      (define key-code (send ch get-key-code))
-      (when (or (eq? key-code 'wheel-up)
-                (eq? key-code 'wheel-down))
+    (define/override (on-char event)
+      (define key-code (send event get-key-code))
+      (case (send event get-key-code)
+        [(wheel-up wheel-down)
+         (define-values (cw ch) (get-client-size))
+         (define max-scroll (get-scroll-range 'vertical))
+         (define scroll-pos (get-scroll-pos 'vertical))
+         (define new-scroll-pos
+           (if (eq? key-code 'wheel-up)
+               (max 0 (- scroll-pos wheel-step))
+               (min max-scroll (+ scroll-pos wheel-step))))
+         (when (not (= new-scroll-pos scroll-pos))
+           (set! scroll-y new-scroll-pos)
+           (set-scroll-pos 'vertical new-scroll-pos)
+           
+           (if (not visible-elements)
+               (set-visible-elements!)
+               (update-visible-elements! (- new-scroll-pos scroll-pos) scroll-y (+ scroll-y ch)))
 
-        (define-values (cw ch) (get-client-size))
-        (define max-scroll (get-scroll-range 'vertical))
-        (define scroll-pos (get-scroll-pos 'vertical))
-        (define new-scroll-pos
-          (if (eq? key-code 'wheel-up)
-              (max 0 (- scroll-pos wheel-step))
-              (min max-scroll (+ scroll-pos wheel-step))))
-
-        (when (not (= new-scroll-pos scroll-pos))
-          (set! scroll-y new-scroll-pos)
-          (set-scroll-pos 'vertical new-scroll-pos)
-        
-          (if (not visible-elements)
-              (set-visible-elements!)
-              (update-visible-elements! (- new-scroll-pos scroll-pos) scroll-y (+ scroll-y ch)))
-
-          ;(printf "new scroll-y ~a, max ~a~n" scroll-y (get-scroll-range 'vertical))
-          (refresh))))
+           ;(printf "new scroll-y ~a, max ~a~n" scroll-y (get-scroll-range 'vertical))
+           (refresh))]
+        [(next)
+         void]))
     
     (define/override (on-event event)
       (case (send event get-event-type)
@@ -1139,15 +1139,26 @@
 
     ;; layout-canvas% users don't have direct access to the elements, so they may need to
     ;; find an element's position using the snip(or string) that they added to the canvas
-    (define/public (lookup-snip-position s)
+    (define/public (lookup-snip-position-size s)
       (define elem
         (for/first ([e (in-dlist elements)]
                     #:when (eq? (element-snip e) s))
           e))
-      (if elem
-          (values (element-xpos elem)
-                  (element-ypos elem))
-          (error "lookup-snip-position failed to find snip!")))
+
+      (cond
+        [(and elem (or (false? (element-lines elem))
+                       (empty? (element-lines elem))))
+         (values (element-xpos elem)
+                 (element-ypos elem)
+                 (get-element-width elem)
+                 (get-element-height elem))]
+        [elem
+         (values (element-xpos elem)
+                 (element-ypos elem)
+                 (get-element-width (car (element-lines elem)))
+                 (get-element-height (car (element-lines elem))))]
+        [else
+         (error "lookup-snip-position-size failed to find snip!")]))
 
     ;; add element e to the end of the elements dlist and update visible elements
     (define (append-element e)

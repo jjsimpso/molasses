@@ -921,7 +921,7 @@
                 [update-status-cb #f]
                 [update-address-cb #f])
     (inherit set-canvas-background
-             lookup-snip-position
+             lookup-snip-position-size
              get-client-size
              get-drawable-size
              get-view-start
@@ -953,11 +953,13 @@
     (define/private (selection-visible? selection)
       (define snip (selection-snip selection))
       (if snip
-          (let-values ([(x y) (lookup-snip-position snip)]
+          (let-values ([(sx sy sw sh) (lookup-snip-position-size snip)]
                        [(w h) (get-drawable-size)]
                        [(ox oy) (get-view-start)])
-            (if (and (>= y oy)
-                     (<= y (+ oy h)))
+            ;; only visible if the entire selection is visible
+            ;; gopher menu items selections are only one line, so there shouldn't be edge cases
+            (if (and (>= sy oy)
+                     (<= (+ sy sh) (+ oy h)))
                 #t
                 #f))
           #f))
@@ -1016,7 +1018,7 @@
                  [node (and (cdr menu-selection)
                             (dlink-next (cdr menu-selection)))])
         (if node
-            (let-values ([(x y) (lookup-snip-position (dlink-value node))])
+            (let-values ([(x y w h) (lookup-snip-position-size (dlink-value node))])
               (cond
                 [(< y oy)
                  (loop (add1 index) (dlink-next node))]
@@ -1035,7 +1037,7 @@
                  [node (and (cdr menu-selection)
                             (dlink-prev (cdr menu-selection)))])
         (if node
-            (let-values ([(x y) (lookup-snip-position (dlink-value node))])
+            (let-values ([(x y w h) (lookup-snip-position-size (dlink-value node))])
               (cond
                 [(< y oy)
                  #f]
@@ -1105,7 +1107,7 @@
         (send snip set-style new-style)
         (if initial-selection-pos
             ;; make the selection visible but not at the very top
-            (let-values ([(x y) (lookup-snip-position snip)]
+            (let-values ([(x y w h) (lookup-snip-position-size snip)]
                          [(cw ch) (get-client-size)])
               (scroll-to (- y (floor (/ ch 4)))))
             ;; scroll to the beginning
@@ -1262,15 +1264,15 @@
                   (set! menu-selection item)
                   (highlight menu-selection)
                   (if (not (selection-visible? menu-selection))
-                      (let-values ([(x y) (lookup-snip-position (selection-snip item))]
+                      (let-values ([(sx sy sw sh) (lookup-snip-position-size (selection-snip item))]
                                    [(w h) (get-drawable-size)])
-                        (scroll-to (- y (/ h 4))))
+                        (scroll-to (- sy (/ h 4))))
                       (refresh)))]
                [else
                 ;; just scroll to make the selected menu snip visible
-                (define-values (x y) (lookup-snip-position (selection-snip menu-selection)))
+                (define-values (sx sy sw sh) (lookup-snip-position-size (selection-snip menu-selection)))
                 (define-values (w h) (get-drawable-size))
-                (scroll-to (- y (/ h 4)))])]
+                (scroll-to (- sy (/ h 4)))])]
             [(up)
              (define item (find-prev-menu-item))
              (when item
@@ -1280,9 +1282,9 @@
                (highlight menu-selection)
                (if (not (selection-visible? menu-selection))
                    ;; scroll up to show the previous page
-                   (let-values ([(x y) (lookup-snip-position (selection-snip item))]
+                   (let-values ([(sx sy sw sh) (lookup-snip-position-size (selection-snip item))]
                                 [(w h) (get-drawable-size)])
-                     (scroll-to (- y (* (/ h 4) 3))))
+                     (scroll-to (- sy (* (/ h 4) 3))))
                    (refresh)))]
             [(left)
              (go-back)]
@@ -1315,7 +1317,7 @@
           (case (send event get-key-code)
             [(left)
              (go-back)]
-            #;[(right)
+            [(right)
              (void)]
             #;[(up)
              ;; scroll the screen up one line
@@ -1339,7 +1341,7 @@
             #;[(next prior home end)
              (super on-char event)]
             [else
-             (void)])))
+             (super on-char event)])))
     ))
 
 (define menu-item-snip%
