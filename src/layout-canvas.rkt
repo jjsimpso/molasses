@@ -39,7 +39,7 @@
     (define snip-ymargin 3)
     
     ;; initially hide both scrollbars 
-    (init-manual-scrollbars #f #f (* xmargin 2) (* ymargin 2) 0 0)
+    (init-manual-scrollbars #f #f 10 10 0 0)
 
     ;(send this wheel-event-mode 'integer)
     
@@ -70,8 +70,7 @@
 
     ;; replaces version from canvas% since we're using manual scrollbars
     (define/override (get-virtual-size)
-      (values (+ canvas-width (* xmargin 2))
-              (+ canvas-height (* ymargin 2))))
+      (values canvas-width canvas-height))
 
     ;; replaces version from canvas% since we're using manual scrollbars
     (define/override (get-view-start)
@@ -285,12 +284,12 @@
     ;; update the manual scrollbars range and hide/unhide them
     ;; new width and height are in pixels
     (define (update-scrollbars new-width new-height)
-      (define-values (cw ch) (get-client-size))
-      (set-scroll-range 'horizontal (max 0 (- new-width cw)))
-      (set-scroll-range 'vertical (max 0 (- new-height ch)))
-      (set-scroll-page 'horizontal cw)
-      (set-scroll-page 'vertical ch)
-      (show-scrollbars (> new-width cw) (> new-height ch)))
+      (define-values (dw dh) (get-drawable-size))
+      (set-scroll-range 'horizontal (max 0 (- new-width dw)))
+      (set-scroll-range 'vertical (max 0 (- new-height dh)))
+      (set-scroll-page 'horizontal dw)
+      (set-scroll-page 'vertical dh)
+      (show-scrollbars (> new-width dw) (> new-height dh)))
 
     (define (calc-word-extents e)
       (define (line-break? c)
@@ -956,8 +955,7 @@
       (define-values (cw ch) (get-client-size))
       (define-values (vw vh) (get-virtual-size))
       ;; position of viewport in virtual canvas
-      (define-values (left top) (values scroll-x scroll-y))
-      (define-values (right bottom) (values (+ left cw) (+ top ch)))
+      (define-values (left top) (get-view-start))
 
       ;(printf "on-paint ~ax~a of ~ax~a at ~ax~a~n" cw ch vw vh left top)
       
@@ -988,20 +986,22 @@
                       x y
                       (- cw xmargin) (- ch ymargin)
                       0 0)))
-          ;; clear bottom and right margins in case it was drawn to
+          ;; clear top, bottom and right margins in case they were drawn to
+          ;; top is needed for cases where an element is partially above the viewable area
+          (clear-rectangle 0 0 cw ymargin)
           (clear-rectangle 0 (- ch ymargin) cw ymargin)
           (clear-rectangle (- cw xmargin) 0 xmargin ch))
         (lambda ()
           (send dc resume-flush))))
 
     (define/override (on-scroll event)
-      (define-values (cw ch) (get-client-size))
+      (define-values (dw dh) (get-drawable-size))
 
       ;(printf "on-scroll: ~a ~a~n" (send event get-direction) (send event get-position))
       
       (if (eq? (send event get-direction) 'vertical)
           (let* ([top (send event get-position)]
-                 [bottom (+ top ch)]
+                 [bottom (+ top dh)]
                  [change (- top scroll-y)])
             (set! scroll-y top)
             (if (not visible-elements)
@@ -1123,7 +1123,7 @@
       (refresh))
 
     (define/public (scroll-to y)
-      (define-values (cw ch) (get-client-size))
+      (define-values (dw dh) (get-drawable-size))
       (define max-scroll (get-scroll-range 'vertical))
       (define old-scroll-pos scroll-y)
       (define new-scroll-pos
@@ -1139,7 +1139,7 @@
         
         (if (not visible-elements)
             (set-visible-elements!)
-            (update-visible-elements! (- new-scroll-pos old-scroll-pos) scroll-y (+ scroll-y ch)))
+            (update-visible-elements! (- new-scroll-pos old-scroll-pos) scroll-y (+ scroll-y dh)))
         (refresh)))
 
     ;; layout-canvas% users don't have direct access to the elements, so they may need to
@@ -1167,10 +1167,10 @@
 
     ;; add element e to the end of the elements dlist and update visible elements
     (define (append-element e)
-      (define-values (cw ch) (get-client-size))
+      (define-values (dw dh) (get-drawable-size))
       (dlist-append! elements e)
       ; send a positive value to for change argument to trigger a check to expand tail of the visible-elements list
-      (update-visible-elements! 1 scroll-y (+ scroll-y ch)))
+      (update-visible-elements! 1 scroll-y (+ scroll-y dh)))
     
     ;; append a snip. snips have their own style
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned])
