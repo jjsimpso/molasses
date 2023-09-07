@@ -154,6 +154,7 @@
      (send canvas init-gopher-menu #f)
      (close-input-port (gopher-response-data-port resp))])
   (send canvas end-edit-sequence)
+  (send canvas refresh)
   (eprintf "goto-gopher UI update took ~a ms~n" (- (current-inexact-monotonic-milliseconds) update-start-time)))
 
 ;; download gopher selector to a temp file and open it with an external application
@@ -1112,8 +1113,7 @@
                          [(cw ch) (get-client-size)])
               (scroll-to (- y (floor (/ ch 4)))))
             ;; scroll to the beginning
-            (scroll-to 0)))
-      (refresh))
+            (scroll-to 0))))
 
     (define/public (cancel-request)
       (when (custodian? thread-custodian)
