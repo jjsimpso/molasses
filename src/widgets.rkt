@@ -921,7 +921,6 @@
                 [update-status-cb #f]
                 [update-address-cb #f])
     (inherit set-canvas-background
-             lookup-snip-position-size
              get-client-size
              get-drawable-size
              get-view-start
@@ -930,6 +929,8 @@
              end-edit-sequence
              in-edit-sequence?
              refresh
+             lookup-snip-position-size
+             first-visible-snip
              scroll-to)
 
     (field [editor-busy? #f]
@@ -1249,6 +1250,9 @@
 
     (define/override (on-event event)
       (super on-event event))
+
+    (define (lines-visible height line-height)
+      (truncate (/ height line-height)))
     
     (define/override (on-char event)
       (if gopher-menu?
@@ -1266,7 +1270,11 @@
                   (if (not (selection-visible? menu-selection))
                       (let-values ([(sx sy sw sh) (lookup-snip-position-size (selection-snip item))]
                                    [(w h) (get-drawable-size)])
-                        (scroll-to (- sy (/ h 4))))
+                        (scroll-to (- sy (/ h 4)))
+                        ;; nudge the visible area just a bit so that the first line isn't partially cut off
+                        (let*-values ([(first-snip) (first-visible-snip)]
+                                      [(sx sy sw sh) (lookup-snip-position-size first-snip)])
+                          (scroll-to sy)))
                       (refresh)))]
                [else
                 ;; just scroll to make the selected menu snip visible
@@ -1284,7 +1292,11 @@
                    ;; scroll up to show the previous page
                    (let-values ([(sx sy sw sh) (lookup-snip-position-size (selection-snip item))]
                                 [(w h) (get-drawable-size)])
-                     (scroll-to (- sy (* (/ h 4) 3))))
+                     (scroll-to (- sy (* (/ h 4) 3)))
+                     ;; nudge the visible area just a bit so that the first line isn't partially cut off
+                     (let*-values ([(first-snip) (first-visible-snip)]
+                                   [(sx sy sw sh) (lookup-snip-position-size first-snip)])
+                          (scroll-to sy)))
                    (refresh)))]
             [(left)
              (go-back)]
@@ -1295,6 +1307,10 @@
              (define-values (x y) (get-view-start))
              (define-values (w h) (get-drawable-size))
              (scroll-to (+ y h))
+             ;; nudge the visible area just a bit so that the first line isn't partially cut off
+             (let*-values ([(first-snip) (first-visible-snip)]
+                           [(sx sy sw sh) (lookup-snip-position-size first-snip)])
+               (scroll-to sy))
              (unless (selection-visible? menu-selection)
                (define item (find-next-visible-menu-item))
                (when item
@@ -1305,6 +1321,10 @@
              (define-values (x y) (get-view-start))
              (define-values (w h) (get-drawable-size))
              (scroll-to (- y h))
+             ;; nudge the visible area just a bit so that the first line isn't partially cut off
+             (let*-values ([(first-snip) (first-visible-snip)]
+                           [(sx sy sw sh) (lookup-snip-position-size first-snip)])
+               (scroll-to sy))
              (unless (selection-visible? menu-selection)
                (define item (find-prev-visible-menu-item))
                (when item
@@ -1338,8 +1358,6 @@
                                    (unbox end)))
              ;(eprintf "range (~a,~a): new line = ~a~n" (unbox start) (unbox end) new-line)
              (set-position (line-start-position new-line))]
-            #;[(next prior home end)
-             (super on-char event)]
             [else
              (super on-char event)])))
     ))

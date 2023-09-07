@@ -1165,6 +1165,11 @@
         [else
          (error "lookup-snip-position-size failed to find snip!")]))
 
+    (define/public (first-visible-snip)
+      (if (and visible-elements (dlist-head-value visible-elements))
+          (element-snip (dlist-head-value visible-elements))
+          #f))
+          
     ;; add element e to the end of the elements dlist and update visible elements
     (define (append-element e)
       (define-values (dw dh) (get-drawable-size))
