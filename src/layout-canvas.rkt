@@ -1119,6 +1119,8 @@
       (set! visible-elements #f)
       (set! scroll-x 0)
       (set! scroll-y 0)
+      (set-scroll-pos 'horizontal 0)
+      (set-scroll-pos 'vertical 0)
       (reset-layout)
       (refresh))
 
