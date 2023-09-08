@@ -265,11 +265,14 @@
         [(3) header3-style]))
     ;; skip the mandatory space character after the last '#'
     (define header-string (substring line (add1 octothorpe-count)))
-    (send canvas append-string header-string header-style))
+    (send canvas append-string header-string header-style #t))
   
   ; Plain text lines are anything else
   (define (line->text line)
-    (send canvas append-string line standard-style #t))
+    (if (non-empty-string? line)
+        (send canvas append-string line standard-style #t)
+        ;; be permissive of blank lines
+        (send canvas append-string "\n")))
   
   (define (make-link text url)
     (define link-snip (new gemini-link-snip% (url url)))
@@ -317,10 +320,11 @@
     (string-append (path->string (path-only path)) relative-path))
   
   (for ([line (in-lines data-port)])
+    (eprintf "gemini line=~a~n" line)
     (match line
       [(regexp gemini-link-re)
        (define-values (link-url link-name) (parse-link line))
-       (eprintf "link url=~a, name=~a~n" link-url link-name)
+       ;(eprintf "link url=~a, name=~a~n" link-url link-name)
        (send canvas append-snip (make-link link-name link-url) #t)
        ;; add clickback to link region
        #;(send text-widget set-clickback
@@ -371,6 +375,7 @@
     (send canvas begin-edit-sequence)
     (send canvas append-string msg)
     (send canvas end-edit-sequence)
+    (send canvas refresh)
     (close-input-port (gemini-response-data-port resp)))
   
   (define resp (gemini-fetch (request-host req)
@@ -421,6 +426,7 @@
           (send canvas append-string (format "Initiating download of ~a~n" (request-path/selector req)))
           (send canvas end-edit-sequence)
           (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]))
+     (send canvas refresh)
      (close-input-port (gemini-response-data-port resp))
      req]
     [(30 31)
@@ -430,6 +436,7 @@
      (send canvas begin-edit-sequence)
      (send canvas append-string (format "Initiating download of ~a~n" (request-path/selector req)))
      (send canvas end-edit-sequence)
+     (send canvas refresh)
      (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]
     
     [(40) (show-gemini-error "Temporary failure")]
