@@ -1103,7 +1103,10 @@
                  event))]
         [else
          void]))
-    
+
+    (define/public (get-mode)
+      mode)
+
     ;;
     (define/public (set-mode m)
       (set! mode m)

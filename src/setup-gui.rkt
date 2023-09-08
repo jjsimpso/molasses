@@ -131,13 +131,14 @@
           (define canvas (active-page-canvas tab-panel))
           (when canvas
             (eprintf "word wrap demand callback~n")
-            #;(send item check (send ed auto-wrap)))))
+            (send item check (eq? (send canvas get-mode) 'wrapped)))))
        (callback 
         (lambda (item event)
           (define canvas (active-page-canvas tab-panel))
           (when canvas
             (eprintf "word wrap callback~n")
-            #;(send ed auto-wrap (send item is-checked?))))))
+            (define checked? (send item is-checked?))
+            (send canvas set-mode (if checked? 'wrapped 'plaintext))))))
 
   ;(append-editor-font-menu-items font-menu)
 
