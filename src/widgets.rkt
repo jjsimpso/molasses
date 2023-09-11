@@ -275,7 +275,7 @@
         (send canvas append-string "\n")))
   
   (define (make-link text url)
-    (define link-snip (new gemini-link-snip% (url url)))
+    (define link-snip (new gemini-link-snip% (url url) (browser-canvas canvas)))
     (send link-snip set-style link-style)
     (send link-snip insert text (string-length text))
     link-snip)
@@ -1382,7 +1382,6 @@
       (gopher-dir-entity-user-name dir-entity))
     
     (define (follow-link)
-      ;(set-field! selection text-widget snip)
       (send browser-canvas go (dir-entity->request dir-entity)))
     
     (define/override (on-event dc x y editorx editory e)
@@ -1392,26 +1391,30 @@
 
 (define gemini-link-snip%
   (class string-snip%
-    (init-field [url ""])
+    (init-field [url ""]
+                [browser-canvas #f])
     (inherit get-flags set-flags get-admin)
     (super-new)
     (set-flags (cons 'handles-all-mouse-events (get-flags)))
     (set-flags (cons 'handles-between-events (get-flags)))
 
     (define status-text (string-append "=> " url))
-    
+
+    (define (follow-link)
+      (send browser-canvas go (url->request url)))
+
     (define/override (on-event dc x y editorx editory event)
-      ;(eprintf "mouse event ~a~n" (send event get-event-type))
-      (when (send event moving?)
-        (define canvas (send (send (get-admin) get-editor) get-canvas))
-        ;(eprintf "mouse motion event~n")
-        (send canvas update-status status-text))
-      (super on-event dc x y editorx editory event))
+      (eprintf "gemini-link-snip% mouse event ~a~n" (send event get-event-type))
+      (cond
+        [(send event moving?)
+         ;(eprintf "mouse motion event~n")
+         (send browser-canvas update-status status-text)]
+        [(send event button-down? 'left)
+         (follow-link)]))
 
     (define/override (on-goodbye-event dc x y editorx editory event)
-      (define canvas (send (send (get-admin) get-editor) get-canvas))
       ;(eprintf "goodbye event~n")
-      (send canvas update-status "Ready"))))
+      (send browser-canvas update-status "Ready"))))
 
 ;; implements a text field that auto selects its contents when it gains focus
 (define address-field%
