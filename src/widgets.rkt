@@ -274,8 +274,8 @@
         ;; be permissive of blank lines
         (send canvas append-string "\n")))
   
-  (define (make-link text url)
-    (define link-snip (new gemini-link-snip% (url url) (browser-canvas canvas)))
+  (define (make-link text url base-url)
+    (define link-snip (new gemini-link-snip% (url url) (base-url base-url) (browser-canvas canvas)))
     (send link-snip set-style link-style)
     (send link-snip insert text (string-length text))
     link-snip)
@@ -325,7 +325,7 @@
       [(regexp gemini-link-re)
        (define-values (link-url link-name) (parse-link line))
        ;(eprintf "link url=~a, name=~a~n" link-url link-name)
-       (send canvas append-snip (make-link link-name link-url) #t)
+       (send canvas append-snip (make-link link-name link-url base-url) #t)
        ;; add clickback to link region
        #;(send text-widget set-clickback
              link-start-pos
@@ -1392,6 +1392,7 @@
 (define gemini-link-snip%
   (class string-snip%
     (init-field [url ""]
+                [base-url ""]
                 [browser-canvas #f])
     (inherit get-flags set-flags get-admin)
     (super-new)
@@ -1400,8 +1401,29 @@
 
     (define status-text (string-append "=> " url))
 
+    (define (replace-final-path-element path relative-path)
+      (string-append (path->string (path-only path)) relative-path))
+
     (define (follow-link)
-      (send browser-canvas go (url->request url)))
+      (eprintf "following gemini link: ~a~n" url)
+      (if (regexp-match #px"^(\\w+://).*" url)
+          (cond
+            [(string-prefix? url "gemini://")
+             (send browser-canvas go (url->request url))]
+            [(string-prefix? url "gopher://")
+             (send browser-canvas go (url->request url))]
+            [(or (string-prefix? url "http://")
+                 (string-prefix? url "https://"))
+             (send-url url #t)])
+          ;; handle partial URLs
+          (let ([base-req (url->request base-url)])
+            (send browser-canvas go
+                  (struct-copy request
+                               base-req
+                               [path/selector
+                                (if (equal? (string-ref url 0) #\/)
+                                    url
+                                    (replace-final-path-element (request-path/selector base-req) url))])))))
 
     (define/override (on-event dc x y editorx editory event)
       (eprintf "gemini-link-snip% mouse event ~a~n" (send event get-event-type))
