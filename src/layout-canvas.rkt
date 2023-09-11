@@ -1081,18 +1081,28 @@
          (define-values (vx vy) (get-virtual-size))
          (define-values (dw dh) (get-drawable-size))
          (scroll-to (- vy dh))]))
+
+    ;; store the element that has mouse focus. send on-goodbye-event to an element's snip if it loses focus
+    (define element-with-focus #f)
     
     (define/override (on-event event)
       (case (send event get-event-type)
-        [(left-down middle-down right-down)
+        [(left-down middle-down right-down motion)
          (define-values (left top) (get-view-start))
          (define-values (ex ey) (values (send event get-x)
                                         (send event get-y)))
          (define-values (x y) (values (- (+ ex left) xmargin)
                                       (- (+ ey top) ymargin)))
          (define e (select-element x y))
+
+         ;; send on-goodby-event to snips that lose mouse focus
+         (when (not (eq? e element-with-focus))
+           (when (and element-with-focus (is-a? (element-snip element-with-focus) snip%))
+             (send (element-snip element-with-focus) on-goodbye-event dc x y (element-xpos element-with-focus) (element-ypos element-with-focus) event))
+           (set! element-with-focus e))
+                
          (when (and e (is-a? (element-snip e) snip%))
-           (printf "on-event: button down event at ~ax~a, canvas:~ax~a, element at ~ax~a~n"
+           (printf "on-event: pass event to snip ~ax~a, canvas:~ax~a, element at ~ax~a~n"
                    (send event get-x) (send event get-y) x y (element-xpos e) (element-ypos e))
            (send (element-snip e) on-event
                  dc
