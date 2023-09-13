@@ -135,41 +135,30 @@
        (printf "skip ~a~n" node)
        (walk-sxml (cdr s))])))
 
-(define (convert-html a-port a-text img-ok?)
+(define (convert-html a-port canvas img-ok?)
   (define content (parse-html a-port))
+  (define style-list (send canvas get-style-list))
   (define html-basic-style
-    (let ([sl (send a-text get-style-list)])
-      (or (send sl find-named-style "Html Standard")
-          (send sl find-named-style "Standard")
-          (send sl find-named-style "Basic"))))
+    (or (send style-list find-named-style "Html Standard")
+        (send style-list find-named-style "Standard")
+        (send style-list find-named-style "Basic")))
+  (define current-style (make-parameter html-basic-style))
   (define current-style-delta (make-parameter (make-object style-delta% 'change-nothing)))
   (define current-block (make-parameter #f))
   ;; alignment is a special case since it isn't controlled by a style and must be applied to each paragraph
-  (define current-alignment 'left)  
+  (define current-alignment 'unaligned)  
   ;; don't use a parameter for link color since it will change so rarely
   (define current-link-color html-link-color)
   (define current-vlink-color html-vlink-color)
   (define current-font-size 3)
 
-  (define horz-inset (send (send a-text get-canvas) horizontal-inset))
+  (define horz-inset (send canvas horizontal-inset))
   
-  (with-method ([a-text-insert (a-text insert)]
-                [current-pos (a-text last-position)]
-                [delete (a-text delete)]
-                [get-character (a-text get-character)]
-                [change-style (a-text change-style)])
-
-    (define (get-font-size)
-      (send (send (send (send a-text find-snip (current-pos) 'after)
-                        get-style)
-                  get-font)
-            get-size))
+  (with-method ([append-string (canvas append-string)]
+                [append-snip (canvas append-snip)])
 
     (define (last-char-newline?)
-      (define cur-pos (current-pos))
-      (if (equal? cur-pos 0)
-          #t
-          (equal? (get-character (sub1 cur-pos)) #\newline)))
+      (send canvas last-element-eol?))
 
     (define (followed-by-newline? node)
       (eprintf "followed-by-newline? ~a~n" node)
@@ -183,30 +172,14 @@
     
     (define (insert-newline)
       (eprintf "inserting newline~n")
-      ;(define last-snip (send a-text find-snip (current-pos) 'after))
-      ;(send last-snip set-flags (cons 'hard-newline (send last-snip get-flags)))
-      ;; adding a hard-newline flag appears to prevent a string from being word wrapped,
-      ;; so add the flag to a new string containing a single space and then insert a newline 
-      (define space (make-object string-snip% " "))
-      (send space set-flags (cons 'hard-newline (send space get-flags)))
-      (send a-text insert "\n"))
+      (send canvas append-string "\n" #f #t))
 
     (define (start-new-paragraph)
-      (when (and (not (zero? (current-pos)))
-                 (not (last-char-newline?)))
+      void
+      #;(when (not (last-char-newline?))
         (eprintf "starting new paragraph~n")
         (insert-newline)
         (insert-newline)))
-
-    (define (set-alignment align)
-      ;(eprintf "setting alignment to ~a~n" align)
-      (send a-text set-paragraph-alignment
-            (send a-text position-paragraph (current-pos))
-            align))
-
-    (define (apply-current-style)
-      (change-style html-basic-style (current-pos))
-      (change-style (current-style-delta) (current-pos)))
 
     (define (is-block-element? elem)
       ;; treat head, title, and body as blocks even though they aren't technically block elements
@@ -231,7 +204,7 @@
         (case (car attr)
           [(bgcolor)
            (define bg-color (parse-color (cadr attr)))
-           (send (send a-text get-canvas) set-canvas-background bg-color)
+           (send canvas set-canvas-background bg-color)
            (send (current-style-delta) set-delta-background bg-color)
            (lambda () void)]
           [(text)
@@ -281,12 +254,13 @@
                   (cond
                     [(string-ci=? value "center") 'center]
                     [(string-ci=? value "left") 'left]
-                    [(string-ci=? value "right") 'right]))
+                    [(string-ci=? value "right") 'right]
+                    [else current-alignment]))
             (list (lambda ()
                     (set! current-alignment prev-alignment))))
           '()))
 
-    (define (handle-href node)
+    #;(define (handle-href node)
       (define href-value (sxml:attr node 'href))
       (if href-value
           (let ([link-start-pos (current-pos)]
@@ -311,7 +285,7 @@
          (handle-paragraph-attributes node)]
         [(a)
          (send (current-style-delta) set-delta-foreground current-link-color)
-         (handle-href node)]
+         #;(handle-href node)]
         [(b)
          (send (current-style-delta) set-delta 'change-bold)
          '()]
@@ -357,10 +331,8 @@
         [else
          '()]))
 
-    (send a-text set-styles-sticky #t)
-    (eprintf "sticky = ~a~n" (send a-text get-styles-sticky))
-    (send a-text change-style html-basic-style)
-        
+    (send canvas set-default-style html-basic-style)
+    
     (let loop ([s content])
       (unless (empty? s)
         (define node (car s))
@@ -385,25 +357,29 @@
                   [("left") 'left]
                   [("right") 'right]
                   [("center") 'center]
-                  [else 'center]))
+                  [else current-alignment]))
               (when (not (last-char-newline?))
                 (insert-newline))
-              (send a-text insert (new horz-line-snip%
-                                       [width-attribute width]
-                                       [align-attribute align]
-                                       [horz-offset horz-inset]))
+              (send canvas append-snip
+                    (new horz-line-snip%
+                         [width-attribute width]
+                         [align-attribute align]
+                         [horz-offset horz-inset])
+                    #t
+                    align)
               (insert-newline)]
              [(img)
               (when img-ok?
                 (define src-value (sxml:attr node 'src))
-                (define request (send a-text get-current-request))
+                (define request (send canvas get-current-request))
                 (when request
-                  #;(define align
+                  (define align
                     (case (sxml:attr node 'align)
                       [("left") 'left]
                       [("right") 'right]
-                      [else #f]))
-                  (send a-text insert (load-new-image-snip src-value request))))]
+                      [("center") 'center]
+                      [else current-alignment]))
+                  (send canvas append-snip (load-new-image-snip src-value request) #f align)))]
              [else
               (define style-copy (make-object style-delta% 'change-nothing))
               (send style-copy copy (current-style-delta))
@@ -412,7 +388,6 @@
                 ;; handle the element. returns a list of functions to call when closing the tag
                 ;; will also update the current style
                 (define close-tag-funcs (handle-element node))
-                (apply-current-style)
                 
                 ;; recurse into the element
                 (loop (cdr node))
@@ -432,27 +407,22 @@
                            (and (not (empty? (cdr s)))
                                 (not (followed-by-newline? (cadr s)))))
                   (insert-newline))
-                (insert-newline))
-              ;; reset the style
-              (apply-current-style)])
+                (insert-newline))])
            (loop (cdr s))]
           [(string? node)
            (case (current-block)
              [(head title)
               void]
              [(pre)
-              (define insert-pos (current-pos))
-              (a-text-insert node)
-              (eprintf "pre: ~a" node)
-              (send a-text set-paragraph-alignment (send a-text position-paragraph insert-pos) 'left)]
+              (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
+              (send canvas append-string node style)
+              (eprintf "pre: ~a" node)]
              [else
               (define text (string-normalize-spaces node))
               (when (non-empty-string? text)
-                (define insert-pos (current-pos))
-                (a-text-insert (string-append text " "))
-                (send a-text set-paragraph-alignment (send a-text position-paragraph insert-pos) current-alignment)
-                (eprintf "~a,~a,~a paragraph ~a: ~a~n" (current-block) current-alignment (get-font-size)
-                         (send a-text position-paragraph insert-pos) text))
+                (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
+                (send canvas append-string (string-append text " ") style #f current-alignment)
+                (eprintf "~a,~a paragraph: ~a~n" (current-block) current-alignment text))
               (when (not (non-empty-string? text))
                 (eprintf "skipped newline char~n"))])
            (loop (cdr s))]
@@ -465,13 +435,11 @@
     
     void))
 
-(define (render-html-to-text port text%-obj [img-ok? #f] [eval-ok? #f])
+(define (render-html-to-text port canvas [img-ok? #f] [eval-ok? #f])
   (unless (input-port? port)
-    (raise-type-error 'render-html-to-text "input port" 0 (list port text%-obj)))
+    (raise-type-error 'render-html-to-text "input port" 0 (list port canvas)))
   ;; TEMP - enable auto wrap automatically for html pages
-  (send text%-obj auto-wrap #t)
+  (send canvas set-mode 'layout)
   ;; set the canvas background color to match the default for html
-  (define canvas (send text%-obj get-active-canvas))
-  (when canvas
-    (send canvas set-canvas-background html-text-bg-color)) 
-  (convert-html port text%-obj img-ok?))
+  (send canvas set-canvas-background html-text-bg-color)
+  (convert-html port canvas img-ok?))

@@ -3,10 +3,14 @@
 (require racket/class
          racket/snip
          racket/draw
-         racket/format)
+         racket/format
+         net/sendurl)
+
+(require "request.rkt")
 
 (provide horz-line-snip%
-         img-hack-snip%)
+         img-hack-snip%
+         html-link-snip%)
 
 (define (next-break-pos s pos)
   (define (line-break? c)
@@ -202,3 +206,52 @@
       (new horz-line-snip%
            [width-attribute width-attribute]
            [align-attribute align-attribute]))))
+
+(define html-link-snip%
+  (class string-snip%
+    (init-field [url ""]
+                [base-url ""]
+                [browser-canvas #f])
+    (inherit get-flags set-flags)
+    (super-new)
+    (set-flags (cons 'handles-all-mouse-events (get-flags)))
+    (set-flags (cons 'handles-between-events (get-flags)))
+    
+    (define status-text (string-append "=> " url))
+
+    (define (replace-final-path-element path relative-path)
+      (string-append (path->string (path-only path)) relative-path))
+
+    (define (follow-link)
+      (eprintf "following html link: ~a~n" url)
+      (if (regexp-match #px"^(\\w+://).*" url)
+          (cond
+            [(string-prefix? url "gemini://")
+             (send browser-canvas go (url->request url))]
+            [(string-prefix? url "gopher://")
+             (send browser-canvas go (url->request url))]
+            [(or (string-prefix? url "http://")
+                 (string-prefix? url "https://"))
+             (send-url url #t)])
+          ;; handle partial URLs
+          (let ([base-req (url->request base-url)])
+            (send browser-canvas go
+                  (struct-copy request
+                               base-req
+                               [path/selector
+                                (if (equal? (string-ref url 0) #\/)
+                                    url
+                                    (replace-final-path-element (request-path/selector base-req) url))])))))
+
+    (define/override (on-event dc x y editorx editory event)
+      (eprintf "html-link-snip% mouse event ~a~n" (send event get-event-type))
+      (cond
+        [(send event moving?)
+         ;(eprintf "mouse motion event~n")
+         (send browser-canvas update-status status-text)]
+        [(send event button-down? 'left)
+         (follow-link)]))
+
+    (define/override (on-goodbye-event dc x y editorx editory event)
+      ;(eprintf "goodbye event~n")
+      (send browser-canvas update-status "Ready"))))

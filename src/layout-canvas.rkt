@@ -37,6 +37,14 @@
     (define ymargin vert-margin)
     (define snip-xmargin 5)
     (define snip-ymargin 3)
+
+    ;; method name from editor-canvas%
+    (define/public (horizontal-inset)
+      xmargin)
+
+    ;; method name from editor-canvas%
+    (define/public (vertical-inset)
+      ymargin)
     
     ;; initially hide both scrollbars 
     (init-manual-scrollbars #f #f 10 10 0 0)
@@ -1221,14 +1229,23 @@
          (define-values (vx vy) (get-virtual-size))
          (update-scrollbars vx vy)
          (append-element e)]))
-      
+
+    (define/public (last-element-eol?)
+      (define last-element (dlist-tail-value elements))
+      (if last-element
+          (element-end-of-line last-element)
+          ;; true if no elements (?)
+          #t))
+    
     (define/public (get-style-list) styles)
 
-    (define/public (set-default-stlye style-name)
-      (define style (send styles find-named-style style-name))
-      (if style
-          (set! default-style style)
-          #f))
+    (define/public (set-default-style style-or-name)
+      (if (is-a? style-or-name style<%>)
+          (set! default-style style-or-name)
+          (let ([style (send styles find-named-style style-or-name)])
+            (if style
+                (set! default-style style)
+                #f))))
 
     (define in-edit-sequence #f)
     

@@ -954,6 +954,9 @@
     ;; keep dlist of gopher menu entries (menu-item-snip%'s)
     (define menu-items (dlist-new))
 
+    (define/public (get-current-request)
+      (and current-url (browser-url-req current-url)))
+    
     (define/private (selection-snip selection)
       (if (pair? selection)
           (dlink-value (cdr selection))
