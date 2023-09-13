@@ -320,6 +320,8 @@
   (check-equal? (for/list ([v (in-dlist-reverse a-dlist)]) v) '(3))
   (check-equal? (dlink-value (dlist-head a-dlist)) 3)
   (check-equal? (dlist-tail a-dlist) #f)
+  (check-equal? (dlist-head-value a-dlist) 3)
+  (check-equal? (dlist-tail-value a-dlist) 3)
   (dlist-append! a-dlist 4)
   (check-equal? (dlink-value (dlist-head a-dlist)) 3)
   (check-equal? (dlink-value (dlist-tail a-dlist)) 4)
