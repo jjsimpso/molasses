@@ -439,11 +439,11 @@
          [(not (empty? layout-right-elements))
           (bottom-edge-of-elements layout-right-elements)]
          [else
-          (printf "next-line-y-pos: all layout lists are empty~n")
+          ;(printf "next-line-y-pos: all layout lists are empty~n")
           (sub1 original)])))
     
     (define (layout-goto-new-line new-y)
-      (printf "layout-goto-new-line: ~a~n" new-y)
+      ;(printf "layout-goto-new-line: ~a~n" new-y)
       (set! place-x 0) ; place-x value isn't currently used in layout mode
       (set! place-y new-y)
       (set! layout-baseline-pos new-y)
@@ -495,7 +495,7 @@
          ;; add last line of element
          (when (< start-pos (string-length (element-snip e)))
            (define-values (last-line-width unused-h unused-d unused-s) (send dc get-text-extent (substring (element-snip e) start-pos) font))
-           (printf "adding last line of element (~a,~a) ~ax~a~n" xpos ypos last-line-width height)
+           ;(printf "adding last line of element (~a,~a) ~ax~a~n" xpos ypos last-line-width height)
            (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) xpos ypos last-line-width height) lines)))
          ;; add last line to layout list
          (set! layout-right-elements (cons (car lines) layout-right-elements))
@@ -556,7 +556,7 @@
            (set! width last-line-width)
            (define margin (/ (- space-available last-line-width) 2))
            (define xpos (+ layout-left-width margin))
-           (printf "adding last line of element (~a,~a) ~ax~a~n" xpos ypos last-line-width height)
+           ;(printf "adding last line of element (~a,~a) ~ax~a~n" xpos ypos last-line-width height)
            (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) xpos ypos last-line-width height) lines)))
          ;; update the baseline position after all lines are placed
          (set! layout-baseline-pos (+ ypos height))
@@ -612,7 +612,7 @@
            (define-values (last-line-width unused-h unused-d unused-s) (send dc get-text-extent (substring (element-snip e) start-pos) font))
            (when (> last-line-width max-width)
              (set! max-width last-line-width))
-           (printf "adding last line of element (~a,~a) ~ax~a~n" line-x ypos last-line-width height)
+           ;(printf "adding last line of element (~a,~a) ~ax~a~n" line-x ypos last-line-width height)
            (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) line-x ypos last-line-width height) lines)))
          ;; add last line to layout list
          (set! layout-left-elements (cons (car lines) layout-left-elements))
@@ -673,7 +673,7 @@
            (define-values (last-line-width unused-h unused-d unused-s) (send dc get-text-extent (substring (element-snip e) start-pos) font))
            (when (> last-line-width max-width)
              (set! max-width last-line-width))
-           (printf "adding last line of element (~a,~a) ~ax~a~n" line-x ypos last-line-width height)
+           ;(printf "adding last line of element (~a,~a) ~ax~a~n" line-x ypos last-line-width height)
            (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) line-x ypos last-line-width height) lines)))
          ;; update the baseline position after all lines are placed
          (set! layout-baseline-pos (+ ypos height))
@@ -751,7 +751,7 @@
                    (set! layout-right-width (+ layout-right-width ew snip-xmargin))
                    (values x1 y1 x2 y2)))]
             [(center)
-             (printf "layout center aligned element~n")
+             ;(printf "layout center aligned element~n")
              ; we assume that center and unaligned elements are mutually exclusive on the same line
              ; the canvas user must end a line before adding an element with the other alignment
              ; otherwise, behavior is undefined
@@ -895,7 +895,7 @@
              (when (not (element-words e))
                (calc-word-extents e))
              (set!-values (x1 y1 x2 y2) (layout-string e dw y))
-             (printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
+             ;(printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
              ;; set position for adding next element
              (when (element-end-of-line e)
                  (layout-goto-new-line (add1 y2)))]
@@ -921,13 +921,14 @@
             (case mode
               [(layout)
                (set!-values (x1 y1 x2 y2) (layout-snip e dw y (unbox snip-w) (unbox snip-h)))
-               (printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
+               ;(printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
                ; layout-goto-new-line needs the element's position to be set, so set it early for now
                (set-element-xpos! e x1)
                (set-element-ypos! e y1)
                ; set position for adding next element
                ; should we allow left or right aligned elements be marked as end-of-line?
                (when (element-end-of-line e)
+                 (eprintf "snip end of line~n")
                  (layout-goto-new-line (add1 y2)))]
               [else
                ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
@@ -1033,9 +1034,9 @@
       
       ;; reposition all elements
       (when (and (wrap-text?) (not (= cached-client-width cw)))
-        (printf "on-size canvas ~ax~a " canvas-width canvas-height)
+        ;(printf "on-size canvas ~ax~a " canvas-width canvas-height)
         (reset-layout)
-        (printf "-> ~ax~a~n" canvas-width canvas-height))
+        #;(printf "-> ~ax~a~n" canvas-width canvas-height))
 
       ;; update visible elements if window height changes
       (when visible-elements
@@ -1230,11 +1231,16 @@
          (update-scrollbars vx vy)
          (append-element e)]))
 
+    ;; the end-of-line flag is only relevant for unaligned or centered elements
     (define/public (last-element-eol?)
-      (define last-element (dlist-tail-value elements))
+      (define last-element
+        (for/or ([e (in-dlist-reverse elements)]
+                 #:when (or (eq? (element-alignment e) 'unaligned)
+                            (eq? (element-alignment e) 'center)))
+          e))
       (if last-element
           (element-end-of-line last-element)
-          ;; true if no elements (?)
+          ;; true if no elements
           #t))
     
     (define/public (get-style-list) styles)
@@ -1366,7 +1372,7 @@
   (init-styles (send canvas get-style-list))
   (send canvas set-canvas-background canvas-bg-color)
 
-  (define layout-test #f)
+  (define layout-test 'text2)
   (if layout-test
       (send canvas set-mode 'layout)
       (send canvas set-mode 'wrapped))
@@ -1399,7 +1405,7 @@
           [(text2)
            (send canvas append-snip tall-left #f 'left)
            (send canvas append-string "Here is some left aligned text. Here is some left aligned text. Here is some left aligned text." #f #t 'left)
-           (send canvas append-string "\n")
+           (send canvas append-string "\n" #f #t 'left)
            (send canvas append-string "Here is some unaligned text. Here is some unaligned text. Here is some unaligned text." #f #t)
            (send canvas append-string "\n")
            (send canvas append-string "Here is some right aligned text. Here is some right aligned text. Here is some right aligned text." #f #t 'right)
