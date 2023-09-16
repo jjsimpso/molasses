@@ -27,6 +27,7 @@
          dlist-length
          dlist->list
          in-dlist
+         in-dlist-reverse
          dlist-cursor
          dlist-advance-head!
          dlist-retreat-head!
