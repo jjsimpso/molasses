@@ -61,6 +61,36 @@
   (close-input-port (gopher-response-data-port response))
   new-snip)
 
+#;(define (join-strings c)
+  (let loop ([accum-s (string-normalize-spaces (car c))]
+             [l (cdr c)])
+    (cond
+      [(string?  (car l))
+       (loop (string-append accum-s " " (string-normalize-spaces (car l)))
+             (cdr l))]
+      [else
+       (string-normalize-spaces accum-s)])))
+
+(define (join-strings c)
+  (string-normalize-spaces (string-join (takef c string?))))
+
+(define (skip-strings c)
+  (dropf c string?))
+
+(define (fixup-newlines2 c)
+  (cond
+    [(and (pair? c) (string? (car c)))
+     (define s (join-strings c))
+     (if (non-empty-string? s)
+         (cons s
+               (fixup-newlines2 (skip-strings c)))
+         (fixup-newlines2 (skip-strings c)))]
+    [(pair? c)
+     (cons (fixup-newlines2 (car c))
+           (fixup-newlines2 (cdr c)))]
+    [else
+     c]))
+
 (define (fixup-newlines c)
   (cond
     [(string? c)
@@ -116,7 +146,7 @@
 
 (define (parse-html a-port)
   (let ([raw (read-html a-port)])
-    (fixup-newlines raw)))
+    (fixup-newlines2 raw)))
 
 (define attr-list? (ntype?? '@))
 
@@ -157,7 +187,7 @@
   (with-method ([append-string (canvas append-string)]
                 [append-snip (canvas append-snip)])
 
-    (define (last-char-newline?)
+    (define (last-element-eol?)
       (send canvas last-element-eol?))
 
     (define (followed-by-newline? node)
@@ -175,12 +205,14 @@
       (send canvas append-string "\n" #f #t))
 
     (define (start-new-paragraph)
-      void
-      #;(when (not (last-char-newline?))
+      (when (not (last-element-eol?))
         (eprintf "starting new paragraph~n")
-        (insert-newline)
         (insert-newline)))
 
+    (define (last-node-in-paragraph? s)
+      (and (is-paragraph-element? (current-block))
+           (empty? (cdr s))))
+    
     (define (is-block-element? elem)
       ;; treat head, title, and body as blocks even though they aren't technically block elements
       ;; head and title need special treatment but body currently doesn't
@@ -358,7 +390,7 @@
                   [("right") 'right]
                   [("center") 'center]
                   [else current-alignment]))
-              (when (not (last-char-newline?))
+              (when (not (last-element-eol?))
                 (insert-newline))
               (send canvas append-snip
                     (new horz-line-snip%
@@ -379,7 +411,7 @@
                       [("right") 'right]
                       [("center") 'center]
                       [else current-alignment]))
-                  (send canvas append-snip (load-new-image-snip src-value request) #f align)))]
+                  (send canvas append-snip (load-new-image-snip src-value request) (last-node-in-paragraph? s) align)))]
              [else
               (define style-copy (make-object style-delta% 'change-nothing))
               (send style-copy copy (current-style-delta))
@@ -397,17 +429,14 @@
                   (f)))
               (eprintf "ending ~a~n" (car node))
               
-              ;; insert newlines and the end of a "paragraph" element
-              ;; only insert one newline if the paragraph already ends with a newline character
-              ;; or the next element is a <br> or <hr>
-              ;; otherwise insert two in order to create a blank line
+              ;; insert a newline after a "paragraph" element unless the next element is a <br> or <hr>
+              ;; don't do this for 'center' elements
               (when (is-paragraph-element? (car node))
-                (eprintf "inserting newlines at end of 'paragraph'~n")
-                (when (and (not (last-char-newline?))
-                           (and (not (empty? (cdr s)))
-                                (not (followed-by-newline? (cadr s)))))
-                  (insert-newline))
-                (insert-newline))])
+                (when (and (not (empty? (cdr s)))
+                           (not (eq? (car node) 'center)) ; center elements don't need space below
+                           (not (followed-by-newline? (cadr s))))
+                  (eprintf "inserting newline after 'paragraph'~n")
+                  (insert-newline)))])
            (loop (cdr s))]
           [(string? node)
            (case (current-block)
@@ -421,7 +450,7 @@
               (define text (string-normalize-spaces node))
               (when (non-empty-string? text)
                 (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
-                (send canvas append-string (string-append text " ") style #f current-alignment)
+                (send canvas append-string (string-append text " ") style (last-node-in-paragraph? s) current-alignment)
                 (eprintf "~a,~a paragraph: ~a~n" (current-block) current-alignment text))
               (when (not (non-empty-string? text))
                 (eprintf "skipped newline char~n"))])
