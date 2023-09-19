@@ -443,7 +443,7 @@
           (sub1 original)])))
     
     (define (layout-goto-new-line new-y)
-      ;(printf "layout-goto-new-line: ~a~n" new-y)
+      (printf "layout-goto-new-line: ~a~n" new-y)
       (set! place-x 0) ; place-x value isn't currently used in layout mode
       (set! place-y new-y)
       (set! layout-baseline-pos new-y)
@@ -453,6 +453,19 @@
       (set!-values (layout-unaligned-elements layout-unaligned-width) (pop-layout-list layout-unaligned-elements layout-unaligned-width new-y)))
 
     (define (layout-string e total-width y)
+      ;; 
+      (define (calc-word-fit words space-available)
+        (define width 0)
+        (for ([w (in-list (element-words e))])
+          #:final (>= (+ width (word-to-next w)) space-available)
+          (if (< (+ width (word-to-next w)) space-available)
+              (set! width (+ width (word-to-next w)))
+              ;; finished with line, but first check if w fits on the current line
+              (let ([maybe-width (+ width (word-width w))])
+                (when (<= maybe-width space-available)
+                  (set! width maybe-width)))))
+        width)
+      
       ;; calculate the extent of the text with word wrapping
       (define font (send (get-style e) get-font))
       (define-values (width height descent space) (send dc get-text-extent "a" font)) ; only need height, so string doesn't matter
@@ -759,16 +772,30 @@
                  (let ([margin (/ (- total-width layout-left-width layout-right-width ew) 2)])
                    (set! layout-center-elements (cons e layout-center-elements))
                    (set! layout-center-width (+ ew snip-xmargin))
+                   (set! layout-baseline-pos (+ y eh))
                    (values (+ layout-left-width margin) y (+ layout-left-width margin ew) (+ y eh)))
                  (let* ([margin (/ (- total-width layout-left-width layout-right-width layout-center-width ew) 2)]
-                        [pos (+ layout-left-width margin)])
+                        [pos (+ layout-left-width margin)]
+                        [y1 y]
+                        [y2 (+ y eh)])
                    ; reposition each centered element on the line
-                   (for ([e (in-list layout-center-elements)])
-                     (set-element-xpos! e pos)
+                   (for ([e (in-list (reverse layout-center-elements))])
+                     (if (wrapped-line? e)
+                         (set-wrapped-line-x! e pos)
+                         (set-element-xpos! e pos))
                      (set! pos (+ pos (get-element-width e) snip-xmargin)))
+                   (when (> y2 layout-baseline-pos)
+                     (define diff (- y2 layout-baseline-pos))
+                     (adjust-elements-ypos! layout-center-elements diff)
+                     (set! layout-baseline-pos y2))
+                   (when (< y2 layout-baseline-pos)
+                     ; adjust y position to touch the baseline
+                     (define diff (- layout-baseline-pos y2))
+                     (set! y1 (+ y1 diff))
+                     (set! y2 (+ y2 diff)))
                    (set! layout-center-elements (cons e layout-center-elements))
                    (set! layout-center-width (+ layout-center-width ew snip-xmargin))
-                   (values pos y (+ pos ew) (+ y eh))))]
+                   (values pos y1 (+ pos ew) y2)))]
             [(unaligned)
              ;(printf "layout unaligned element~n")
              (if (empty? layout-unaligned-elements)
@@ -1372,7 +1399,7 @@
   (init-styles (send canvas get-style-list))
   (send canvas set-canvas-background canvas-bg-color)
 
-  (define layout-test 'text2)
+  (define layout-test 'center)
   (if layout-test
       (send canvas set-mode 'layout)
       (send canvas set-mode 'wrapped))
@@ -1390,8 +1417,10 @@
             [square-right (make-object image-snip% "test/square-right.png")]
             [square-center (make-object image-snip% "test/square-center.png")]
             [big (make-object image-snip% "test/big.png")]
+            [bullet (make-object image-snip% "test/bulletr.gif")]
             [tall (make-object image-snip% "test/tall.png")]
             [tall-left (make-object image-snip% "test/tall-left.png")]
+            [tall-center (make-object image-snip% "test/tall-center.png")]
             [tall-right (make-object image-snip% "test/tall-right.png")])
 
         (case layout-test
@@ -1419,10 +1448,18 @@
            (send canvas append-snip tall #t)]
           [(center)
            (send canvas append-string "Layout Test" (send (send canvas get-style-list) find-named-style "Header1") #t 'center)
+           ;(send canvas append-snip bullet #f 'center)
+           ;(send canvas append-string "homepage" #f #f 'center)
+           ;(send canvas append-snip bullet #f 'center)
+           ;(send canvas append-string "links" #f #f 'center)
+           ;(send canvas append-snip bullet #f 'center)
+           ;(send canvas append-string "anonymity" #f #f 'center)
+           ;(send canvas append-snip bullet #f 'center)
+           ;(send canvas append-string "+ORC" #f #t 'center)
            (send canvas append-snip square-center #t 'center)
            (send canvas append-snip tall-left #f 'left)
            (send canvas append-snip square #t)
-           (send canvas append-snip square-center #f 'center)
+           (send canvas append-snip tall-center #f 'center)
            (send canvas append-snip square-center #f 'center)
            (send canvas append-snip square-center #t 'center)
            
