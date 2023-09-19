@@ -79,6 +79,8 @@
 
 (define (fixup-newlines2 c)
   (cond
+    [(and (pair? c) (eq? (car c) 'pre))
+     (fixup-newlines c)]
     [(and (pair? c) (string? (car c)))
      (define s (join-strings c))
      (if (non-empty-string? s)
@@ -292,10 +294,10 @@
                     (set! current-alignment prev-alignment))))
           '()))
 
-    #;(define (handle-href node)
+    (define (handle-href node)
       (define href-value (sxml:attr node 'href))
       (if href-value
-          (let ([link-start-pos (current-pos)]
+          #;(let ([link-start-pos (current-pos)]
                 [vlink-delta (make-object style-delta%)])
             (send vlink-delta set-delta-foreground current-vlink-color)
             (list (lambda ()
@@ -306,6 +308,7 @@
                           (lambda (text-widget start end)
                             (eprintf "link to ~a clicked~n" href-value)
                             (send text-widget change-style vlink-delta start end))))))
+          '()
           '()))
     
     ;; handle each element based on the element type
@@ -317,7 +320,7 @@
          (handle-paragraph-attributes node)]
         [(a)
          (send (current-style-delta) set-delta-foreground current-link-color)
-         #;(handle-href node)]
+         (handle-href node)]
         [(b)
          (send (current-style-delta) set-delta 'change-bold)
          '()]
@@ -385,7 +388,8 @@
                               (string->number width-value)))
                     '('percent . 100)))
               (define align
-                (case (sxml:attr node 'align)
+                (case (and (sxml:attr node 'align)
+                           (string-downcase (sxml:attr node 'align)))
                   [("left") 'left]
                   [("right") 'right]
                   [("center") 'center]
@@ -406,12 +410,20 @@
                 (define request (send canvas get-current-request))
                 (when request
                   (define align
-                    (case (sxml:attr node 'align)
+                    (case (and (sxml:attr node 'align)
+                               (string-downcase (sxml:attr node 'align)))
                       [("left") 'left]
                       [("right") 'right]
                       [("center") 'center]
                       [else current-alignment]))
                   (send canvas append-snip (load-new-image-snip src-value request) (last-node-in-paragraph? s) align)))]
+             [(a)
+              (define style-copy (make-object style-delta% 'change-nothing))
+              (send style-copy copy (current-style-delta))
+              (send style-copy set-delta-foreground current-link-color)
+              (define style (send style-list find-or-create-style (current-style) style-copy))
+              (send canvas append-string (sxml:text node) style (last-node-in-paragraph? s) current-alignment)
+              #;(handle-href node)]
              [else
               (define style-copy (make-object style-delta% 'change-nothing))
               (send style-copy copy (current-style-delta))
