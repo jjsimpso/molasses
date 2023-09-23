@@ -403,7 +403,7 @@
                          [horz-offset horz-inset])
                     #t
                     align)
-              (insert-newline)]
+              #;(insert-newline)]
              [(img)
               (when img-ok?
                 (define src-value (sxml:attr node 'src))
@@ -416,13 +416,13 @@
                       [("right") 'right]
                       [("center") 'center]
                       [else current-alignment]))
-                  (send canvas append-snip (load-new-image-snip src-value request) (last-node-in-paragraph? s) align)))]
+                  (send canvas append-snip (load-new-image-snip src-value request) #f align)))]
              [(a)
               (define style-copy (make-object style-delta% 'change-nothing))
               (send style-copy copy (current-style-delta))
               (send style-copy set-delta-foreground current-link-color)
               (define style (send style-list find-or-create-style (current-style) style-copy))
-              (send canvas append-string (sxml:text node) style (last-node-in-paragraph? s) current-alignment)
+              (send canvas append-string (sxml:text node) style #f current-alignment)
               #;(handle-href node)]
              [else
               (define style-copy (make-object style-delta% 'change-nothing))
@@ -440,10 +440,11 @@
                 (for ([f (in-list close-tag-funcs)])
                   (f)))
               (eprintf "ending ~a~n" (car node))
-              
+
               ;; insert a newline after a "paragraph" element unless the next element is a <br> or <hr>
               ;; don't do this for 'center' elements
               (when (is-paragraph-element? (car node))
+                (insert-newline)
                 (when (and (not (empty? (cdr s)))
                            (not (eq? (car node) 'center)) ; center elements don't need space below
                            (not (followed-by-newline? (cadr s))))
@@ -456,13 +457,13 @@
               void]
              [(pre)
               (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
-              (send canvas append-string node style)
-              (eprintf "pre: ~a" node)]
+              (send canvas append-string node style (string-suffix? node "\n"))
+              (eprintf "pre: ~aEND~n" node)]
              [else
               (define text (string-normalize-spaces node))
               (when (non-empty-string? text)
                 (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
-                (send canvas append-string (string-append text " ") style (last-node-in-paragraph? s) current-alignment)
+                (send canvas append-string (string-append text " ") style #f current-alignment)
                 (eprintf "~a,~a paragraph: ~a~n" (current-block) current-alignment text))
               (when (not (non-empty-string? text))
                 (eprintf "skipped newline char~n"))])
