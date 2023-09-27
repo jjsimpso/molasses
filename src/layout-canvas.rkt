@@ -465,14 +465,16 @@
     (define (layout-string e total-width y)
       (define (layout-remainder-of-line word-list)
         (define space-available (- total-width layout-left-width layout-center-width layout-right-width))
+        (printf "layout-remainder-of-line: space-available=~a~n" space-available)
         (let loop ([words word-list]
                    [last-word #f]
                    [width 0])
           (if (empty? words)
               (values last-word width '())
               (let ([w (car words)])
+                (printf "layout-remainder-of-line: loop iter width=~a, ~a, space-avail=~a~n" width (word-to-next w) space-available)
                 (cond
-                  [(< (+ width (word-to-next w) space-available))
+                  [(< (+ width (word-to-next w)) space-available)
                    (loop (cdr words)
                          w
                          (+ width (word-to-next w)))]
@@ -539,6 +541,7 @@
          (define words (element-words e))
          (define lines '())
          (define max-width 0)
+         (define ypos y)
          ;; if there is a partial line of centered elements, finish the line and deal with the remaining words below
          (when (not (empty? layout-center-elements))
            (define-values (last-word width remaining-words) (layout-remainder-of-line words))
@@ -549,6 +552,7 @@
              (define old-margin ( / (- total-width layout-left-width layout-center-width layout-right-width) 2))
              (define margin ( / (- total-width layout-left-width layout-center-width layout-right-width width) 2))
              (define diff (- margin old-margin))
+             (printf "shift centered elements over: lcw=~a, width =~a, margin ~a to ~a, diff=~a~n" layout-center-width width old-margin margin diff)
              (adjust-elements-xpos! layout-center-elements diff)
              ;; 
              (set! lines (cons (wrapped-line 0 (word-end-pos last-word) (+ layout-left-width margin layout-center-width) y width font-height) lines))
@@ -556,14 +560,16 @@
              (set! max-width (+ layout-center-width width))
              (set! layout-center-width max-width)
              (when (not (empty? remaining-words))
-               (layout-goto-new-line (+ y to-next-y)))))
+               (set! ypos (+ y to-next-y))
+               (layout-goto-new-line ypos))))
 
          (define space-available (- total-width layout-left-width layout-right-width))
          (define x (+ layout-left-width (/ space-available 2)))
          (define width 0)
-         (define ypos y)
          (define baseline (+ ypos height))
 
+         (printf "space avail=~a, x=~a~n" space-available x)
+         
          (if (> baseline layout-baseline-pos)
              (when (not (empty? layout-center-elements))
                (define diff (- baseline layout-baseline-pos))
@@ -572,7 +578,7 @@
                (set! ypos (+ ypos diff))))
          
          (when (not (empty? words))
-           (define start-pos 0) ; line's starting position (an index into the string)
+           (define start-pos (word-pos (car words))) ; line's starting position (an index into the string)
            (for ([w (in-list words)])
              (if (< (+ width (word-to-next w)) space-available)
                  (set! width (+ width (word-to-next w)))
@@ -611,7 +617,9 @@
              (set! layout-center-width last-line-width)
              (define margin (/ (- space-available last-line-width) 2))
              (define xpos (+ layout-left-width margin))
-             ;(printf "adding last line of element (~a,~a) ~ax~a~n" xpos ypos last-line-width font-height)
+             (when (< xpos x)
+               (set! x xpos))
+             (printf "adding last line of element (~a,~a) ~ax~a~n" xpos ypos last-line-width font-height)
              (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) xpos ypos last-line-width font-height) lines))))
          ;; update the baseline position after all lines are placed
          (set! layout-baseline-pos (+ ypos height))
@@ -1438,7 +1446,7 @@
   (init-styles (send canvas get-style-list))
   (send canvas set-canvas-background canvas-bg-color)
 
-  (define layout-test 'text2)
+  (define layout-test 'center)
   (if layout-test
       (send canvas set-mode 'layout)
       (send canvas set-mode 'wrapped))
@@ -1478,6 +1486,7 @@
            (send canvas append-string "\n")
            (send canvas append-string "Here is some right aligned text. Here is some right aligned text. Here is some right aligned text." #f #t 'right)
            (send canvas append-string "\n")
+           (send canvas append-string "****CENTERED****" #f #f 'center)
            (send canvas append-string "Here is some centered text. Here is some centered text. Here is some centered text." #f #t 'center)
            (send canvas append-string "\n")
            (send canvas append-snip square-left #f 'left)
