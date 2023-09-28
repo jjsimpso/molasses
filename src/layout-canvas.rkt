@@ -178,7 +178,7 @@
 
     (define (draw-wrapped-text e dc left top)
       (for ([line (in-list (element-lines e))])
-        (printf "draw-wrapped-text: (~a,~a) ~a~n" (wrapped-line-x line) (wrapped-line-y line) (substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)))
+        ;(printf "draw-wrapped-text: (~a,~a) ~a~n" (wrapped-line-x line) (wrapped-line-y line) (substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)))
         (send/apply dc draw-text `(,(substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)) ,(+ (- (wrapped-line-x line) left) xmargin) ,(+ (- (wrapped-line-y line) top) ymargin)))))
     
     (define (draw e dc x y left top right bottom dx dy)
@@ -359,6 +359,7 @@
     (define layout-baseline-pos 0)
 
     (define (adjust-elements-xpos! elist xdelta)
+      (printf "adjust-elements-xpos!: delta=~a~n" xdelta)
       (for ([e (in-list elist)])
         (if (wrapped-line? e)
             (set-wrapped-line-x! e (+ (wrapped-line-x e) xdelta))
@@ -460,6 +461,7 @@
       (set!-values (layout-left-elements layout-left-width) (pop-layout-list layout-left-elements layout-left-width new-y))
       (set!-values (layout-right-elements layout-right-width) (pop-layout-list layout-right-elements layout-right-width new-y))
       (set!-values (layout-center-elements layout-center-width) (pop-layout-list layout-center-elements layout-center-width new-y))
+      (printf "before pop: ~a ~a~n" layout-unaligned-elements layout-unaligned-width)
       (set!-values (layout-unaligned-elements layout-unaligned-width) (pop-layout-list layout-unaligned-elements layout-unaligned-width new-y)))
 
     (define (layout-string e total-width y)
@@ -541,6 +543,7 @@
          (define words (element-words e))
          (define lines '())
          (define max-width 0)
+         (define x total-width) ; just default to something large and shrink as we add lines
          (define ypos y)
          ;; if there is a partial line of centered elements, finish the line and deal with the remaining words below
          (when (not (empty? layout-center-elements))
@@ -555,17 +558,16 @@
              (define diff (- margin old-margin))
              ;(printf "shift centered elements over: lcw=~a, width =~a, margin ~a to ~a, diff=~a~n" layout-center-width width old-margin margin diff)
              (adjust-elements-xpos! layout-center-elements diff)
-             ;; 
-             (set! lines (cons (wrapped-line 0 (word-end-pos last-word) (+ layout-left-width margin layout-center-width) y width font-height) lines))
+             ;;
+             (set! x (+ layout-left-width margin layout-center-width))
+             (set! lines (cons (wrapped-line 0 (word-end-pos last-word) x y width font-height) lines))
              (set! words remaining-words)
-             (set! max-width (+ layout-center-width width))
-             (set! layout-center-width max-width)
+             (set! max-width width)
+             (set! layout-center-width (+ layout-center-width width))
              (when (not (empty? remaining-words))
                (set! ypos (+ y to-next-y))
                (layout-goto-new-line ypos))))
 
-         (define space-available (- total-width layout-left-width layout-right-width))
-         (define x (+ layout-left-width (/ space-available 2)))
          (define width 0)
          (define baseline (+ ypos height))
 
@@ -579,6 +581,8 @@
                (set! ypos (+ ypos diff))))
          
          (when (not (empty? words))
+           (define space-available (- total-width layout-left-width layout-right-width))
+           (set! x (+ layout-left-width (/ space-available 2)))
            (define start-pos (word-pos (car words))) ; line's starting position (an index into the string)
            (for ([w (in-list words)])
              (if (< (+ width (word-to-next w)) space-available)
@@ -699,6 +703,7 @@
                (set! ypos (+ ypos diff))))
          (define lines '())
          (define start-pos 0) ; line's starting position (an index into the string)
+         (printf "start line-x=~a, llw=~a, luw=~a text=~a~n" line-x layout-left-width layout-unaligned-width (element-snip e))
          (for ([w (in-list (element-words e))])
            (if (< (+ xpos (word-to-next w)) right-margin)
                (set! xpos (+ xpos (word-to-next w)))
@@ -736,13 +741,15 @@
            (define-values (last-line-width unused-h unused-d unused-s) (send dc get-text-extent (substring (element-snip e) start-pos) font))
            (when (> last-line-width max-width)
              (set! max-width last-line-width))
-           ;(printf "adding last line of element ~a (~a,~a) ~ax~a~n" (substring (element-snip e) start-pos) line-x ypos last-line-width font-height)
+           (printf "adding last line of element ~a (~a,~a) ~ax~a~n" (substring (element-snip e) start-pos) line-x ypos last-line-width font-height)
            (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) line-x ypos last-line-width font-height) lines)))
+         (printf "middle line-x=~a, luw=~a~n" line-x layout-unaligned-width)
          ;; update the baseline position after all lines are placed
          (set! layout-baseline-pos (+ ypos height))
          ;; add last line to layout list
          (set! layout-unaligned-elements (cons (car lines) layout-unaligned-elements))
          (set! layout-unaligned-width (+ layout-unaligned-width (- xpos line-x)))
+         (printf "end line-x=~a, luw=~a~n" line-x layout-unaligned-width)
          ;; set the element's lines field and put the lines in order
          (set-element-lines! e (reverse lines))
          (values x y (+ x max-width) (+ ypos font-height))]))
