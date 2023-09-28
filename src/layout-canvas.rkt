@@ -465,14 +465,14 @@
     (define (layout-string e total-width y)
       (define (layout-remainder-of-line word-list)
         (define space-available (- total-width layout-left-width layout-center-width layout-right-width))
-        (printf "layout-remainder-of-line: space-available=~a~n" space-available)
+        ;(printf "layout-remainder-of-line: space-available=~a~n" space-available)
         (let loop ([words word-list]
                    [last-word #f]
                    [width 0])
           (if (empty? words)
               (values last-word width '())
               (let ([w (car words)])
-                (printf "layout-remainder-of-line: loop iter width=~a, ~a, space-avail=~a~n" width (word-to-next w) space-available)
+                ;(printf "layout-remainder-of-line: loop iter width=~a, ~a, space-avail=~a~n" width (word-to-next w) space-available)
                 (cond
                   [(< (+ width (word-to-next w)) space-available)
                    (loop (cdr words)
@@ -546,13 +546,14 @@
          (when (not (empty? layout-center-elements))
            (define-values (last-word width remaining-words) (layout-remainder-of-line words))
            (when (false? last-word)
-             (error "unhandled condition in center layout~n"))
+             (set! ypos (next-line-y-pos y))
+             (layout-goto-new-line ypos))
            (when last-word
              ;; shift existing elements over to make room
              (define old-margin ( / (- total-width layout-left-width layout-center-width layout-right-width) 2))
              (define margin ( / (- total-width layout-left-width layout-center-width layout-right-width width) 2))
              (define diff (- margin old-margin))
-             (printf "shift centered elements over: lcw=~a, width =~a, margin ~a to ~a, diff=~a~n" layout-center-width width old-margin margin diff)
+             ;(printf "shift centered elements over: lcw=~a, width =~a, margin ~a to ~a, diff=~a~n" layout-center-width width old-margin margin diff)
              (adjust-elements-xpos! layout-center-elements diff)
              ;; 
              (set! lines (cons (wrapped-line 0 (word-end-pos last-word) (+ layout-left-width margin layout-center-width) y width font-height) lines))
@@ -568,7 +569,7 @@
          (define width 0)
          (define baseline (+ ypos height))
 
-         (printf "space avail=~a, x=~a~n" space-available x)
+         ;(printf "space avail=~a, x=~a~n" space-available x)
          
          (if (> baseline layout-baseline-pos)
              (when (not (empty? layout-center-elements))
