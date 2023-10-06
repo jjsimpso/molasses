@@ -465,8 +465,7 @@
       (set!-values (layout-unaligned-elements layout-unaligned-width) (pop-layout-list layout-unaligned-elements layout-unaligned-width new-y)))
 
     (define (layout-string e total-width y)
-      (define (layout-remainder-of-line word-list)
-        (define space-available (- total-width layout-left-width layout-center-width layout-right-width))
+      (define (layout-remainder-of-line word-list space-available)
         ;(printf "layout-remainder-of-line: space-available=~a~n" space-available)
         (let loop ([words word-list]
                    [last-word #f]
@@ -547,7 +546,8 @@
          (define ypos y)
          ;; if there is a partial line of centered elements, finish the line and deal with the remaining words below
          (when (not (empty? layout-center-elements))
-           (define-values (last-word width remaining-words) (layout-remainder-of-line words))
+           (define-values (last-word width remaining-words)
+             (layout-remainder-of-line words (- total-width layout-left-width layout-center-width layout-right-width)))
            (when (false? last-word)
              (set! ypos (next-line-y-pos y))
              (layout-goto-new-line ypos))
@@ -634,125 +634,132 @@
          (set-element-lines! e (reverse lines))
          (values x y (+ x max-width) (+ ypos font-height))]
         [(left)
-         (define x layout-left-width)
-         (define line-x x) ; starting x value of current line
-         (define max-width 0)
-         (define right-margin (- total-width (unaligned-or-center-width) layout-right-width))
-         (define xpos x)
-         (define ypos y)
-         (define lines '())
-         (define start-pos 0) ; line's starting position (an index into the string)
-         (for ([w (in-list (element-words e))])
-           (if (< (+ xpos (word-to-next w)) right-margin)
-               (set! xpos (+ xpos (word-to-next w)))
-               (let ([w-end-x (+ xpos (word-width w))])
-                 ;; wrap to next line, but first check if w fits on the current line
-                 (if (<=  w-end-x right-margin)
-                     (begin
-                       (set! lines (cons (wrapped-line start-pos (word-end-pos w) x ypos (- w-end-x x) font-height) lines))
-                       (set! start-pos (word-end-pos w))
-                       (when (> w-end-x max-width)
-                         (set! max-width w-end-x))
-                       ;; advance to the new line
-                       (set! ypos (+ ypos to-next-y))
-                       (layout-goto-new-line ypos)
-                       (set! right-margin (- total-width (unaligned-or-center-width) layout-right-width))
-                       (set! line-x layout-left-width)
-                       (set! xpos line-x)
-                       (when (< line-x x)
-                         (set! x line-x)))
-                     (begin
-                       (set! lines (cons (wrapped-line start-pos (word-pos w) x ypos (- xpos x) font-height) lines))
-                       (set! start-pos (word-pos w))
-                       (when (> xpos max-width)
-                         (set! max-width xpos))
-                       ;; advance to the new line
-                       (set! ypos (+ ypos to-next-y))
-                       (layout-goto-new-line ypos)
-                       (set! right-margin (- total-width (unaligned-or-center-width) layout-right-width))
-                       (set! line-x layout-left-width)
-                       (set! xpos (+ line-x (word-to-next w)))
-                       (when (< line-x x)
-                         (set! x line-x)))))))
-         ;; add last line of element
-         (when (< start-pos (string-length (element-snip e)))
-           (define-values (last-line-width unused-h unused-d unused-s) (send dc get-text-extent (substring (element-snip e) start-pos) font))
-           (when (> last-line-width max-width)
-             (set! max-width last-line-width))
-           ;(printf "adding last line of element (~a,~a) ~ax~a~n" line-x ypos last-line-width font-height)
-           (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) line-x ypos last-line-width font-height) lines)))
-         ;; add last line to layout list
-         (set! layout-left-elements (cons (car lines) layout-left-elements))
-         (set! layout-left-width (+ layout-left-width (- xpos line-x)))
-         ;; set the element's lines field and put the lines in order
-         (set-element-lines! e (reverse lines))
-         (values x y (+ x max-width) (+ ypos font-height))]
+         (let loop ([words (element-words e)]
+                    [lines '()]
+                    [line-start-pos 0]
+                    [ypos y]
+                    [x layout-left-width]
+                    [max-width 0])
+           (printf "loop left: start=~a, ypos=~a, x=~a, max-width=~a~n" line-start-pos ypos x max-width)
+           (define-values (last-word width remaining-words)
+             (layout-remainder-of-line words (- total-width layout-left-width (unaligned-or-center-width) layout-right-width)))
+           ;(printf " last-word=~a, width=~a, remaining=~a~n" last-word width remaining-words)
+           (cond
+             [(and (false? last-word) (empty? remaining-words))
+              ; final iteration
+              ;; update the baseline position after all lines are placed
+              (printf " final iteration~n")
+              (set! layout-baseline-pos (+ ypos height))
+              ;; add last line to layout element list
+              (set! layout-left-elements (cons (car lines) layout-left-elements))
+              (set! layout-left-width (+ layout-left-width (wrapped-line-w (car lines))))
+              ;(printf " end line width=~a, llw=~a~n" (wrapped-line-w (car lines)) layout-left-width)
+              ;; set the element's lines field and put the lines in order
+              (set-element-lines! e (reverse lines))
+              (values x y (+ x max-width) (+ ypos font-height))]
+             [(and (false? last-word) (empty? (unaligned-or-center-elements)) (empty? layout-left-elements) (empty? layout-right-elements))
+              ; first word is too long to fit on a line, just place it at the beginning of line
+              (printf " unable to wrap word ~a, place it anyway~n" (word-str (car remaining-words)))
+              (define xpos 0)
+              (define new-ypos ypos)
+              (when (not (empty? (cdr remaining-words)))
+                (set! new-ypos (+ ypos to-next-y))
+                (layout-goto-new-line new-ypos))
+              (loop (cdr remaining-words)
+                    (cons (wrapped-line line-start-pos (word-end-pos (car remaining-words)) xpos ypos (word-width (car remaining-words)) font-height) lines)
+                    (word-end-pos (car remaining-words))
+                    new-ypos
+                    (min xpos x)
+                    (max width max-width))]
+             [(false? last-word)
+              ; first word is too long, advance line and try again
+              (define new-ypos (+ ypos to-next-y))
+              (layout-goto-new-line new-ypos)
+              (loop remaining-words
+                    lines
+                    line-start-pos
+                    new-ypos
+                    x
+                    max-width)]
+             [else
+              (define xpos layout-left-width)
+              (define new-ypos ypos)
+              (when (not (empty? remaining-words))
+                (set! new-ypos (+ ypos to-next-y))
+                (layout-goto-new-line new-ypos))
+              (loop remaining-words
+                    (cons (wrapped-line line-start-pos (word-end-pos last-word) xpos ypos width font-height) lines)
+                    (word-end-pos last-word)
+                    new-ypos
+                    (min xpos x)
+                    (max width max-width))]))]
         [(unaligned)
-         (define x (+ layout-left-width layout-unaligned-width))
-         (define line-x x) ; starting x value of current line
-         (define max-width 0)
-         (define right-margin (- total-width layout-right-width))
-         (define xpos x)
-         (define ypos y)
-         (define baseline (+ ypos height))
-         (if (> baseline layout-baseline-pos)
+         (define baseline (+ y height))
+         (when (> baseline layout-baseline-pos)
              (when (not (empty? layout-unaligned-elements))
                (define diff (- baseline layout-baseline-pos))
                (adjust-elements-ypos! layout-unaligned-elements diff))
-             (let ([diff (- layout-baseline-pos baseline)])
-               (set! ypos (+ ypos diff))))
-         (define lines '())
-         (define start-pos 0) ; line's starting position (an index into the string)
-         (printf "start line-x=~a, llw=~a, luw=~a text=~a~n" line-x layout-left-width layout-unaligned-width (element-snip e))
-         (for ([w (in-list (element-words e))])
-           (if (< (+ xpos (word-to-next w)) right-margin)
-               (set! xpos (+ xpos (word-to-next w)))
-               (let ([w-end-x (+ xpos (word-width w))])
-                 ;; wrap to next line, but first check if w fits on the current line
-                 (if (<=  w-end-x right-margin)
-                     (begin
-                       (set! lines (cons (wrapped-line start-pos (word-end-pos w) x ypos (- w-end-x x) font-height) lines))
-                       (set! start-pos (word-end-pos w))
-                       (when (> w-end-x max-width)
-                         (set! max-width w-end-x))
-                       ;; advance to the new line
-                       (set! ypos (+ ypos to-next-y))
-                       (layout-goto-new-line ypos)
-                       (set! right-margin (- total-width layout-right-width))
-                       (set! line-x layout-left-width)
-                       (set! xpos line-x)
-                       (when (< line-x x)
-                         (set! x line-x)))
-                     (begin
-                       (set! lines (cons (wrapped-line start-pos (word-pos w) x ypos (- xpos x) font-height) lines))
-                       (set! start-pos (word-pos w))
-                       (when (> xpos max-width)
-                         (set! max-width xpos))
-                       ;; advance to the new line
-                       (set! ypos (+ ypos to-next-y))
-                       (layout-goto-new-line ypos)
-                       (set! right-margin (- total-width layout-right-width))
-                       (set! line-x layout-left-width)
-                       (set! xpos (+ line-x (word-to-next w)))
-                       (when (< line-x x)
-                         (set! x line-x)))))))
-         ;; add last line of element
-         (when (< start-pos (string-length (element-snip e)))
-           (define-values (last-line-width unused-h unused-d unused-s) (send dc get-text-extent (substring (element-snip e) start-pos) font))
-           (when (> last-line-width max-width)
-             (set! max-width last-line-width))
-           (printf "adding last line of element ~a (~a,~a) ~ax~a~n" (substring (element-snip e) start-pos) line-x ypos last-line-width font-height)
-           (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) line-x ypos last-line-width font-height) lines)))
-         (printf "middle line-x=~a, luw=~a~n" line-x layout-unaligned-width)
-         ;; update the baseline position after all lines are placed
-         (set! layout-baseline-pos (+ ypos height))
-         ;; add last line to layout list
-         (set! layout-unaligned-elements (cons (car lines) layout-unaligned-elements))
-         (set! layout-unaligned-width (+ layout-unaligned-width (- xpos line-x)))
-         (printf "end line-x=~a, luw=~a~n" line-x layout-unaligned-width)
-         ;; set the element's lines field and put the lines in order
-         (set-element-lines! e (reverse lines))
-         (values x y (+ x max-width) (+ ypos font-height))]))
+             (set! layout-baseline-pos baseline))
+
+         (let loop ([words (element-words e)]
+                    [lines '()]
+                    [line-start-pos 0]
+                    [ypos (- layout-baseline-pos height)]
+                    [x (+ layout-left-width layout-unaligned-width)]
+                    [max-width 0])
+           ;(printf "loop unaligned: start=~a, ypos=~a, x=~a, max-width=~a~n" line-start-pos ypos x max-width)
+           (define-values (last-word width remaining-words)
+             (layout-remainder-of-line words (- total-width layout-left-width layout-unaligned-width layout-right-width)))
+           ;(printf " last-word=~a, width=~a, remaining=~a~n" last-word width remaining-words)
+           (cond
+             [(and (false? last-word) (empty? remaining-words))
+              ; final iteration
+              ;; update the baseline position after all lines are placed
+              ;(printf " final iteration~n")
+              (set! layout-baseline-pos (+ ypos height))
+              ;; add last line to layout element list
+              (set! layout-unaligned-elements (cons (car lines) layout-unaligned-elements))
+              (set! layout-unaligned-width (+ layout-unaligned-width (wrapped-line-w (car lines))))
+              ;(printf " end line width=~a, luw=~a~n" (wrapped-line-w (car lines)) layout-unaligned-width)
+              ;; set the element's lines field and put the lines in order
+              (set-element-lines! e (reverse lines))
+              (values x y (+ x max-width) (+ ypos font-height))]
+             [(and (false? last-word) (empty? layout-unaligned-elements) (empty? layout-left-elements) (empty? layout-right-elements))
+              ; first word is too long to fit on a line, just place it at the beginning of line
+              ;(printf " unable to wrap word ~a, place it anyway~n" (word-str (car remaining-words)))
+              (define xpos 0)
+              (define new-ypos ypos)
+              (when (not (empty? (cdr remaining-words)))
+                (set! new-ypos (+ ypos to-next-y))
+                (layout-goto-new-line new-ypos))
+              (loop (cdr remaining-words)
+                    (cons (wrapped-line line-start-pos (word-end-pos (car remaining-words)) xpos ypos (word-width (car remaining-words)) font-height) lines)
+                    (word-end-pos (car remaining-words))
+                    new-ypos
+                    (min xpos x)
+                    (max width max-width))]
+             [(false? last-word)
+              ; first word is too long, advance line and try again
+              (define new-ypos (+ ypos to-next-y))
+              (layout-goto-new-line new-ypos)
+              (loop remaining-words
+                    lines
+                    line-start-pos
+                    new-ypos
+                    x
+                    max-width)]
+             [else
+              (define xpos (+ layout-left-width layout-unaligned-width))
+              (define new-ypos ypos)
+              (when (not (empty? remaining-words))
+                (set! new-ypos (+ ypos to-next-y))
+                (layout-goto-new-line new-ypos))
+              (loop remaining-words
+                    (cons (wrapped-line line-start-pos (word-end-pos last-word) xpos ypos width font-height) lines)
+                    (word-end-pos last-word)
+                    new-ypos
+                    (min xpos x)
+                    (max width max-width))]))]))
 
     (define (unaligned-or-center-width)
       (cond
@@ -1454,7 +1461,7 @@
   (init-styles (send canvas get-style-list))
   (send canvas set-canvas-background canvas-bg-color)
 
-  (define layout-test 'center)
+  (define layout-test 'text2)
   (if layout-test
       (send canvas set-mode 'layout)
       (send canvas set-mode 'wrapped))
