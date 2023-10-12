@@ -10,7 +10,8 @@
 
 (provide horz-line-snip%
          img-hack-snip%
-         html-link-snip%)
+         html-link-snip%
+         html-link-img-snip%)
 
 (define (next-break-pos s pos)
   (define (line-break? c)
@@ -207,8 +208,10 @@
            [width-attribute width-attribute]
            [align-attribute align-attribute]))))
 
-(define html-link-snip%
-  (class string-snip%
+(define link-interface (interface () on-event on-goodbye-event get-flags set-flags))
+
+(define (html-link-mixin %)
+  (class %
     (init-field [url ""]
                 [base-url ""]
                 [browser-canvas #f])
@@ -216,8 +219,8 @@
     (super-new)
     (set-flags (cons 'handles-all-mouse-events (get-flags)))
     (set-flags (cons 'handles-between-events (get-flags)))
-    
-    (define status-text (string-append "=> " url))
+
+    (define status-text (string-append "Goto " url))
 
     (define (replace-final-path-element path relative-path)
       (string-append (path->string (path-only path)) relative-path))
@@ -255,3 +258,6 @@
     (define/override (on-goodbye-event dc x y editorx editory event)
       ;(eprintf "goodbye event~n")
       (send browser-canvas update-status "Ready"))))
+
+(define html-link-snip% (html-link-mixin string-snip%))
+(define html-link-img-snip% (html-link-mixin image-snip%))

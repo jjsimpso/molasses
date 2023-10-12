@@ -1020,7 +1020,10 @@
             (get-extent e dc x y snip-w snip-h snip-descent snip-space #f #f)
             (case mode
               [(layout)
-               (set!-values (x1 y1 x2 y2) (layout-snip e dw y (unbox snip-w) (unbox snip-h)))
+               (define snip-height (if (is-a? (element-snip e) string-snip%)
+                                       (- (unbox snip-h) (unbox snip-descent))
+                                       (unbox snip-h)))
+               (set!-values (x1 y1 x2 y2) (layout-snip e dw y (unbox snip-w) snip-height))
                ;(printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
                ; layout-goto-new-line needs the element's position to be set, so set it early for now
                (set-element-xpos! e x1)

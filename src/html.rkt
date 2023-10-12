@@ -193,7 +193,7 @@
       (send canvas last-element-eol?))
 
     (define (followed-by-newline? node)
-      (eprintf "followed-by-newline? ~a~n" node)
+      ;(eprintf "followed-by-newline? ~a~n" node)
       (cond
         [(empty? node) #f]
         [(sxml:element? node)
@@ -399,7 +399,6 @@
               (send canvas append-snip
                     (new horz-line-snip%
                          [width-attribute width]
-                         [align-attribute align]
                          [horz-offset horz-inset])
                     #t
                     align)
@@ -418,11 +417,17 @@
                       [else current-alignment]))
                   (send canvas append-snip (load-new-image-snip src-value request) #f align)))]
              [(a)
+              (define text (sxml:text node))
+              (define href-value (sxml:attr node 'href))
               (define style-copy (make-object style-delta% 'change-nothing))
               (send style-copy copy (current-style-delta))
               (send style-copy set-delta-foreground current-link-color)
               (define style (send style-list find-or-create-style (current-style) style-copy))
-              (send canvas append-string (sxml:text node) style #f current-alignment)
+              (when (non-empty-string? text)
+                (define link-snip (new html-link-snip% (url href-value) (base-url href-value) (browser-canvas canvas)))
+                (send link-snip set-style style)
+                (send link-snip insert text (string-length text))
+                (send canvas append-snip link-snip #f current-alignment))
               #;(handle-href node)]
              [else
               (define style-copy (make-object style-delta% 'change-nothing))
@@ -458,13 +463,13 @@
              [(pre)
               (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
               (send canvas append-string node style (string-suffix? node "\n"))
-              (eprintf "pre: ~aEND~n" node)]
+              #;(eprintf "pre: ~aEND~n" node)]
              [else
               (define text (string-normalize-spaces node))
               (when (non-empty-string? text)
                 (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
                 (send canvas append-string (string-append text " ") style #f current-alignment)
-                (eprintf "~a,~a paragraph: ~a~n" (current-block) current-alignment text))
+                #;(eprintf "~a,~a paragraph: ~a~n" (current-block) current-alignment text))
               (when (not (non-empty-string? text))
                 (eprintf "skipped newline char~n"))])
            (loop (cdr s))]
