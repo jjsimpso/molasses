@@ -223,7 +223,39 @@
     (define status-text (string-append "Goto " url))
 
     (define (replace-final-path-element path relative-path)
+      ;(printf "replace-final-path-element: ~a, ~a~n" path relative-path)
       (string-append (path->string (path-only path)) relative-path))
+
+    (define (guess-type-from-filename path)
+      (define extension (path-get-extension path))
+      (if extension
+          (cond
+            [(or (bytes=? extension #".htm")
+                 (bytes=? extension #".html"))
+             #\h]
+            [(or (bytes=? extension #".txt")
+                 (bytes=? extension #".conf")
+                 (bytes=? extension #".cfg")
+                 (bytes=? extension #".sh")
+                 (bytes=? extension #".bat")
+                 (bytes=? extension #".ini"))
+             #\0]
+            [(bytes=? extension #".gif") "g"]
+            [(or (bytes=? extension #".jpg")
+                 (bytes=? extension #".jpeg")
+                 (bytes=? extension #".bmp")
+                 (bytes=? extension #".xpm")
+                 (bytes=? extension #".ppm")
+                 (bytes=? extension #".tiff")
+                 (bytes=? extension #".png"))
+             #\I]
+            [(or (bytes=? extension #".wav")
+                 (bytes=? extension #".ogg")
+                 (bytes=? extension #".mp3"))
+             #\s]
+            [else
+             #\9])
+          #\h))
 
     (define (follow-link)
       (eprintf "following html link: ~a~n" url)
@@ -241,6 +273,7 @@
             (send browser-canvas go
                   (struct-copy request
                                base-req
+                               [type (guess-type-from-filename url)]
                                [path/selector
                                 (if (equal? (string-ref url 0) #\/)
                                     url
