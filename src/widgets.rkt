@@ -1250,9 +1250,8 @@
         (when (browser-url? (car list-of-data))
           (go (browser-url-req (car list-of-data))))))
     
-    ;; eventually this may need to handle multiple types of editors, but for now assume browser-text%
     (define/public (get-restore-data)
-      void)
+      (list current-url history))
 
     (define/public (get-history)
       (for/list ([item (in-list history)])
