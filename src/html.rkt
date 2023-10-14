@@ -40,10 +40,10 @@
     d))
 (define delta:symbol (make-object style-delta% 'change-family 'symbol))
 
-;; create a new image snip
+;; create a new bitmap
 ;; use img src attribute and request structure to compose a gopher request to the image
 ;; 
-(define (load-new-image-snip src request)
+(define (load-new-bitmap src request)
   (define selector
     (if (equal? (string-ref src 0) #\/)
         src
@@ -55,11 +55,11 @@
                                  selector
                                  "I"
                                  (request-port request)))
-  (define new-snip (make-object image-snip%
+  (define new-bitmap (make-object bitmap%
                                 (gopher-response-data-port response)
                                 'unknown))
   (close-input-port (gopher-response-data-port response))
-  new-snip)
+  new-bitmap)
 
 #;(define (join-strings c)
   (let loop ([accum-s (string-normalize-spaces (car c))]
@@ -294,22 +294,24 @@
                     (set! current-alignment prev-alignment))))
           '()))
 
-    (define (handle-href node)
-      (define href-value (sxml:attr node 'href))
-      (if href-value
-          #;(let ([link-start-pos (current-pos)]
-                [vlink-delta (make-object style-delta%)])
-            (send vlink-delta set-delta-foreground current-vlink-color)
-            (list (lambda ()
-                    ;; add clickback to link region (temp function to just change the link color)
-                    (send a-text set-clickback
-                          link-start-pos
-                          (current-pos)
-                          (lambda (text-widget start end)
-                            (eprintf "link to ~a clicked~n" href-value)
-                            (send text-widget change-style vlink-delta start end))))))
-          '()
-          '()))
+    (define (handle-img node [url #f] [base-url #f])
+      (when img-ok?
+        (define src-value (sxml:attr node 'src))
+        (define request (send canvas get-current-request))
+        (when request
+          (define align
+            (case (and (sxml:attr node 'align)
+                       (string-downcase (sxml:attr node 'align)))
+              [("left") 'left]
+              [("right") 'right]
+              [("center") 'center]
+              [else current-alignment]))
+          (define bm (load-new-bitmap src-value request))
+          (define snip (if url
+                           (new html-link-img-snip% (url url) (base-url base-url) (browser-canvas canvas))
+                           (make-object image-snip%)))
+          (send snip set-bitmap bm)
+          (send canvas append-snip snip #f align))))
     
     ;; handle each element based on the element type
     ;; return a list of functions to call when closing the element
@@ -318,9 +320,6 @@
         [(p)
          (start-new-paragraph)
          (handle-paragraph-attributes node)]
-        [(a)
-         (send (current-style-delta) set-delta-foreground current-link-color)
-         (handle-href node)]
         [(b)
          (send (current-style-delta) set-delta 'change-bold)
          '()]
@@ -373,7 +372,7 @@
         (define node (car s))
         (cond
           [(sxml:element? node)
-           (printf "element ~a~n" (sxml:element-name node))
+           ;(printf "element ~a~n" (sxml:element-name node))
            (case (sxml:element-name node)
              [(br)
               (insert-newline)]
@@ -404,32 +403,28 @@
                     align)
               #;(insert-newline)]
              [(img)
-              (when img-ok?
-                (define src-value (sxml:attr node 'src))
-                (define request (send canvas get-current-request))
-                (when request
-                  (define align
-                    (case (and (sxml:attr node 'align)
-                               (string-downcase (sxml:attr node 'align)))
-                      [("left") 'left]
-                      [("right") 'right]
-                      [("center") 'center]
-                      [else current-alignment]))
-                  (send canvas append-snip (load-new-image-snip src-value request) #f align)))]
+              (handle-img node)]
              [(a)
-              (define text (sxml:text node))
+              (define content (sxml:content node))
               (define href-value (sxml:attr node 'href))
               (define base-url (request->url (send canvas get-current-request)))
-              (define style-copy (make-object style-delta% 'change-nothing))
-              (send style-copy copy (current-style-delta))
-              (send style-copy set-delta-foreground current-link-color)
-              (define style (send style-list find-or-create-style (current-style) style-copy))
-              (when (non-empty-string? text)
-                (define link-snip (new html-link-snip% (url href-value) (base-url base-url) (browser-canvas canvas)))
-                (send link-snip set-style style)
-                (send link-snip insert text (string-length text))
-                (send canvas append-snip link-snip #f current-alignment))
-              #;(handle-href node)]
+              (when (not (empty? content))
+                (cond
+                  [(non-empty-string? (car content))
+                   (define text (car content))
+                   (define style-copy (make-object style-delta% 'change-nothing))
+                   (send style-copy copy (current-style-delta))
+                   (send style-copy set-delta-foreground current-link-color)
+                   (define style (send style-list find-or-create-style (current-style) style-copy))
+                   (define link-snip (new html-link-snip% (url href-value) (base-url base-url) (browser-canvas canvas)))
+                   (send link-snip set-style style)
+                   (send link-snip insert text (string-length text))
+                   (send canvas append-snip link-snip #f current-alignment)]
+                  [((ntype-names?? '(img)) (car content))
+                   (printf "handle img href~n")
+                   (handle-img (car content) href-value base-url)]
+                  [else
+                   (printf "unhandled href~n")]))]
              [else
               (define style-copy (make-object style-delta% 'change-nothing))
               (send style-copy copy (current-style-delta))
@@ -445,7 +440,7 @@
                 ;; perform actions to close the tag
                 (for ([f (in-list close-tag-funcs)])
                   (f)))
-              (eprintf "ending ~a~n" (car node))
+              ;(eprintf "ending ~a~n" (car node))
 
               ;; insert a newline after a "paragraph" element unless the next element is a <br> or <hr>
               ;; don't do this for 'center' elements
