@@ -157,7 +157,7 @@
          (default-bg-color canvas-bg-color)
          (update-status-cb update-status)
          (update-address-cb update-address)
-         #;(wheel-step 3)))
+         (wheel-step 10)))
 
   (init-styles (send page-canvas get-style-list))
   
