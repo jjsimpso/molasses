@@ -120,6 +120,9 @@
 
     (define visible-elements #f)
 
+    (define (first-visible-element)
+      (and visible-elements (dlist-head-value visible-elements)))
+    
     (define styles (new style-list%))
     (send styles new-named-style "Standard" (send styles find-named-style "Basic"))
 
@@ -454,7 +457,7 @@
           (- original snip-ymargin)])))
     
     (define (layout-goto-new-line new-y)
-      (printf "layout-goto-new-line: ~a~n" new-y)
+      ;(printf "layout-goto-new-line: ~a~n" new-y)
       (set! place-x 0) ; place-x value isn't currently used in layout mode
       (set! place-y new-y)
       (set! layout-baseline-pos new-y)
@@ -1175,6 +1178,16 @@
            (if (eq? key-code 'wheel-up)
                (max 0 (- scroll-pos wheel-step))
                (min max-scroll (+ scroll-pos wheel-step))))
+         (printf "new scroll-y ~a, max ~a~n" scroll-y max-scroll)
+         (scroll-to new-scroll-pos)]
+        [(up down)
+         (define max-scroll (get-scroll-range 'vertical))
+         (define scroll-pos (get-scroll-pos 'vertical))
+         (define line-height wheel-step)
+         (define new-scroll-pos
+           (if (eq? key-code 'up)
+               (max 0 (- scroll-pos line-height))
+               (min max-scroll (+ scroll-pos line-height))))
          (printf "new scroll-y ~a, max ~a~n" scroll-y max-scroll)
          (scroll-to new-scroll-pos)]
         [(next)
