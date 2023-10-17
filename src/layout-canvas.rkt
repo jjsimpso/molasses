@@ -998,6 +998,7 @@
              (when (not (element-words e))
                (calc-word-extents e))
              (set!-values (x1 y1 x2 y2) (layout-string e dw y))
+             (set-element-cached-text-extent! e (text-extent (- x2 x1) (- y2 y1) 0 0)) 
              ;(printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
              ;; set position for adding next element
              (when (element-end-of-line e)
@@ -1488,7 +1489,7 @@
   (init-styles (send canvas get-style-list))
   (send canvas set-canvas-background canvas-bg-color)
 
-  (define layout-test 'center)
+  (define layout-test 'text2)
   (if layout-test
       (send canvas set-mode 'layout)
       (send canvas set-mode 'wrapped))
