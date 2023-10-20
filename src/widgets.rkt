@@ -1059,10 +1059,10 @@
                  (cons index node)]))
             #f)))
 
-    (define/override (append-snip s [end-of-line #f] [alignment 'unaligned])
+    (define/override (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       (when (is-a? s menu-item-snip%)
         (dlist-append! menu-items s))
-      (super append-snip s end-of-line alignment))
+      (super append-snip s end-of-line alignment properties))
 
     (define/override (erase)
       (set! menu-items (dlist-new))

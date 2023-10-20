@@ -125,22 +125,14 @@
   (class snip%
     (super-new)
 
-    (init-field [width-attribute '('percent . 100)]
-                [align-attribute 'center]
-                ; the left margin/horizontal inset of the editor-canvas<%>
-                [horz-offset 5])
+    (init-field
+     ; the left margin/horizontal inset of the editor-canvas<%>
+     [horz-offset 5])
 
-    (define (calc-width dc-width)
-      ;(eprintf "get-extent width=~a~n" (* dc-width (/ (cdr width-attribute) 100)))
-      (if (eq? (car width-attribute) 'pixels)
-          (cdr width-attribute)
-          (* (- dc-width (* horz-offset 2))
-             (/ (cdr width-attribute) 100))))
-
-    (define (calc-height)
-      8.0)
+    (define width 100)
+    (define height 8)
     
-    (define/override (get-extent dc x y	 	 	 	 
+    (define/override (get-extent dc x y
                                    [w #f]
                                    [h #f]
                                    [descent #f]
@@ -148,23 +140,22 @@
                                    [lspace #f]
                                    [rspace #f])
       (define (maybe-set-box! b v) (when b (set-box! b v)))
-      (define-values (width height) (send dc get-size))
       
-      (maybe-set-box! w (calc-width width))
-      (maybe-set-box! h (calc-height))
+      (maybe-set-box! w width)
+      (maybe-set-box! h height)
       (maybe-set-box! descent 0.0)
       (maybe-set-box! space 0.0)
       (maybe-set-box! lspace 0.0)
       (maybe-set-box! rspace 0.0))
 
+    (define/override (resize w h)
+      (printf "resizing horiz-line-snip% to ~ax~a~n" w h)
+      (set! width w)
+      (set! height h))
+    
     (define/override (draw dc x y left top right bottom dx dy draw-caret)
       (define old-pen (send dc get-pen))
       (define old-smoothing (send dc get-smoothing))
-      
-      (define-values (w h) (send dc get-size))
-      (define drawable-width (- w (* horz-offset 2)))
-      (define width (calc-width w))
-      (define height (calc-height))
       
       ;; draw debug rectangle
       #|
@@ -178,18 +169,10 @@
       (send dc set-pen (make-object color% #x9a #x9a #x9a) 1 'solid)
       (send dc set-smoothing 'aligned)
 
-      (define x-pos
-        (cond
-          [(eq? align-attribute 'left) x]
-          [(eq? align-attribute 'right)
-           (max (- w horz-offset width) 0)]
-          [else
-           ;; default to 'center
-           (+ x (/ (max (- drawable-width width) 0) 2))]))
+      (define x-pos x)
       (define y-pos (sub1 (+ y (/ height 2))))
       (define y-pos-line2 (add1 y-pos))
-      ;(eprintf "draw: align=~a,w=~a,width=~a draw ~a to ~a~n" align-attribute w width x-pos (+ x-pos width))
-      ;(eprintf "draw: draw rectangle ~a to ~a~n" x (+ x drawable-width))
+      ;(eprintf "draw: width=~a draw ~a to ~a~n" width x-pos (+ x-pos width))
       (send dc draw-line x-pos                  y-pos
                          (sub1 (+ x-pos width)) y-pos)
       (send dc set-pen (make-object color% #xba #xba #xba) 1 'solid)
@@ -204,9 +187,7 @@
       (send dc set-pen old-pen))
 
     (define/override (copy)
-      (new horz-line-snip%
-           [width-attribute width-attribute]
-           [align-attribute align-attribute]))))
+      (new horz-line-snip% [horz-offset horz-offset]))))
 
 (define link-interface (interface () on-event on-goodbye-event get-flags set-flags))
 
@@ -283,7 +264,7 @@
       (eprintf "html-link-snip% mouse event ~a~n" (send event get-event-type))
       (cond
         [(send event moving?)
-         ;(eprintf "mouse motion event~n")
+         (eprintf "mouse motion event~n")
          (send browser-canvas update-status status-text)]
         [(send event button-down? 'left)
          (follow-link)]))

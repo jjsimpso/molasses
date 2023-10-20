@@ -107,6 +107,7 @@
       ([snip #:mutable] ; for strings this will be a raw string instead of a string-snip%
        [end-of-line #:mutable]
        [alignment #:mutable]
+       [properties #:mutable]
        [xpos #:mutable #:auto] ; position of top left corner of element, #f for hidden(hiding not implemented yet)
        [ypos #:mutable #:auto]
        [text-style #:mutable #:auto] ; only used for strings since snips have their own style
@@ -921,6 +922,23 @@
       
       (when (> (dlist-length elements) 0)
         (set-visible-elements!)))
+
+    (define (handle-element-properties e)
+      (define snip (element-snip e))
+      (when (is-a? snip snip%)
+        (define-values (dw dh) (get-drawable-size))
+        (for ([prop (in-list (element-properties e))])
+          (printf "handle element property ~a~n" prop)
+          (case (car prop)
+            [(width-percent)
+             (define space-available (- dw layout-left-width (unaligned-or-center-width) layout-right-width))
+             (define w (* space-available (/ (cdr prop) 100.0)))
+             (define h (get-element-height e))
+             (send snip resize w h)]
+            [(width-pixels)
+             (define w (cdr prop))
+             (define h (get-element-height e))
+             (send snip resize w h)]))))
     
     ;; places element on the virtual canvas and updates virtual size of canvas
     ;; e is the new element and must be the new tail of the element list
@@ -936,6 +954,8 @@
 
       ;; cause get-extent to recalculate text extents by deleting cached value
       (set-element-cached-text-extent! e #f)
+
+      (handle-element-properties e)
       
       ;; get extent of element
       (if (string? (element-snip e))
@@ -1029,6 +1049,7 @@
                                        (unbox snip-h)))
                (set!-values (x1 y1 x2 y2) (layout-snip e dw y (unbox snip-w) snip-height))
                ;(printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
+               ;(printf "extent: ~ax~a~n" (unbox snip-w) (unbox snip-h))
                ; layout-goto-new-line needs the element's position to be set, so set it early for now
                (set-element-xpos! e x1)
                (set-element-ypos! e y1)
@@ -1221,6 +1242,8 @@
                                       (- (+ ey top) ymargin)))
          (define e (select-element x y))
 
+         ;(printf "on-event: ~ax~a ~ax~a~n" (send event get-x) (send event get-y) x y)
+
          ;; send on-goodby-event to snips that lose mouse focus
          (when (not (eq? e element-with-focus))
            (when (and element-with-focus (is-a? (element-snip element-with-focus) snip%))
@@ -1319,8 +1342,8 @@
       (update-visible-elements! 1 scroll-y (+ scroll-y dh)))
     
     ;; append a snip. snips have their own style
-    (define/public (append-snip s [end-of-line #f] [alignment 'unaligned])
-      (define e (element s end-of-line alignment))
+    (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
+      (define e (element s end-of-line alignment properties))
       (place-element e place-x place-y)
       (define-values (vx vy) (get-virtual-size))
       (update-scrollbars vx vy)
@@ -1334,14 +1357,14 @@
          ;; default to adding newline after each line/element
          (define p (open-input-string s))
          (for ([line (in-lines p)])
-           (define e (element line end-of-line alignment))
+           (define e (element line end-of-line alignment '()))
            (set-element-text-style! e (or style default-style))
            (place-element e place-x place-y)
            (define-values (vx vy) (get-virtual-size))
            (update-scrollbars vx vy)
            (append-element e))]
         [else
-         (define e (element s end-of-line alignment))
+         (define e (element s end-of-line alignment '()))
          (set-element-text-style! e (or style default-style))
          (place-element e place-x place-y)
          (define-values (vx vy) (get-virtual-size))

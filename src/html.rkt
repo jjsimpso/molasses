@@ -203,7 +203,7 @@
          #f]))
     
     (define (insert-newline)
-      (eprintf "inserting newline~n")
+      ;(eprintf "inserting newline~n")
       (send canvas append-string "\n" #f #t))
 
     (define (start-new-paragraph)
@@ -378,14 +378,14 @@
               (insert-newline)]
              [(hr)
               (define width-value (sxml:attr node 'width))
-              (define width
+              (define width-property
                 (if width-value
                     (if (string-contains? width-value "%")
-                        (cons 'percent
+                        (cons 'width-percent
                               (string->number (car (string-split width-value "%"))))
-                        (cons 'pixels
+                        (cons 'width-pixels
                               (string->number width-value)))
-                    '('percent . 100)))
+                    '(width-percent . 100)))
               (define align
                 (case (and (sxml:attr node 'align)
                            (string-downcase (sxml:attr node 'align)))
@@ -396,11 +396,10 @@
               (when (not (last-element-eol?))
                 (insert-newline))
               (send canvas append-snip
-                    (new horz-line-snip%
-                         [width-attribute width]
-                         [horz-offset horz-inset])
+                    (new horz-line-snip%)
                     #t
-                    align)
+                    align
+                    (list width-property))
               #;(insert-newline)]
              [(img)
               (handle-img node)]
@@ -411,6 +410,7 @@
               (when (not (empty? content))
                 (cond
                   [(non-empty-string? (car content))
+                   (printf "handle href ~a~n" content)
                    (define text (car content))
                    (define style-copy (make-object style-delta% 'change-nothing))
                    (send style-copy copy (current-style-delta))
