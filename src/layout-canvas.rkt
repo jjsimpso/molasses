@@ -1179,6 +1179,13 @@
       (define-values (vx vy) (get-virtual-size))
       (update-scrollbars vx vy))
 
+    (define (clip-lines lines x y)
+      (for/or ([wl (in-dlist lines)])
+        (and (>= x (wrapped-line-x wl))
+             (>= y (wrapped-line-y wl))
+             (<= x (+ (wrapped-line-x wl) (wrapped-line-w wl)))
+             (<= y (+ (wrapped-line-y wl) (wrapped-line-h wl))))))
+    
     (define (select-element x y)
       (for/or ([e (in-dlist visible-elements)]
                #:when (and (>= y (element-ypos e))
@@ -1188,6 +1195,8 @@
         (get-extent e dc (element-xpos e) (element-ypos e) w h)
         (and (<= y (+ (element-ypos e) (unbox h)))
              (<= x (+ (element-xpos e) (unbox w)))
+             (or (false? (element-lines e))
+                 (clip-lines (element-lines e) x y))
              e)))
 
     (define/override (on-char event)
