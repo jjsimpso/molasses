@@ -131,7 +131,12 @@
           (define canvas (active-page-canvas tab-panel))
           (when canvas
             (eprintf "word wrap demand callback~n")
-            (send item check (eq? (send canvas get-mode) 'wrapped)))))
+            ; disable word wrapping selection if in layout mode
+            (if (eq? (send canvas get-mode) 'layout)
+                (send item enable #f)
+                (begin
+                  (send item enable #t)
+                  (send item check (eq? (send canvas get-mode) 'wrapped)))))))
        (callback 
         (lambda (item event)
           (define canvas (active-page-canvas tab-panel))

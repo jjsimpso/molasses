@@ -1260,7 +1260,7 @@
            (set! element-with-focus e))
                 
          (when (and e (is-a? (element-snip e) snip%))
-           (printf "on-event: pass event to snip ~ax~a, canvas:~ax~a, element at ~ax~a~n"
+           #;(printf "on-event: pass event to snip ~ax~a, canvas:~ax~a, element at ~ax~a~n"
                    (send event get-x) (send event get-y) x y (element-xpos e) (element-ypos e))
            (send (element-snip e) on-event
                  dc
@@ -1277,12 +1277,13 @@
 
     ;;
     (define/public (set-mode m)
-      (set! mode m)
-      (unless (dlist-empty? elements)
-        (reset-layout)
-        (let-values ([(x y) (get-virtual-size)])
-          (update-scrollbars x y))
-        (refresh)))
+      (unless (eq? mode m)
+        (set! mode m)
+        (unless (dlist-empty? elements)
+          (reset-layout)
+          (let-values ([(x y) (get-virtual-size)])
+            (update-scrollbars x y))
+          (refresh))))
 
     ;; clear the canvas contents
     (define/public (erase)

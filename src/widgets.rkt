@@ -96,6 +96,8 @@
   ;; reset gopher-menu? boolean to default when loading a new page
   (set-field! gopher-menu? canvas #f)
 
+  (send canvas check-gopher-defaults)
+  
   (define update-start-time (current-inexact-monotonic-milliseconds))
 
   (send canvas begin-edit-sequence)
@@ -384,6 +386,8 @@
 
   (eprintf "goto-gemini: status=~a, meta=~a, from-url=~a~n" (gemini-response-status resp) (gemini-response-meta resp)
            (gemini-response-from-url resp))
+
+  (send canvas check-gemini-defaults)
 
   ;; the case needs to be in tail position so that it returns the correct value to load-page
   (case (gemini-response-status resp)
@@ -933,6 +937,9 @@
              get-drawable-size
              get-view-start
              get-style-list
+             get-mode
+             set-mode
+             set-default-style
              begin-edit-sequence
              end-edit-sequence
              in-edit-sequence?
@@ -1073,6 +1080,25 @@
     (define/public (reset-background-color)
       (set-canvas-background default-bg-color))
 
+    (define/public (check-gopher-defaults)
+      ;; reset canvas mode if it was changed when loading html
+      (when (eq? (get-mode) 'layout)
+        (printf "check-gopher-defaults~n")
+        (define standard-style
+          (send (get-style-list) find-named-style "Standard"))
+        (set-default-style standard-style)
+        (reset-background-color)
+        (set-mode 'plaintext)))
+
+    (define/public (check-gemini-defaults)
+      ;; reset canvas mode if it was changed when loading html
+      (when (eq? (get-mode) 'layout)
+        (define standard-style
+          (send (get-style-list) find-named-style "Standard"))
+        (set-default-style standard-style)
+        (reset-background-color)
+        (set-mode 'wrapped)))
+    
     (define/private (push-history url)
       ;; prevent sequence of duplicate URLs. replace top element of history if it
       ;; refers to the same URL/Request. essentially this only updates the current
