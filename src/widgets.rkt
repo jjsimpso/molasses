@@ -1138,7 +1138,7 @@
       (if initial-selection-pos
           (set! menu-selection (find-menu-item initial-selection-pos)) 
           (set! menu-selection (find-first-menu-item)))
-      (when (cdr menu-selection)
+      (when (and menu-selection (cdr menu-selection))
         (eprintf "highlight first menu item~n")
         (define snip (selection-snip menu-selection))
         (define new-style (send (get-style-list) find-named-style "Link Highlight"))
