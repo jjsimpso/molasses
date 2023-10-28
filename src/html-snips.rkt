@@ -3,10 +3,15 @@
 (require racket/class
          racket/snip
          racket/draw
-         racket/format)
+         racket/format
+         net/sendurl)
+
+(require "request.rkt")
 
 (provide horz-line-snip%
-         img-hack-snip%)
+         img-hack-snip%
+         html-link-snip%
+         html-link-img-snip%)
 
 (define (next-break-pos s pos)
   (define (line-break? c)
@@ -120,22 +125,14 @@
   (class snip%
     (super-new)
 
-    (init-field [width-attribute '('percent . 100)]
-                [align-attribute 'center]
-                ; the left margin/horizontal inset of the editor-canvas<%>
-                [horz-offset 5])
+    (init-field
+     ; the left margin/horizontal inset of the editor-canvas<%>
+     [horz-offset 5])
 
-    (define (calc-width dc-width)
-      ;(eprintf "get-extent width=~a~n" (* dc-width (/ (cdr width-attribute) 100)))
-      (if (eq? (car width-attribute) 'pixels)
-          (cdr width-attribute)
-          (* (- dc-width (* horz-offset 2))
-             (/ (cdr width-attribute) 100))))
-
-    (define (calc-height)
-      8.0)
+    (define width 100)
+    (define height 8)
     
-    (define/override (get-extent dc x y	 	 	 	 
+    (define/override (get-extent dc x y
                                    [w #f]
                                    [h #f]
                                    [descent #f]
@@ -143,23 +140,22 @@
                                    [lspace #f]
                                    [rspace #f])
       (define (maybe-set-box! b v) (when b (set-box! b v)))
-      (define-values (width height) (send dc get-size))
       
-      (maybe-set-box! w (calc-width width))
-      (maybe-set-box! h (calc-height))
+      (maybe-set-box! w width)
+      (maybe-set-box! h height)
       (maybe-set-box! descent 0.0)
       (maybe-set-box! space 0.0)
       (maybe-set-box! lspace 0.0)
       (maybe-set-box! rspace 0.0))
 
+    (define/override (resize w h)
+      (printf "resizing horiz-line-snip% to ~ax~a~n" w h)
+      (set! width w)
+      (set! height h))
+    
     (define/override (draw dc x y left top right bottom dx dy draw-caret)
       (define old-pen (send dc get-pen))
       (define old-smoothing (send dc get-smoothing))
-      
-      (define-values (w h) (send dc get-size))
-      (define drawable-width (- w (* horz-offset 2)))
-      (define width (calc-width w))
-      (define height (calc-height))
       
       ;; draw debug rectangle
       #|
@@ -173,18 +169,10 @@
       (send dc set-pen (make-object color% #x9a #x9a #x9a) 1 'solid)
       (send dc set-smoothing 'aligned)
 
-      (define x-pos
-        (cond
-          [(eq? align-attribute 'left) x]
-          [(eq? align-attribute 'right)
-           (max (- w horz-offset width) 0)]
-          [else
-           ;; default to 'center
-           (+ x (/ (max (- drawable-width width) 0) 2))]))
+      (define x-pos x)
       (define y-pos (sub1 (+ y (/ height 2))))
       (define y-pos-line2 (add1 y-pos))
-      ;(eprintf "draw: align=~a,w=~a,width=~a draw ~a to ~a~n" align-attribute w width x-pos (+ x-pos width))
-      ;(eprintf "draw: draw rectangle ~a to ~a~n" x (+ x drawable-width))
+      ;(eprintf "draw: width=~a draw ~a to ~a~n" width x-pos (+ x-pos width))
       (send dc draw-line x-pos                  y-pos
                          (sub1 (+ x-pos width)) y-pos)
       (send dc set-pen (make-object color% #xba #xba #xba) 1 'solid)
@@ -199,6 +187,91 @@
       (send dc set-pen old-pen))
 
     (define/override (copy)
-      (new horz-line-snip%
-           [width-attribute width-attribute]
-           [align-attribute align-attribute]))))
+      (new horz-line-snip% [horz-offset horz-offset]))))
+
+(define link-interface (interface () on-event on-goodbye-event get-flags set-flags))
+
+(define (html-link-mixin %)
+  (class %
+    (init-field [url ""]
+                [base-url ""]
+                [browser-canvas #f])
+    (inherit get-flags set-flags)
+    (super-new)
+    (set-flags (cons 'handles-all-mouse-events (get-flags)))
+    (set-flags (cons 'handles-between-events (get-flags)))
+
+    (define status-text (string-append "Goto " url))
+
+    (define (replace-final-path-element path relative-path)
+      ;(printf "replace-final-path-element: ~a, ~a~n" path relative-path)
+      (string-append (path->string (path-only path)) relative-path))
+
+    (define (guess-type-from-filename path)
+      (define extension (path-get-extension path))
+      (if extension
+          (cond
+            [(or (bytes=? extension #".htm")
+                 (bytes=? extension #".html"))
+             #\h]
+            [(or (bytes=? extension #".txt")
+                 (bytes=? extension #".conf")
+                 (bytes=? extension #".cfg")
+                 (bytes=? extension #".sh")
+                 (bytes=? extension #".bat")
+                 (bytes=? extension #".ini"))
+             #\0]
+            [(bytes=? extension #".gif") "g"]
+            [(or (bytes=? extension #".jpg")
+                 (bytes=? extension #".jpeg")
+                 (bytes=? extension #".bmp")
+                 (bytes=? extension #".xpm")
+                 (bytes=? extension #".ppm")
+                 (bytes=? extension #".tiff")
+                 (bytes=? extension #".png"))
+             #\I]
+            [(or (bytes=? extension #".wav")
+                 (bytes=? extension #".ogg")
+                 (bytes=? extension #".mp3"))
+             #\s]
+            [else
+             #\9])
+          #\h))
+
+    (define (follow-link)
+      (eprintf "following html link: ~a~n" url)
+      (if (regexp-match #px"^(\\w+://).*" url)
+          (cond
+            [(string-prefix? url "gemini://")
+             (send browser-canvas go (url->request url))]
+            [(string-prefix? url "gopher://")
+             (send browser-canvas go (url->request url))]
+            [(or (string-prefix? url "http://")
+                 (string-prefix? url "https://"))
+             (send-url url #t)])
+          ;; handle partial URLs
+          (let ([base-req (url->request base-url)])
+            (send browser-canvas go
+                  (struct-copy request
+                               base-req
+                               [type (guess-type-from-filename url)]
+                               [path/selector
+                                (if (equal? (string-ref url 0) #\/)
+                                    url
+                                    (replace-final-path-element (request-path/selector base-req) url))])))))
+
+    (define/override (on-event dc x y editorx editory event)
+      (eprintf "html-link-snip% mouse event ~a~n" (send event get-event-type))
+      (cond
+        [(send event moving?)
+         (eprintf "mouse motion event~n")
+         (send browser-canvas update-status status-text)]
+        [(send event button-down? 'left)
+         (follow-link)]))
+
+    (define/override (on-goodbye-event dc x y editorx editory event)
+      ;(eprintf "goodbye event~n")
+      (send browser-canvas update-status "Ready"))))
+
+(define html-link-snip% (html-link-mixin string-snip%))
+(define html-link-img-snip% (html-link-mixin image-snip%))

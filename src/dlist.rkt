@@ -6,6 +6,10 @@
 (require (for-syntax syntax/parse))
 
 (provide dlist
+         dlink
+         dlink-next
+         dlink-prev
+         dlink-value
          dlist-head
          dlist-tail
          set-dlist-head!
@@ -16,12 +20,14 @@
          dlist-tail-value
          dlist-head-next
          dlist-tail-prev
+         dlist-ref
          dlist-append!
          dlist-push!
          dlist-pop!
          dlist-length
          dlist->list
          in-dlist
+         in-dlist-reverse
          dlist-cursor
          dlist-advance-head!
          dlist-retreat-head!
@@ -73,6 +79,14 @@
   (if (dlist-tail dl)
       (dlink-prev (dlist-tail dl))
       #f))
+
+;; returns the value of element at index or #f
+;; ideally i'd like this to throw an exception instead of returning #f, as list-ref does
+(define (dlist-ref dl index)
+  (for/or ([node (in-dlist dl)]
+           [i (in-naturals)]
+           #:when (= i index))
+    node))
 
 (define (dlist-append! dl value)
   (define old-tail (dlist-tail dl))
@@ -307,6 +321,8 @@
   (check-equal? (for/list ([v (in-dlist-reverse a-dlist)]) v) '(3))
   (check-equal? (dlink-value (dlist-head a-dlist)) 3)
   (check-equal? (dlist-tail a-dlist) #f)
+  (check-equal? (dlist-head-value a-dlist) 3)
+  (check-equal? (dlist-tail-value a-dlist) 3)
   (dlist-append! a-dlist 4)
   (check-equal? (dlink-value (dlist-head a-dlist)) 3)
   (check-equal? (dlink-value (dlist-tail a-dlist)) 4)
@@ -319,6 +335,9 @@
   (check-equal? (dlist-length a-dlist) 5)
   (check-equal? (for/list ([v (in-dlist a-dlist)]) v) '(1 2 3 4 5))
   (check-equal? (for/list ([v (in-dlist-reverse a-dlist)]) v) '(5 4 3 2 1))
+  (check-equal? (dlist-ref a-dlist 0) 1)
+  (check-equal? (dlist-ref a-dlist 4) 5)
+  (check-equal? (dlist-ref a-dlist 5) #f)
   
   ;;; cursor tests
   (define cursor (dlist-cursor a-dlist))

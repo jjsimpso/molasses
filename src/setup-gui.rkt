@@ -128,15 +128,22 @@
        (parent edit-menu)
        (demand-callback
         (lambda (item)
-          (define ed (send (active-page-canvas tab-panel) get-editor))
-          (when ed
-            ;(eprintf "word wrap demand callback, autowrap=~a~n" (send ed auto-wrap))
-            (send item check (send ed auto-wrap)))))
+          (define canvas (active-page-canvas tab-panel))
+          (when canvas
+            (eprintf "word wrap demand callback~n")
+            ; disable word wrapping selection if in layout mode
+            (if (eq? (send canvas get-mode) 'layout)
+                (send item enable #f)
+                (begin
+                  (send item enable #t)
+                  (send item check (eq? (send canvas get-mode) 'wrapped)))))))
        (callback 
         (lambda (item event)
-          (define ed (send (active-page-canvas tab-panel) get-editor))
-          (when ed
-            (send ed auto-wrap (send item is-checked?))))))
+          (define canvas (active-page-canvas tab-panel))
+          (when canvas
+            (eprintf "word wrap callback~n")
+            (define checked? (send item is-checked?))
+            (send canvas set-mode (if checked? 'wrapped 'plaintext))))))
 
   ;(append-editor-font-menu-items font-menu)
 
@@ -180,8 +187,7 @@
   (define (goto-bookmark url)
     (eprintf "opening bookmark to ~a~n" url)
     (define page-canvas (active-page-canvas tab-panel))
-    (define page-text (send page-canvas get-editor))
-    (send page-text go (url->request url))
+    (send page-canvas go (url->request url))
     (send page-canvas focus))
 
   (new menu-item%

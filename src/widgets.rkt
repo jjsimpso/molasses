@@ -6,9 +6,10 @@
 (require "gemini.rkt")
 (require "download.rkt")
 (require "html.rkt")
+(require "dlist.rkt")
+(require "layout-canvas.rkt")
 
-(provide browser-text%
-         browser-canvas%
+(provide browser-canvas%
          menu-item-snip%
          address-field%)
 
@@ -17,7 +18,7 @@
    selection-pos)  ;; position value or #f
   #:prefab)
 
-(define (insert-menu-item text-widget dir-entity)
+(define (insert-menu-item canvas dir-entity)
   (define (gopher-menu-type-text type)
     (case type
       [(#\0) "(TEXT) "]
@@ -35,12 +36,12 @@
       [else  "(UNKN) "]))
 
   (define standard-style
-    (send (send text-widget get-style-list) find-named-style "Standard"))
+    (send (send canvas get-style-list) find-named-style "Standard"))
   (define link-style
-    (send (send text-widget get-style-list) find-named-style "Link"))
+    (send (send canvas get-style-list) find-named-style "Link"))
   
   (define type-snip (new string-snip%))
-  (define link-snip (new menu-item-snip% (dir-entity dir-entity)))
+  (define link-snip (new menu-item-snip% (dir-entity dir-entity) (browser-canvas canvas)))
   
   (define type-text (gopher-menu-type-text (gopher-dir-entity-type dir-entity)))
   (define display-text (gopher-dir-entity-user-name dir-entity))
@@ -48,21 +49,13 @@
   ;; insert text for type indication
   (send type-snip set-style standard-style)
   (send type-snip insert type-text (string-length type-text))
-  (send text-widget insert type-snip)
-  
-  (define link-start-pos (send text-widget last-position))
+  (send canvas append-snip type-snip)
+
   (send link-snip set-style link-style)
   (send link-snip insert display-text (string-length display-text)) ;(send link-snip get-count))
-  (send text-widget insert link-snip)
-  (send text-widget change-style standard-style)
-  ;; add clickback to link region
-  (send text-widget set-clickback
-        link-start-pos
-        (send text-widget last-position)
-        selection-clickback-handler)
-)
+  (send canvas append-snip link-snip #t))
 
-(define (insert-directory-line text-widget line)
+(define (insert-directory-line canvas line)
   ;(eprintf "insert-directory-line: ~a~n" line)
   (if (non-empty-string? line)
       (let ([dir-entity (parse-dir-entity line)])
@@ -72,20 +65,19 @@
            void]
           ;; display error line
           [(equal? (gopher-dir-entity-type dir-entity) #\3)
-           (send text-widget insert (gopher-dir-entity-user-name dir-entity))
-           (send text-widget insert "\n")]
+           (send canvas append-string (gopher-dir-entity-user-name dir-entity))]
           ;; insert informational lines as plain text
           [(equal? (gopher-dir-entity-type dir-entity) #\i)
-           (send text-widget insert "       ")  ; indent information text to line up with menu items
-           (send text-widget insert (gopher-dir-entity-user-name dir-entity))
-           (send text-widget insert "\n")]
+           (send canvas append-string "       " #f #f)  ; indent information text to line up with menu items
+           (if (= (string-length (gopher-dir-entity-user-name dir-entity)) 0)
+               (send canvas append-string "\n")
+               (send canvas append-string (gopher-dir-entity-user-name dir-entity)))]
           [else
-           (insert-menu-item text-widget dir-entity)
-           (send text-widget insert "\n")]))
+           (insert-menu-item canvas dir-entity)]))
       ;; be permissive of blank lines
-      (send text-widget insert "\n")))
+      (send canvas append-string "\n")))
 
-(define (goto-gopher req page-text [initial-selection-pos #f])
+(define (goto-gopher req canvas [initial-selection-pos #f])
   (eprintf "goto-gopher: ~a, ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req) initial-selection-pos)
 
   (define resp (gopher-fetch (request-host req)
@@ -99,73 +91,72 @@
                         #\1))
 
   ;; this flag is used to signal the main thread that text% updates have begun
-  (set-field! editor-busy? page-text #t)
+  (set-field! editor-busy? canvas #t)
   
   ;; reset gopher-menu? boolean to default when loading a new page
-  (set-field! gopher-menu? page-text #f)
+  (set-field! gopher-menu? canvas #f)
 
+  (send canvas check-gopher-defaults)
+  
   (define update-start-time (current-inexact-monotonic-milliseconds))
 
-  (send page-text begin-edit-sequence)
+  (send canvas begin-edit-sequence)
   (cond
     [(gopher-response-error? resp)
-     (send page-text insert (port->string (gopher-response-data-port resp) #:close? #t))]
+     (send canvas append-string (port->string (gopher-response-data-port resp) #:close? #t))]
     [(equal? item-type #\1) ; directory
      (for ([line (in-lines (gopher-response-data-port resp))])
-       (insert-directory-line page-text line))
+       (insert-directory-line canvas line))
      (close-input-port (gopher-response-data-port resp))
-     (send page-text init-gopher-menu initial-selection-pos)]
+     (send canvas init-gopher-menu initial-selection-pos)]
     [(equal? item-type #\0) ; text
      ;; insert one line at a time to handle end of line conversion
      #;(for ([line (in-lines (gopher-response-data-port resp))])
-       (send page-text insert line)
-       (send page-text insert "\n"))
+       (send canvas insert line)
+       (send canvas insert "\n"))
      ;; this isn't ideal but is still a lot faster than inserting one line at a time
      ;; (text% treats #\return as a newline so DOS formatted files have extra newlines)
-     (send page-text insert (string-replace
-                             (port->string (gopher-response-data-port resp))
-                             "\r\n"
-                             "\n"))
-     (close-input-port (gopher-response-data-port resp))
-     (send page-text set-position 0)]
+     (send canvas append-string (string-replace
+                                 (port->string (gopher-response-data-port resp))
+                                 "\r\n"
+                                 "\n"))
+     (close-input-port (gopher-response-data-port resp))]
     [(equal? item-type #\h)
      (render-html-to-text (gopher-response-data-port resp)
-                          page-text
+                          canvas
                           #t
                           #f)
-     (close-input-port (gopher-response-data-port resp))
-     (send page-text set-position 0)]
+     (close-input-port (gopher-response-data-port resp))]
     [(equal? item-type #\I) ; image
      (define img (make-object image-snip%
                               (gopher-response-data-port resp)
                               'unknown))
-     (send page-text insert img)
-     (send page-text set-position 0)
+     (send canvas append-snip img #t)
      (close-input-port (gopher-response-data-port resp))]
     [(equal? item-type #\g) ; gif
      (define img (make-object image-snip%
                               (gopher-response-data-port resp)
                               'gif))
      (close-input-port (gopher-response-data-port resp))
-     (send page-text insert img)
-     (send page-text set-position 0)]
+     (send canvas append-snip img #t)]
     [(or (equal? item-type #\d) ; document (PDF, Word, etc.)
          (equal? item-type #\P))
-     (send page-text insert (format "How would you like to handle document ~a ?~n~n" (request-path/selector req)))
-     (insert-menu-item page-text
+     (send canvas append-string (format "How would you like to handle document ~a ?~n~n" (request-path/selector req)))
+     (insert-menu-item canvas
                        (gopher-dir-entity #\> "Open file in external application" (request-path/selector req) (request-host req) (~a (request-port req))))
-     (send page-text insert "\n")
-     (insert-menu-item page-text
+     (send canvas append-string "\n")
+     (insert-menu-item canvas
                        (gopher-dir-entity #\9 "Download file" (request-path/selector req) (request-host req) (~a (request-port req))))
-     (send page-text init-gopher-menu #f)
+     (send canvas init-gopher-menu #f)
      (close-input-port (gopher-response-data-port resp))]
     [else
-     (send page-text insert (format "Unsupported type ~a~n~n" item-type))
-     (insert-menu-item page-text
+     (send canvas append-string (format "Unsupported type ~a~n~n" item-type))
+     (insert-menu-item canvas
                        (gopher-dir-entity #\9 "Download file" (request-path/selector req) (request-host req) (~a (request-port req))))
-     (send page-text init-gopher-menu #f)
+     (send canvas init-gopher-menu #f)
      (close-input-port (gopher-response-data-port resp))])
-  (send page-text end-edit-sequence)
+  (send canvas end-edit-sequence)
+  (send canvas refresh)
   (eprintf "goto-gopher UI update took ~a ms~n" (- (current-inexact-monotonic-milliseconds) update-start-time)))
 
 ;; download gopher selector to a temp file and open it with an external application
@@ -232,7 +223,7 @@
         (copy-port data-port (current-output-port))
         (mark-download-complete (current-thread))))))
 
-(define (selection-clickback-handler text-widget start end)
+#;(define (selection-clickback-handler text-widget start end)
   (define snip (send text-widget find-snip start 'after))
   (eprintf "clickback: start=~a, snip=~a~n" start snip)
   (when (and snip (is-a? snip menu-item-snip%))
@@ -240,23 +231,6 @@
     (define dir-entity (get-field dir-entity snip))
     (send text-widget go (dir-entity->request dir-entity))))
 
-(define (find-next-menu-snip snip)
-  (if (not snip)
-      #f
-      (let ([next-snip (send snip next)])
-        ;(eprintf "find-next-menu-snip: ~a, ~a~n" snip next-snip)
-        (if (is-a? next-snip menu-item-snip%)
-            next-snip
-            (find-next-menu-snip next-snip)))))
-
-(define (find-prev-menu-snip snip)
-  (if (not snip)
-      #f
-      (let ([prev-snip (send snip previous)])
-        ;(eprintf "find-prev-menu-snip: ~a, ~a~n" snip prev-snip)
-        (if (is-a? prev-snip menu-item-snip%)
-            prev-snip
-            (find-prev-menu-snip prev-snip)))))
 
 ; Links take the form "=>[<whitespace>]<URL>[<whitespace><USER-FRIENDLY LINK NAME>]<CR><LF>"
 (define gemini-link-re #px"^=>\\s*(\\S*)\\s*(.*)")
@@ -266,17 +240,17 @@
 
 (define gemini-pre-re #px"^```.*")
 
-(define (insert-gemini-text text-widget data-port base-url)
+(define (insert-gemini-text canvas data-port base-url)
   (define standard-style
-    (send (send text-widget get-style-list) find-named-style "Standard"))
+    (send (send canvas get-style-list) find-named-style "Standard"))
   (define link-style
-    (send (send text-widget get-style-list) find-named-style "Link"))
+    (send (send canvas get-style-list) find-named-style "Link"))
   (define header1-style
-    (send (send text-widget get-style-list) find-named-style "Header1"))
+    (send (send canvas get-style-list) find-named-style "Header1"))
   (define header2-style
-    (send (send text-widget get-style-list) find-named-style "Header2"))
+    (send (send canvas get-style-list) find-named-style "Header2"))
   (define header3-style
-    (send (send text-widget get-style-list) find-named-style "Header3"))
+    (send (send canvas get-style-list) find-named-style "Header3"))
   
   ; We'll just display them as bold text
   (define (line->header line)  
@@ -286,26 +260,24 @@
               3
               2)
           1))
-    (define text-snip (new string-snip%))
-    (send text-snip set-style
-          (case octothorpe-count
-            [(1) header1-style]
-            [(2) header2-style]
-            [(3) header3-style]))
+    (define header-style
+      (case octothorpe-count
+        [(1) header1-style]
+        [(2) header2-style]
+        [(3) header3-style]))
     ;; skip the mandatory space character after the last '#'
     (define header-string (substring line (add1 octothorpe-count)))
-    (send text-snip insert header-string (string-length header-string))
-    text-snip)
+    (send canvas append-string header-string header-style #t))
   
   ; Plain text lines are anything else
-  (define (line->text text)
-    (define text-snip (new string-snip%))
-    (send text-snip set-style standard-style)
-    (send text-snip insert text (string-length text))
-    text-snip)
-
-  (define (make-link text url)
-    (define link-snip (new gemini-link-snip% (url url)))
+  (define (line->text line)
+    (if (non-empty-string? line)
+        (send canvas append-string line standard-style #t)
+        ;; be permissive of blank lines
+        (send canvas append-string "\n")))
+  
+  (define (make-link text url base-url)
+    (define link-snip (new gemini-link-snip% (url url) (base-url base-url) (browser-canvas canvas)))
     (send link-snip set-style link-style)
     (send link-snip insert text (string-length text))
     link-snip)
@@ -350,14 +322,14 @@
     (string-append (path->string (path-only path)) relative-path))
   
   (for ([line (in-lines data-port)])
+    (eprintf "gemini line=~a~n" line)
     (match line
       [(regexp gemini-link-re)
        (define-values (link-url link-name) (parse-link line))
-       (define link-start-pos (send text-widget last-position))
-       (eprintf "link url=~a, name=~a~n" link-url link-name)
-       (send text-widget insert (make-link link-name link-url))
+       ;(eprintf "link url=~a, name=~a~n" link-url link-name)
+       (send canvas append-snip (make-link link-name link-url base-url) #t)
        ;; add clickback to link region
-       (send text-widget set-clickback
+       #;(send text-widget set-clickback
              link-start-pos
              (send text-widget last-position)
              (lambda (text-widget start end)
@@ -380,34 +352,32 @@
                                          (if (equal? (string-ref link-url 0) #\/)
                                              link-url
                                              (replace-final-path-element (request-path/selector base-req) link-url))]))))))]
-
       [(regexp gemini-header-re)
-       (send text-widget insert (line->header line))]
+       (line->header line)]
       [(regexp gemini-pre-re)
        ;; read preformatted text until we read another "```". technically should create
        ;; a style for this that has a fixed width font, but our default font already
        ;; is fixed width.
        (let loop ([line (read-line data-port)])
          (unless (or (regexp-match gemini-pre-re line) (equal? line eof))
-           (send text-widget insert (line->text line))
-           (send text-widget insert "\n")
+           (line->text line)
            (loop (read-line data-port))))]
-      [_ (send text-widget insert (line->text line))])
-    (send text-widget insert "\n")))
+      [_ (line->text line)])))
 
 ;; unlike goto-gopher, goto-gemini returns a request
 ;; the initial request can be forwaded to a new request for queries
 ;; 
-(define (goto-gemini req page-text)
+(define (goto-gemini req canvas)
   (eprintf "goto-gemini: ~a, ~a~n" (request-host req) (request-path/selector req))
 
   (define (show-gemini-error msg)
-    ;; this flag is used to signal the main thread that text% updates have begun
-    (set-field! editor-busy? page-text #t)
+    ;; this flag is used to signal the main thread that canvas updates have begun
+    (set-field! editor-busy? canvas #t)
     
-    (send page-text begin-edit-sequence)
-    (send page-text insert msg)
-    (send page-text end-edit-sequence)
+    (send canvas begin-edit-sequence)
+    (send canvas append-string msg)
+    (send canvas end-edit-sequence)
+    (send canvas refresh)
     (close-input-port (gemini-response-data-port resp)))
   
   (define resp (gemini-fetch (request-host req)
@@ -417,6 +387,8 @@
   (eprintf "goto-gemini: status=~a, meta=~a, from-url=~a~n" (gemini-response-status resp) (gemini-response-meta resp)
            (gemini-response-from-url resp))
 
+  (send canvas check-gemini-defaults)
+
   ;; the case needs to be in tail position so that it returns the correct value to load-page
   (case (gemini-response-status resp)
     [(10)
@@ -424,52 +396,51 @@
      (define query-string (get-text-from-user "Input required" (gemini-response-meta resp)))
      (if query-string
          (let ([query-request (url->request (string-append (gemini-response-from-url resp) "?" query-string))])
-           (goto-gemini query-request page-text))
+           (goto-gemini query-request canvas))
          (void))]
     [(20 21)
      ;; this flag is used to signal the main thread that text% updates have begun
-     (set-field! editor-busy? page-text #t)
+     (set-field! editor-busy? canvas #t)
      
      (let ([data-port (gemini-response-data-port resp)]
            [mimetype (gemini-response-meta resp)]
            [from-url (gemini-response-from-url resp)])
        (cond
          [(string-prefix? mimetype "text/gemini")
-          (send page-text begin-edit-sequence)
-          (insert-gemini-text page-text data-port from-url)
-          (send page-text set-position 0)
-          (send page-text end-edit-sequence)]
+          (send canvas begin-edit-sequence)
+          (insert-gemini-text canvas data-port from-url)
+          (send canvas end-edit-sequence)]
          [(string-prefix? mimetype "text/")
-          (send page-text begin-edit-sequence)
+          (send canvas begin-edit-sequence)
           ;; this isn't ideal but is still a lot faster than inserting one line at a time
           ;; (text% treats #\return as a newline so DOS formatted files have extra newlines)
-          (send page-text insert (string-replace
-                                  (port->string data-port)
-                                  "\r\n"
-                                  "\n"))
-          (send page-text set-position 0)
-          (send page-text end-edit-sequence)]
+          (send canvas append-string (string-replace
+                                      (port->string data-port)
+                                      "\r\n"
+                                      "\n"))
+          (send canvas end-edit-sequence)]
          [(string-prefix? mimetype "image/")
           (define img (make-object image-snip% data-port 'unknown))
-          (send page-text begin-edit-sequence)
-          (send page-text insert img)
-          (send page-text set-position 0)
-          (send page-text end-edit-sequence)]
+          (send canvas begin-edit-sequence)
+          (send canvas append-snip img #t)
+          (send canvas end-edit-sequence)]
          [else
-          (send page-text begin-edit-sequence)
-          (send page-text insert (format "unknown mimetype: ~a~n" mimetype))
-          (send page-text insert (format "Initiating download of ~a~n" (request-path/selector req)))
-          (send page-text end-edit-sequence)
+          (send canvas begin-edit-sequence)
+          (send canvas append-string (format "unknown mimetype: ~a~n" mimetype))
+          (send canvas append-string (format "Initiating download of ~a~n" (request-path/selector req)))
+          (send canvas end-edit-sequence)
           (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]))
+     (send canvas refresh)
      (close-input-port (gemini-response-data-port resp))
      req]
     [(30 31)
      ;; this flag is used to signal the main thread that text% updates have begun
-     (set-field! editor-busy? page-text #t)
+     (set-field! editor-busy? canvas #t)
      ;; initiate a file download
-     (send page-text begin-edit-sequence)
-     (send page-text insert (format "Initiating download of ~a~n" (request-path/selector req)))
-     (send page-text end-edit-sequence)
+     (send canvas begin-edit-sequence)
+     (send canvas append-string (format "Initiating download of ~a~n" (request-path/selector req)))
+     (send canvas end-edit-sequence)
+     (send canvas refresh)
      (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]
     
     [(40) (show-gemini-error "Temporary failure")]
@@ -486,7 +457,7 @@
     
     [else (show-gemini-error "Unknown status code returned from server")]))
 
-(define browser-text%
+#;(define browser-text%
   (class text% (super-new)
     (init-field [selection #f]
                 [gopher-menu? #f]
@@ -907,7 +878,7 @@
              (void)])))
     ))
 
-(define browser-canvas%
+#;(define browser-canvas%
   (class editor-canvas% (super-new)
     (init-field [tab-id 0]
                 [default-bg-color (make-color 33 33 33)]
@@ -955,42 +926,545 @@
           '()))
     ))
 
+(define browser-canvas%
+  (class layout-canvas% (super-new)
+    (init-field [tab-id 0]
+                [default-bg-color (make-color 33 33 33)]
+                [update-status-cb #f]
+                [update-address-cb #f])
+    (inherit set-canvas-background
+             get-client-size
+             get-drawable-size
+             get-view-start
+             get-style-list
+             get-mode
+             set-mode
+             set-default-style
+             begin-edit-sequence
+             end-edit-sequence
+             in-edit-sequence?
+             refresh
+             lookup-snip-position-size
+             first-visible-snip
+             scroll-to)
+
+    (field [editor-busy? #f]
+           [current-url #f]
+           [gopher-menu? #f]
+           [menu-selection (cons 0  #f)]) ; menu item index and dlink for menu item
+    
+    (define thread-custodian #f)
+    (define request-thread-id #f)
+    (define history '())
+    (define status-text "Ready")
+
+    ;; keep dlist of gopher menu entries (menu-item-snip%'s)
+    (define menu-items (dlist-new))
+
+    (define/public (get-current-request)
+      (and current-url (browser-url-req current-url)))
+    
+    (define/private (selection-snip selection)
+      (if (pair? selection)
+          (dlink-value (cdr selection))
+          (error "selection-snip: invalid selection")))
+
+    (define/private (selection-visible? selection)
+      (define snip (selection-snip selection))
+      (if snip
+          (let-values ([(sx sy sw sh) (lookup-snip-position-size snip)]
+                       [(w h) (get-drawable-size)]
+                       [(ox oy) (get-view-start)])
+            ;; only visible if the entire selection is visible
+            ;; gopher menu items selections are only one line, so there shouldn't be edge cases
+            (if (and (>= sy oy)
+                     (<= (+ sy sh) (+ oy h)))
+                #t
+                #f))
+          #f))
+
+    (define (highlight selection)
+      (define snip (selection-snip menu-selection))
+      (define new-style (send (get-style-list) find-named-style "Link Highlight"))
+      (send snip set-style new-style))
+
+    (define (unhighlight selection)
+      (define snip (selection-snip menu-selection))
+      (define new-style (send (get-style-list) find-named-style "Link"))
+          (send snip set-style new-style))
+    
+    ;; return a pair representing the menu selection or #f
+    (define/private (find-next-menu-item)
+      (define node (and (cdr menu-selection)
+                        (dlink-next (cdr menu-selection))))
+      
+      (if node
+          (cons (add1 (car menu-selection)) node)
+          #f))
+
+    ;; return a pair representing the menu selection or #f
+    (define/private (find-prev-menu-item)
+      (define node (and (cdr menu-selection)
+                        (dlink-prev (cdr menu-selection))))
+      
+      (if node
+          (cons (sub1 (car menu-selection)) node)
+          #f))
+
+    ;; return a pair representing the menu selection or #f
+    ;; index starts at 1, which maps to index 0 in our dlist
+    (define/private (find-menu-item index)
+      (let loop ([node (dlist-head menu-items)]
+                 [i 1])
+        (cond
+          [(not node) #f]
+          [(= i index) (cons index node)]
+          [else
+           (loop (dlink-next node) (add1 i))])))
+    
+    ;; return a pair representing the menu selection or #f
+    (define/public (find-first-menu-item)
+      (if (dlist-head menu-items)
+          (cons 1 (dlist-head menu-items))
+          #f))
+
+    ;; return a pair representing the menu selection or #f
+    (define/private (find-next-visible-menu-item)
+      (define-values (w h) (get-drawable-size))
+      (define-values (ox oy) (get-view-start))
+      
+      (let loop ([index (car menu-selection)]
+                 [node (and (cdr menu-selection)
+                            (dlink-next (cdr menu-selection)))])
+        (if node
+            (let-values ([(x y w h) (lookup-snip-position-size (dlink-value node))])
+              (cond
+                [(< y oy)
+                 (loop (add1 index) (dlink-next node))]
+                [(> y (+ oy h))
+                 #f]
+                [else
+                 (cons index node)]))
+            #f)))
+
+    ;; return a pair representing the menu selection or #f
+    (define/private (find-prev-visible-menu-item)
+      (define-values (w h) (get-drawable-size))
+      (define-values (ox oy) (get-view-start))
+      
+      (let loop ([index (car menu-selection)]
+                 [node (and (cdr menu-selection)
+                            (dlink-prev (cdr menu-selection)))])
+        (if node
+            (let-values ([(x y w h) (lookup-snip-position-size (dlink-value node))])
+              (cond
+                [(< y oy)
+                 #f]
+                [(> y (+ oy h))
+                 (loop (sub1 index) (dlink-prev node))]
+                [else
+                 (cons index node)]))
+            #f)))
+
+    (define/override (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
+      (when (is-a? s menu-item-snip%)
+        (dlist-append! menu-items s))
+      (super append-snip s end-of-line alignment properties))
+
+    (define/override (erase)
+      (set! menu-items (dlist-new))
+      (super erase))
+    
+    (set-canvas-background default-bg-color)
+
+    (define/public (reset-background-color)
+      (set-canvas-background default-bg-color))
+
+    (define/public (check-gopher-defaults)
+      ;; reset canvas mode if it was changed when loading html
+      (when (eq? (get-mode) 'layout)
+        (printf "check-gopher-defaults~n")
+        (define standard-style
+          (send (get-style-list) find-named-style "Standard"))
+        (set-default-style standard-style)
+        (reset-background-color)
+        (set-mode 'plaintext)))
+
+    (define/public (check-gemini-defaults)
+      ;; reset canvas mode if it was changed when loading html
+      (when (eq? (get-mode) 'layout)
+        (define standard-style
+          (send (get-style-list) find-named-style "Standard"))
+        (set-default-style standard-style)
+        (reset-background-color)
+        (set-mode 'wrapped)))
+    
+    (define/private (push-history url)
+      ;; prevent sequence of duplicate URLs. replace top element of history if it
+      ;; refers to the same URL/Request. essentially this only updates the current
+      ;; selection position.
+      (if (and (not (empty? history))
+               (equal? (browser-url-req url) (browser-url-req (car history))))
+          (set! history (cons url (cdr history)))
+          (set! history (cons url history))))
+
+    (define/private (pop-history)
+      (if (not (empty? history))
+        (let ([top (car history)])
+          (set! history (cdr history))
+          top)
+        '()))
+
+    (define/private (previous-history)
+      (if (not (empty? history))
+          (car history)
+          #f))
+    
+    (define/public (update-status [text #f])
+      (when update-status-cb
+        (if text
+            (begin
+              (set! status-text text)
+              (update-status-cb tab-id text))
+            (update-status-cb tab-id status-text))))
+    
+    ;; takes a request struct and updates UI elements using the provided callback
+    (define/public (update-address req)
+      (when update-address-cb
+        (update-address-cb tab-id req)))
+
+    (define/public (init-gopher-menu [initial-selection-pos #f])
+      (set! gopher-menu? #t)
+      (if initial-selection-pos
+          (set! menu-selection (find-menu-item initial-selection-pos)) 
+          (set! menu-selection (find-first-menu-item)))
+      (when (and menu-selection (cdr menu-selection))
+        (eprintf "highlight first menu item~n")
+        (define snip (selection-snip menu-selection))
+        (define new-style (send (get-style-list) find-named-style "Link Highlight"))
+        (send snip set-style new-style)
+        (if initial-selection-pos
+            ;; make the selection visible but not at the very top
+            (let-values ([(x y w h) (lookup-snip-position-size snip)]
+                         [(cw ch) (get-client-size)])
+              (scroll-to (- y (floor (/ ch 4)))))
+            ;; scroll to the beginning
+            (scroll-to 0))))
+
+    (define/public (cancel-request)
+      (when (custodian? thread-custodian)
+        (eprintf "cancelling request: ~a~n" (custodian-managed-list thread-custodian (current-custodian)))
+        (custodian-shutdown-all thread-custodian)
+        ;; without this the editor gets stuck in no refresh mode
+        (when (in-edit-sequence?)
+          (end-edit-sequence))
+        (set! thread-custodian #f)
+        ;; update status message
+        (update-status "Ready")))
+    
+    (define/private (load-page req [initial-selection-pos #f] #:back? [back? #f])
+      (define (make-history-updater old-url old-position)
+        (if back?
+            (lambda () (pop-history))
+            (lambda ()
+              ;; add previous page to history
+              (when old-url
+                (if old-position
+                    ;; also save the position of the selection that we are following so we can return to it
+                    (push-history (struct-copy browser-url old-url [selection-pos old-position]))
+                    (push-history old-url))))))
+
+      ;; background color can be changed by html rendering
+      (reset-background-color)
+      
+      ;; this will shutdown the previous custodian on every page load.
+      ;; seems wasteful not to re-use the custodian if we aren't actually interrupting
+      ;; the previous thread's work.
+      (if (and editor-busy? (thread? request-thread-id))
+          ;; killing a thread that is updating an editor<%> is not support so if
+          ;; the network request has completed and text% updates have been initiated
+          ;; we must wait for the thread to finish.
+          (begin
+            (update-status "Cancelling...")
+            (thread-wait request-thread-id)
+            (cancel-request))
+          (cancel-request))
+
+      (set! editor-busy? #f)
+      (set! thread-custodian (make-custodian))
+
+      (define update-history (make-history-updater current-url (and menu-selection (car menu-selection))))
+
+      (update-status "Loading...")
+      
+      (parameterize ([current-custodian thread-custodian])
+        (cond
+          [(equal? (request-protocol req) 'gopher)
+           (update-history)
+           (set! current-url (browser-url req initial-selection-pos))
+           (update-address req)
+           ;; clear the current page contents
+           (begin-edit-sequence)
+           (erase)
+           (end-edit-sequence)
+           (set! request-thread-id
+                 (thread (thunk
+                          (goto-gopher req this initial-selection-pos)
+                          (update-status "Ready"))))]
+          [(equal? (request-protocol req) 'gemini)
+           (update-history)
+           (set! current-url (browser-url req #f))
+           (update-address req)
+           ;; clear the current page contents
+           (begin-edit-sequence)
+           (erase)
+           (end-edit-sequence)
+           (thread (thunk
+                    (define terminal-request (goto-gemini req this))
+                    (unless (void? terminal-request)
+                      (set! current-url (browser-url terminal-request #f))
+                      (update-address terminal-request)
+                      (update-status "Ready"))))]
+          [else
+           ;; TODO display error to user?
+           (eprintf "Invalid request protocol!~n")])))
+    
+    (define/public (go req)
+      (define (download-only-type? type)
+        (or (equal? type #\5)
+            (equal? type #\9)))
+
+      (cond
+        [(equal? (request-protocol req) 'gemini)
+         ;; gemini complicates matters because we must send our request before we know the type of request
+         ;; and what we need to do with it. We have to handle this in the request thread instead of before
+         ;; creating the thread as we do with gopher.
+         (load-page req)]
+        ;; Below here is for gopher
+        [(download-only-type? (request-type req)) ; open save file dialog
+         (thread (thunk
+                  (save-gopher-to-file req)))]
+        [(equal? (request-type req) #\>) ; open file in external application
+         (thread (thunk
+                  (open-with-app req)))]
+        [(equal? (request-type req) #\7) ; gopher index search
+         ;; prompt user for query string
+         (define query-string (get-text-from-user "Query" "search string"))
+         (define query-request (request (request-protocol req)
+                                        (request-host req)
+                                        (request-port req)
+                                        (string-append (request-path/selector req) "\t" query-string)
+                                        #\1))
+         (load-page query-request)]
+        [(gopher-url-request? req)
+         ; URL, probably http, open in external browser
+         (eprintf "opening ~a in browser~n" (gopher-url-request->url req))
+         (send-url (gopher-url-request->url req) #t)]
+        [else
+         (load-page req)]))
+
+    (define/public (go-back)
+      (unless (empty? history)
+        (define prev-url (previous-history))
+        (define req (browser-url-req prev-url))
+        (load-page req (browser-url-selection-pos prev-url) #:back? #t)))
+    
+    (define/public (load-restore-data list-of-data)
+      (when (and (list? list-of-data)
+                 (= (length list-of-data) 2))
+        (set! history (cadr list-of-data))
+        (when (browser-url? (car list-of-data))
+          (go (browser-url-req (car list-of-data))))))
+    
+    (define/public (get-restore-data)
+      (list current-url history))
+
+    (define/public (get-history)
+      (for/list ([item (in-list history)])
+        (browser-url-req item)))
+
+    (define/override (on-event event)
+      (super on-event event))
+
+    (define (lines-visible height line-height)
+      (truncate (/ height line-height)))
+    
+    (define/override (on-char event)
+      (if gopher-menu?
+          (case (send event get-key-code)
+            [(down)
+             (cond
+               [(or (not (cdr menu-selection)) (selection-visible? menu-selection))
+                ;; change selection to the next menu snip
+                (define item (find-next-menu-item))
+                (when item
+                  (eprintf "browser-text on-char down: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
+                  (unhighlight menu-selection)
+                  (set! menu-selection item)
+                  (highlight menu-selection)
+                  (if (not (selection-visible? menu-selection))
+                      (let-values ([(sx sy sw sh) (lookup-snip-position-size (selection-snip item))]
+                                   [(w h) (get-drawable-size)])
+                        (scroll-to (- sy (/ h 4)))
+                        ;; nudge the visible area just a bit so that the first line isn't partially cut off
+                        (let*-values ([(first-snip) (first-visible-snip)]
+                                      [(sx sy sw sh) (lookup-snip-position-size first-snip)])
+                          (scroll-to sy)))
+                      (refresh)))]
+               [else
+                ;; just scroll to make the selected menu snip visible
+                (define-values (sx sy sw sh) (lookup-snip-position-size (selection-snip menu-selection)))
+                (define-values (w h) (get-drawable-size))
+                (scroll-to (- sy (/ h 4)))])]
+            [(up)
+             (define item (find-prev-menu-item))
+             (when item
+               (eprintf "browser-text on-char up: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
+               (unhighlight menu-selection)
+               (set! menu-selection item)
+               (highlight menu-selection)
+               (if (not (selection-visible? menu-selection))
+                   ;; scroll up to show the previous page
+                   (let-values ([(sx sy sw sh) (lookup-snip-position-size (selection-snip item))]
+                                [(w h) (get-drawable-size)])
+                     (scroll-to (- sy (* (/ h 4) 3)))
+                     ;; nudge the visible area just a bit so that the first line isn't partially cut off
+                     (let*-values ([(first-snip) (first-visible-snip)]
+                                   [(sx sy sw sh) (lookup-snip-position-size first-snip)])
+                          (scroll-to sy)))
+                   (refresh)))]
+            [(left)
+             (go-back)]
+            [(right #\return)
+             (when menu-selection
+               (go (dir-entity->request (get-field dir-entity (selection-snip menu-selection)))))]
+            [(next)
+             (define-values (x y) (get-view-start))
+             (define-values (w h) (get-drawable-size))
+             (scroll-to (+ y h))
+             ;; nudge the visible area just a bit so that the first line isn't partially cut off
+             (let*-values ([(first-snip) (first-visible-snip)]
+                           [(sx sy sw sh) (lookup-snip-position-size first-snip)])
+               (scroll-to sy))
+             (unless (selection-visible? menu-selection)
+               (define item (find-next-visible-menu-item))
+               (when item
+                 (unhighlight menu-selection)
+                 (set! menu-selection item)
+                 (highlight menu-selection)))]
+            [(prior)
+             (define-values (x y) (get-view-start))
+             (define-values (w h) (get-drawable-size))
+             (scroll-to (- y h))
+             ;; nudge the visible area just a bit so that the first line isn't partially cut off
+             (let*-values ([(first-snip) (first-visible-snip)]
+                           [(sx sy sw sh) (lookup-snip-position-size first-snip)])
+               (scroll-to sy))
+             (unless (selection-visible? menu-selection)
+               (define item (find-prev-visible-menu-item))
+               (when item
+                 (unhighlight menu-selection)
+                 (set! menu-selection item)
+                 (highlight menu-selection)))]            
+            [else
+             (define key-code (send event get-key-code))
+             (super on-char event)])
+          (case (send event get-key-code)
+            [(left)
+             (go-back)]
+            [(right)
+             (void)]
+            #;[(up)
+             ;; scroll the screen up one line
+             (define start (box 0))
+             (define end (box 0))
+             (get-visible-line-range start end #f)
+             (define new-line (max 0 (sub1 (unbox start))))
+             ;(eprintf "range (~a,~a): new line = ~a~n" (unbox start) (unbox end) new-line)
+             (set-position (line-start-position new-line))]
+            #;[(down)
+             ;; scroll the screen one line
+             (define start (box 0))
+             (define end (box 0))
+             (get-visible-line-range start end #f)
+             ;; setting the position to the last line will scroll the screen by one
+             ;; don't have to actually set the position to the next visible line
+             (define new-line (min (position-line (last-position))
+                                   (unbox end)))
+             ;(eprintf "range (~a,~a): new line = ~a~n" (unbox start) (unbox end) new-line)
+             (set-position (line-start-position new-line))]
+            [else
+             (super on-char event)])))
+    ))
+
 (define menu-item-snip%
   (class string-snip%
-    (init-field [dir-entity #f])
+    (init-field [dir-entity #f]
+                [browser-canvas #f])
     (inherit get-flags set-flags)
     (super-new)
     (set-flags (cons 'handles-all-mouse-events (get-flags)))
     ;(set-flags (cons 'handles-events (get-flags)))
 
-    ;; use clickbacks instead
-    #;(define/override (on-event dc x y editorx editory e)
+    (define/public (get-item-label)
+      (gopher-dir-entity-user-name dir-entity))
+    
+    (define (follow-link)
+      (send browser-canvas go (dir-entity->request dir-entity)))
+    
+    (define/override (on-event dc x y editorx editory e)
+      (eprintf "menu-item-snip% on-event~n")
       (when (send e button-down? 'left)
-        (follow-link)))
-    ))
+        (follow-link)))))
 
 (define gemini-link-snip%
   (class string-snip%
-    (init-field [url ""])
+    (init-field [url ""]
+                [base-url ""]
+                [browser-canvas #f])
     (inherit get-flags set-flags get-admin)
     (super-new)
     (set-flags (cons 'handles-all-mouse-events (get-flags)))
     (set-flags (cons 'handles-between-events (get-flags)))
 
     (define status-text (string-append "=> " url))
-    
+
+    (define (replace-final-path-element path relative-path)
+      (string-append (path->string (path-only path)) relative-path))
+
+    (define (follow-link)
+      (eprintf "following gemini link: ~a~n" url)
+      (if (regexp-match #px"^(\\w+://).*" url)
+          (cond
+            [(string-prefix? url "gemini://")
+             (send browser-canvas go (url->request url))]
+            [(string-prefix? url "gopher://")
+             (send browser-canvas go (url->request url))]
+            [(or (string-prefix? url "http://")
+                 (string-prefix? url "https://"))
+             (send-url url #t)])
+          ;; handle partial URLs
+          (let ([base-req (url->request base-url)])
+            (send browser-canvas go
+                  (struct-copy request
+                               base-req
+                               [path/selector
+                                (if (equal? (string-ref url 0) #\/)
+                                    url
+                                    (replace-final-path-element (request-path/selector base-req) url))])))))
+
     (define/override (on-event dc x y editorx editory event)
-      ;(eprintf "mouse event ~a~n" (send event get-event-type))
-      (when (send event moving?)
-        (define canvas (send (send (get-admin) get-editor) get-canvas))
-        ;(eprintf "mouse motion event~n")
-        (send canvas update-status status-text))
-      (super on-event dc x y editorx editory event))
+      (eprintf "gemini-link-snip% mouse event ~a~n" (send event get-event-type))
+      (cond
+        [(send event moving?)
+         ;(eprintf "mouse motion event~n")
+         (send browser-canvas update-status status-text)]
+        [(send event button-down? 'left)
+         (follow-link)]))
 
     (define/override (on-goodbye-event dc x y editorx editory event)
-      (define canvas (send (send (get-admin) get-editor) get-canvas))
       ;(eprintf "goodbye event~n")
-      (send canvas update-status "Ready"))))
+      (send browser-canvas update-status "Ready"))))
 
 ;; implements a text field that auto selects its contents when it gains focus
 (define address-field%
