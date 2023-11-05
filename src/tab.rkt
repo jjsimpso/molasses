@@ -157,6 +157,7 @@
          (default-bg-color canvas-bg-color)
          (update-status-cb update-status)
          (update-address-cb update-address)
+         (smooth-scrolling #t)
          (wheel-step 10)))
 
   (init-styles (send page-canvas get-style-list))

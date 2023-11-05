@@ -12,7 +12,9 @@
      (style '(hscroll vscroll resize-corner)))
     (init [horiz-margin 5]
           [vert-margin 5])
-    (init-field [wheel-step 5])
+    (init-field [wheel-step 5]
+                [smooth-scrolling #f]
+                [smooth-scroll-steps 10])
     (inherit get-dc
              get-size
              get-client-size
@@ -27,6 +29,7 @@
              resume-flush
              flush
              refresh
+             refresh-now
              get-canvas-background)
 
     ;; tentative mode options: 'plaintext, 'wrapped, 'layout, 'columns
@@ -37,7 +40,7 @@
     (define ymargin vert-margin)
     (define snip-xmargin 5)
     (define snip-ymargin 2)
-
+    
     ;; method name from editor-canvas%
     (define/public (horizontal-inset)
       xmargin)
@@ -1134,7 +1137,7 @@
     (define/override (on-scroll event)
       (define-values (dw dh) (get-drawable-size))
 
-      ;(printf "on-scroll: ~a ~a~n" (send event get-direction) (send event get-position))
+      (printf "on-scroll: ~a ~a~n" (send event get-direction) (send event get-position))
       
       (if (eq? (send event get-direction) 'vertical)
           (let* ([top (send event get-position)]
@@ -1209,8 +1212,8 @@
            (if (eq? key-code 'wheel-up)
                (max 0 (- scroll-pos wheel-step))
                (min max-scroll (+ scroll-pos wheel-step))))
-         (printf "new scroll-y ~a, max ~a~n" scroll-y max-scroll)
-         (scroll-to new-scroll-pos)]
+         (printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
+         (scroll-to new-scroll-pos smooth-scrolling)]
         [(up down)
          (define max-scroll (get-scroll-range 'vertical))
          (define scroll-pos (get-scroll-pos 'vertical))
@@ -1219,24 +1222,24 @@
            (if (eq? key-code 'up)
                (max 0 (- scroll-pos line-height))
                (min max-scroll (+ scroll-pos line-height))))
-         (printf "new scroll-y ~a, max ~a~n" scroll-y max-scroll)
+         (printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
          (scroll-to new-scroll-pos)]
         [(next)
          (define-values (dw dh) (get-drawable-size))
          (define-values (x y) (get-view-start))
          (printf "page down to ~a~n" (+ y dh))
-         (scroll-to (+ y dh))]
+         (scroll-to (+ y dh) smooth-scrolling)]
         [(prior)
          (define-values (dw dh) (get-drawable-size))
          (define-values (x y) (get-view-start))
          (printf "page up to ~a~n" (- y dh))
-         (scroll-to (- y dh))]
+         (scroll-to (- y dh) smooth-scrolling)]
         [(home)
-         (scroll-to 0)]
+         (scroll-to 0 smooth-scrolling)]
         [(end)
          (define-values (vx vy) (get-virtual-size))
          (define-values (dw dh) (get-drawable-size))
-         (scroll-to (- vy dh))]))
+         (scroll-to (- vy dh) smooth-scrolling)]))
 
     ;; store the element that has mouse focus. send on-goodbye-event to an element's snip if it loses focus
     (define element-with-focus #f)
@@ -1296,7 +1299,7 @@
       (reset-layout)
       (refresh))
 
-    (define/public (scroll-to y)
+    (define/public (scroll-to y [smooth #f])
       (define-values (dw dh) (get-drawable-size))
       (define max-scroll (get-scroll-range 'vertical))
       (define old-scroll-pos scroll-y)
@@ -1306,15 +1309,34 @@
             (if (< y 0)
                 0
                 y)))
-      
+
       (when (not (= new-scroll-pos old-scroll-pos))
-        (set! scroll-y new-scroll-pos)
-        (set-scroll-pos 'vertical new-scroll-pos)
-        
-        (if (not visible-elements)
-            (set-visible-elements!)
-            (update-visible-elements! (- new-scroll-pos old-scroll-pos) scroll-y (+ scroll-y dh)))
-        (refresh)))
+        (when smooth
+          (let* ([step-size (/ (- new-scroll-pos old-scroll-pos) smooth-scroll-steps)]
+                 [step (if (< step-size 0)
+                           (min -1 (round step-size))
+                           (max 1 (round step-size)))])
+            (for ([pos (in-inclusive-range (+ old-scroll-pos step)
+                                           new-scroll-pos
+                                           step)])
+              (printf "scroll-to ~a step-size=~a step=~a~n" pos step-size step)
+              (set! scroll-y pos)
+              (set-scroll-pos 'vertical pos)
+              (if (not visible-elements)
+                  (set-visible-elements!)
+                  (update-visible-elements! step scroll-y (+ scroll-y dh)))
+              (refresh-now)
+              (sleep 0.003))))
+        ;; handle both the non-smooth case and the final step of a smooth scroll if it didn't divide
+        ;; evenly into integer steps
+        (unless (= scroll-y new-scroll-pos)
+          (printf "scroll-to ~a~n" new-scroll-pos)
+          (set! scroll-y new-scroll-pos)
+          (set-scroll-pos 'vertical new-scroll-pos)
+          (if (not visible-elements)
+              (set-visible-elements!)
+              (update-visible-elements! (- new-scroll-pos old-scroll-pos) scroll-y (+ scroll-y dh)))
+          (refresh))))
 
     ;; layout-canvas% users don't have direct access to the elements, so they may need to
     ;; find an element's position using the snip(or string) that they added to the canvas
@@ -1424,6 +1446,7 @@
 
   (define canvas
     (new layout-canvas% (parent frame)
+         (smooth-scrolling #t)
          (horiz-margin 5)
          (vert-margin 5)))
 
@@ -1522,7 +1545,7 @@
   (init-styles (send canvas get-style-list))
   (send canvas set-canvas-background canvas-bg-color)
 
-  (define layout-test 'text2)
+  (define layout-test #f)
   (if layout-test
       (send canvas set-mode 'layout)
       (send canvas set-mode 'wrapped))
