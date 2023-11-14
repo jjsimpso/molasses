@@ -12,6 +12,7 @@
 
 (require "config.rkt"
          "html-snips.rkt"
+         "table.rkt"
          "gopher.rkt"
          "request.rkt")
 
@@ -177,6 +178,7 @@
   (define current-style (make-parameter html-basic-style))
   (define current-style-delta (make-parameter (make-object style-delta% 'change-nothing)))
   (define current-block (make-parameter #f))
+  (define current-container (make-parameter #f))
   ;; alignment is a special case since it isn't controlled by a style and must be applied to each paragraph
   (define current-alignment 'unaligned)  
   ;; don't use a parameter for link color since it will change so rarely
@@ -185,298 +187,321 @@
   (define current-font-size 3)
 
   (define horz-inset (send canvas horizontal-inset))
+
+  ;; need to abstract functions which add elements in order to handle tables
+  (define (append-string s . rest-args)
+    (if (current-container)
+        (send/apply (current-container) append-string s `(,@rest-args))
+        (send/apply canvas append-string s `(,@rest-args))))
+
+  (define (append-snip s . rest-args)
+    (if (current-container)
+        (send/apply (current-container) append-snip s `(,@rest-args))
+        (send/apply canvas append-snip s `(,@rest-args))))
   
-  (with-method ([append-string (canvas append-string)]
-                [append-snip (canvas append-snip)])
+  (define (last-element-eol?)
+    (send canvas last-element-eol?))
+  
+  (define (followed-by-newline? node)
+    ;(eprintf "followed-by-newline? ~a~n" node)
+    (cond
+      [(empty? node) #f]
+      [(sxml:element? node)
+       (or (eq? (sxml:element-name node) 'br)
+           (eq? (sxml:element-name node) 'hr))]
+      [else
+       #f]))
+  
+  (define (insert-newline)
+    ;(eprintf "inserting newline~n")
+    (append-string "\n" #f #t))
 
-    (define (last-element-eol?)
-      (send canvas last-element-eol?))
+  (define (start-new-paragraph)
+    (when (not (last-element-eol?))
+      (eprintf "starting new paragraph~n")
+      (insert-newline)))
 
-    (define (followed-by-newline? node)
-      ;(eprintf "followed-by-newline? ~a~n" node)
-      (cond
-        [(empty? node) #f]
-        [(sxml:element? node)
-         (or (eq? (sxml:element-name node) 'br)
-             (eq? (sxml:element-name node) 'hr))]
+  (define (last-node-in-paragraph? s)
+    (and (is-paragraph-element? (current-block))
+         (empty? (cdr s))))
+  
+  (define (is-block-element? elem)
+    ;; treat head, title, and body as blocks even though they aren't technically block elements
+    ;; head and title need special treatment but body currently doesn't
+    (define block-elements '(head title body h1 h2 h3 h4 h5 h6 p pre center))
+    (memq elem block-elements))
+
+  ;; defines elements that create paragraphs and require a newline or two after closing
+  ;; may eventually get rid of this function
+  (define (is-paragraph-element? elem)
+    (define para-elements '(h1 h2 h3 h4 h5 h6 p pre center))
+    (memq elem para-elements))
+  
+  (define (update-block current-block elem)
+    (if (is-block-element? elem)
+        elem
+        current-block))
+  
+  (define (handle-body-attributes node)
+    (for/list ([attr (in-list (sxml:attr-list node))])
+      (eprintf "handling body attribute ~a~n" attr)
+      (case (car attr)
+        [(bgcolor)
+         (define bg-color (parse-color (cadr attr)))
+         (send canvas set-canvas-background bg-color)
+         (send (current-style-delta) set-delta-background bg-color)
+         (lambda () void)]
+        [(text)
+         (define text-color (parse-color (cadr attr)))
+         (send (current-style-delta) set-delta-foreground text-color)
+         (lambda () void)]
+        [(link)
+         (define prev-link-color current-link-color)
+         (set! current-link-color (parse-color (cadr attr)))
+         (lambda ()
+           (set! current-link-color prev-link-color))]
+        [(vlink)
+         (define prev-vlink-color current-vlink-color)
+         (set! current-vlink-color (parse-color (cadr attr)))
+         (lambda ()
+           (set! current-vlink-color prev-vlink-color))]
         [else
-         #f]))
+         (eprintf "  null func for attribute ~a~n" attr)
+         (lambda () void)])))
+  
+  (define (handle-font-attributes node)
+    (define font-size-vec #(7/12 5/6 1.0 1.125 1.5 2.0 3.0))  ; 7 10 12 13.5 18 24 36
+    (define size-value (sxml:attr node 'size))
+    (define color-value (sxml:attr node 'color))
+
+    ;; changes current style only, no need for close tag function
+    (when color-value
+      (eprintf "setting font color to ~a~n" color-value)
+      (define text-color (parse-color color-value))
+      (send (current-style-delta) set-delta-foreground text-color))
     
-    (define (insert-newline)
-      ;(eprintf "inserting newline~n")
-      (send canvas append-string "\n" #f #t))
-
-    (define (start-new-paragraph)
-      (when (not (last-element-eol?))
-        (eprintf "starting new paragraph~n")
-        (insert-newline)))
-
-    (define (last-node-in-paragraph? s)
-      (and (is-paragraph-element? (current-block))
-           (empty? (cdr s))))
-    
-    (define (is-block-element? elem)
-      ;; treat head, title, and body as blocks even though they aren't technically block elements
-      ;; head and title need special treatment but body currently doesn't
-      (define block-elements '(head title body h1 h2 h3 h4 h5 h6 p pre center))
-      (memq elem block-elements))
-
-    ;; defines elements that create paragraphs and require a newline or two after closing
-    ;; may eventually get rid of this function
-    (define (is-paragraph-element? elem)
-      (define para-elements '(h1 h2 h3 h4 h5 h6 p pre center))
-      (memq elem para-elements))
-    
-    (define (update-block current-block elem)
-      (if (is-block-element? elem)
-          elem
-          current-block))
-
-    (define (handle-body-attributes node)
-      (for/list ([attr (in-list (sxml:attr-list node))])
-        (eprintf "handling body attribute ~a~n" attr)
-        (case (car attr)
-          [(bgcolor)
-           (define bg-color (parse-color (cadr attr)))
-           (send canvas set-canvas-background bg-color)
-           (send (current-style-delta) set-delta-background bg-color)
-           (lambda () void)]
-          [(text)
-           (define text-color (parse-color (cadr attr)))
-           (send (current-style-delta) set-delta-foreground text-color)
-           (lambda () void)]
-          [(link)
-           (define prev-link-color current-link-color)
-           (set! current-link-color (parse-color (cadr attr)))
-           (lambda ()
-             (set! current-link-color prev-link-color))]
-          [(vlink)
-           (define prev-vlink-color current-vlink-color)
-           (set! current-vlink-color (parse-color (cadr attr)))
-           (lambda ()
-             (set! current-vlink-color prev-vlink-color))]
-          [else
-           (eprintf "  null func for attribute ~a~n" attr)
-           (lambda () void)])))
-
-    (define (handle-font-attributes node)
-      (define font-size-vec #(7/12 5/6 1.0 1.125 1.5 2.0 3.0))  ; 7 10 12 13.5 18 24 36
-      (define size-value (sxml:attr node 'size))
-      (define color-value (sxml:attr node 'color))
-
-      ;; changes current style only, no need for close tag function
-      (when color-value
-        (eprintf "setting font color to ~a~n" color-value)
-        (define text-color (parse-color color-value))
-        (send (current-style-delta) set-delta-foreground text-color))
-      
-      (if size-value
-          (let ([prev-size current-font-size]
-                [size (parse-font-size size-value current-font-size)])
-            (eprintf "new font size: ~a -> ~a -> ~a~n" prev-size size-value size)
-            (set! current-font-size size)
-            (send (current-style-delta) set-size-mult (vector-ref font-size-vec (sub1 size)))
-            (list (lambda ()
-                    (set! current-font-size prev-size))))
-          '()))
-          
-    (define (handle-paragraph-attributes node)
-      (define value (sxml:attr node 'align))
-      (if value
-          (let ([prev-alignment current-alignment])
-            (set! current-alignment
-                  (cond
-                    [(string-ci=? value "center") 'center]
-                    [(string-ci=? value "left") 'left]
-                    [(string-ci=? value "right") 'right]
-                    [else current-alignment]))
-            (list (lambda ()
-                    (set! current-alignment prev-alignment))))
-          '()))
-
-    (define (handle-img node [url #f] [base-url #f])
-      (when img-ok?
-        (define src-value (sxml:attr node 'src))
-        (define request (send canvas get-current-request))
-        (when request
-          (define align
-            (case (and (sxml:attr node 'align)
-                       (string-downcase (sxml:attr node 'align)))
-              [("left") 'left]
-              [("right") 'right]
-              [("center") 'center]
-              [else current-alignment]))
-          (define bm (load-new-bitmap src-value request))
-          (define snip (if url
-                           (new html-link-img-snip% (url url) (base-url base-url) (browser-canvas canvas))
-                           (make-object image-snip%)))
-          (send snip set-bitmap bm)
-          (send canvas append-snip snip #f align))))
-    
-    ;; handle each element based on the element type
-    ;; return a list of functions to call when closing the element
-    (define (handle-element node)
-      (case (car node)
-        [(p)
-         (start-new-paragraph)
-         (handle-paragraph-attributes node)]
-        [(b)
-         (send (current-style-delta) set-delta 'change-bold)
-         '()]
-        [(i)
-         (send (current-style-delta) set-delta 'change-italic)
-         '()]
-        [(u)
-         (send (current-style-delta) set-delta 'change-underline #t)
-         '()]
-        [(h1)
-         (start-new-paragraph)
-         (send (current-style-delta) set-delta 'change-bold)
-         (send (current-style-delta) set-size-mult 2.0)
-         (handle-paragraph-attributes node)]
-        [(h2)
-         (start-new-paragraph)
-         (send (current-style-delta) set-delta 'change-bold)
-         (send (current-style-delta) set-size-mult 1.5)
-         (handle-paragraph-attributes node)]
-        [(h3)
-         (start-new-paragraph)
-         (send (current-style-delta) set-delta 'change-bold)
-         (send (current-style-delta) set-size-mult 1.2)
-         (handle-paragraph-attributes node)]
-        [(h4 h5 h6)
-         (start-new-paragraph)
-         (send (current-style-delta) set-delta 'change-bold)
-         (handle-paragraph-attributes node)]
-        [(pre)
-         (start-new-paragraph)
-         (send (current-style-delta) set-delta 'change-family 'modern)
-         '()]
-        [(center)
-         (start-new-paragraph)
-         (define prev-alignment current-alignment)
-         (set! current-alignment 'center)
-         (list (lambda ()
-                 (set! current-alignment prev-alignment)))]
-        [(body)
-         (handle-body-attributes node)]
-        [(font)
-         (handle-font-attributes node)]
-        [else
-         '()]))
-
-    (send canvas set-default-style html-basic-style)
-    
-    (let loop ([s content])
-      (unless (empty? s)
-        (define node (car s))
-        (cond
-          [(sxml:element? node)
-           ;(printf "element ~a~n" (sxml:element-name node))
-           (case (sxml:element-name node)
-             [(br)
-              (insert-newline)]
-             [(hr)
-              (define width-value (sxml:attr node 'width))
-              (define width-property
-                (if width-value
-                    (if (string-contains? width-value "%")
-                        (cons 'width-percent
-                              (string->number (car (string-split width-value "%"))))
-                        (cons 'width-pixels
-                              (string->number width-value)))
-                    '(width-percent . 100)))
-              (define align
-                (case (and (sxml:attr node 'align)
-                           (string-downcase (sxml:attr node 'align)))
-                  [("left") 'left]
-                  [("right") 'right]
-                  [("center") 'center]
-                  [else current-alignment]))
-              (when (not (last-element-eol?))
-                (insert-newline))
-              (send canvas append-snip
-                    (new horz-line-snip%)
-                    #t
-                    align
-                    (list width-property))
-              #;(insert-newline)]
-             [(img)
-              (handle-img node)]
-             [(a)
-              (define content (sxml:content node))
-              (define href-value (sxml:attr node 'href))
-              (define base-url (request->url (send canvas get-current-request)))
-              (when (not (empty? content))
+    (if size-value
+        (let ([prev-size current-font-size]
+              [size (parse-font-size size-value current-font-size)])
+          (eprintf "new font size: ~a -> ~a -> ~a~n" prev-size size-value size)
+          (set! current-font-size size)
+          (send (current-style-delta) set-size-mult (vector-ref font-size-vec (sub1 size)))
+          (list (lambda ()
+                  (set! current-font-size prev-size))))
+        '()))
+  
+  (define (handle-paragraph-attributes node)
+    (define value (sxml:attr node 'align))
+    (if value
+        (let ([prev-alignment current-alignment])
+          (set! current-alignment
                 (cond
-                  [(non-empty-string? (car content))
-                   (printf "handle href ~a~n" content)
-                   (define text (car content))
-                   (define style-copy (make-object style-delta% 'change-nothing))
-                   (send style-copy copy (current-style-delta))
-                   (send style-copy set-delta-foreground current-link-color)
-                   (define style (send style-list find-or-create-style (current-style) style-copy))
-                   (define link-snip (new html-link-snip% (url href-value) (base-url base-url) (browser-canvas canvas)))
-                   (send link-snip set-style style)
-                   (send link-snip insert text (string-length text))
-                   (send canvas append-snip link-snip #f current-alignment)]
-                  [((ntype-names?? '(img)) (car content))
-                   (printf "handle img href~n")
-                   (handle-img (car content) href-value base-url)]
-                  [else
-                   (printf "unhandled href~n")]))]
-             [else
-              (define style-copy (make-object style-delta% 'change-nothing))
-              (send style-copy copy (current-style-delta))
-              (parameterize ([current-style-delta style-copy]
-                             [current-block (update-block (current-block) (car node))])
-                ;; handle the element. returns a list of functions to call when closing the tag
-                ;; will also update the current style
-                (define close-tag-funcs (handle-element node))
-                
-                ;; recurse into the element
-                (loop (cdr node))
-                
-                ;; perform actions to close the tag
-                (for ([f (in-list close-tag-funcs)])
-                  (f)))
-              ;(eprintf "ending ~a~n" (car node))
+                  [(string-ci=? value "center") 'center]
+                  [(string-ci=? value "left") 'left]
+                  [(string-ci=? value "right") 'right]
+                  [else current-alignment]))
+          (list (lambda ()
+                  (set! current-alignment prev-alignment))))
+        '()))
+  
+  (define (handle-img node [url #f] [base-url #f])
+    (when img-ok?
+      (define src-value (sxml:attr node 'src))
+      (define request (send canvas get-current-request))
+      (when request
+        (define align
+          (case (and (sxml:attr node 'align)
+                     (string-downcase (sxml:attr node 'align)))
+            [("left") 'left]
+            [("right") 'right]
+            [("center") 'center]
+            [else current-alignment]))
+        (define bm (load-new-bitmap src-value request))
+        (define snip (if url
+                         (new html-link-img-snip% (url url) (base-url base-url) (browser-canvas canvas))
+                         (make-object image-snip%)))
+        (send snip set-bitmap bm)
+        (append-snip snip #f align))))
+  
+  ;; handle each element based on the element type
+  ;; return a list of functions to call when closing the element
+  (define (handle-element node)
+    (case (car node)
+      [(p)
+       (start-new-paragraph)
+       (handle-paragraph-attributes node)]
+      [(b)
+       (send (current-style-delta) set-delta 'change-bold)
+       '()]
+      [(i)
+       (send (current-style-delta) set-delta 'change-italic)
+       '()]
+      [(u)
+       (send (current-style-delta) set-delta 'change-underline #t)
+       '()]
+      [(h1)
+       (start-new-paragraph)
+       (send (current-style-delta) set-delta 'change-bold)
+       (send (current-style-delta) set-size-mult 2.0)
+       (handle-paragraph-attributes node)]
+      [(h2)
+       (start-new-paragraph)
+       (send (current-style-delta) set-delta 'change-bold)
+       (send (current-style-delta) set-size-mult 1.5)
+       (handle-paragraph-attributes node)]
+      [(h3)
+       (start-new-paragraph)
+       (send (current-style-delta) set-delta 'change-bold)
+       (send (current-style-delta) set-size-mult 1.2)
+       (handle-paragraph-attributes node)]
+      [(h4 h5 h6)
+       (start-new-paragraph)
+       (send (current-style-delta) set-delta 'change-bold)
+       (handle-paragraph-attributes node)]
+      [(pre)
+       (start-new-paragraph)
+       (send (current-style-delta) set-delta 'change-family 'modern)
+       '()]
+      [(center)
+       (start-new-paragraph)
+       (define prev-alignment current-alignment)
+       (set! current-alignment 'center)
+       (list (lambda ()
+               (set! current-alignment prev-alignment)))]
+      [(body)
+       (handle-body-attributes node)]
+      [(font)
+       (handle-font-attributes node)]
+      [else
+       '()]))
+  
+  (send canvas set-default-style html-basic-style)
+  
+  (let loop ([s content])
+    (unless (empty? s)
+      (define node (car s))
+      (cond
+        [(sxml:element? node)
+         ;(printf "element ~a~n" (sxml:element-name node))
+         (case (sxml:element-name node)
+           [(br)
+            (insert-newline)]
+           [(hr)
+            (define width-value (sxml:attr node 'width))
+            (define width-property
+              (if width-value
+                  (if (string-contains? width-value "%")
+                      (cons 'width-percent
+                            (string->number (car (string-split width-value "%"))))
+                      (cons 'width-pixels
+                            (string->number width-value)))
+                  '(width-percent . 100)))
+            (define align
+              (case (and (sxml:attr node 'align)
+                         (string-downcase (sxml:attr node 'align)))
+                [("left") 'left]
+                [("right") 'right]
+                [("center") 'center]
+                [else current-alignment]))
+            (when (not (last-element-eol?))
+              (insert-newline))
+            (append-snip (new horz-line-snip%)
+                         #t
+                         align
+                         (list width-property))
+            #;(insert-newline)]
+           [(img)
+            (handle-img node)]
+           [(a)
+            (define content (sxml:content node))
+            (define href-value (sxml:attr node 'href))
+            (define base-url (request->url (send canvas get-current-request)))
+            (when (not (empty? content))
+              (cond
+                [(non-empty-string? (car content))
+                 (printf "handle href ~a~n" content)
+                 (define text (car content))
+                 (define style-copy (make-object style-delta% 'change-nothing))
+                 (send style-copy copy (current-style-delta))
+                 (send style-copy set-delta-foreground current-link-color)
+                 (define style (send style-list find-or-create-style (current-style) style-copy))
+                 (define link-snip (new html-link-snip% (url href-value) (base-url base-url) (browser-canvas canvas)))
+                 (send link-snip set-style style)
+                 (send link-snip insert text (string-length text))
+                 (append-snip link-snip #f current-alignment)]
+                [((ntype-names?? '(img)) (car content))
+                 (printf "handle img href~n")
+                 (handle-img (car content) href-value base-url)]
+                [else
+                 (printf "unhandled href~n")]))]
+           [(table)
+            (define table-snip (new table-snip%))
+            (parameterize ([current-container table-snip])
+              (printf "start table~n")
+              (loop (sxml:content node))
+              (printf "end table~n"))]
+           [(th)
+            (printf "table header~n")]
+           [(tr)
+            (printf "start table row~n")
+            (loop (sxml:content node))
+            (printf "end table row~n")]
+           [(td)
+            (printf "start table cell~n")
+            (loop (sxml:content node))
+            (printf "end table cell~n")]
+           [else
+            (define style-copy (make-object style-delta% 'change-nothing))
+            (send style-copy copy (current-style-delta))
+            (parameterize ([current-style-delta style-copy]
+                           [current-block (update-block (current-block) (car node))])
+              ;; handle the element. returns a list of functions to call when closing the tag
+              ;; will also update the current style
+              (define close-tag-funcs (handle-element node))
+              
+              ;; recurse into the element
+              (loop (cdr node))
+              
+              ;; perform actions to close the tag
+              (for ([f (in-list close-tag-funcs)])
+                (f)))
+            ;(eprintf "ending ~a~n" (car node))
 
-              ;; insert a newline after a "paragraph" element unless the next element is a <br> or <hr>
-              ;; don't do this for 'center' elements
-              (when (is-paragraph-element? (car node))
-                (insert-newline)
-                (when (and (not (empty? (cdr s)))
-                           (not (eq? (car node) 'center)) ; center elements don't need space below
-                           (not (followed-by-newline? (cadr s))))
-                  (eprintf "inserting newline after 'paragraph'~n")
-                  (insert-newline)))])
-           (loop (cdr s))]
-          [(string? node)
-           (case (current-block)
-             [(head title)
-              void]
-             [(pre)
+            ;; insert a newline after a "paragraph" element unless the next element is a <br> or <hr>
+            ;; don't do this for 'center' elements
+            (when (is-paragraph-element? (car node))
+              (insert-newline)
+              (when (and (not (empty? (cdr s)))
+                         (not (eq? (car node) 'center)) ; center elements don't need space below
+                         (not (followed-by-newline? (cadr s))))
+                (eprintf "inserting newline after 'paragraph'~n")
+                (insert-newline)))])
+         (loop (cdr s))]
+        [(string? node)
+         (case (current-block)
+           [(head title)
+            void]
+           [(pre)
+            (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
+            (append-string node style (string-suffix? node "\n"))
+            #;(eprintf "pre: ~aEND~n" node)]
+           [else
+            (define text (string-normalize-spaces node))
+            (when (non-empty-string? text)
               (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
-              (send canvas append-string node style (string-suffix? node "\n"))
-              #;(eprintf "pre: ~aEND~n" node)]
-             [else
-              (define text (string-normalize-spaces node))
-              (when (non-empty-string? text)
-                (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
-                (send canvas append-string (string-append text " ") style #f current-alignment)
-                #;(eprintf "~a,~a paragraph: ~a~n" (current-block) current-alignment text))
-              (when (not (non-empty-string? text))
-                (eprintf "skipped newline char~n"))])
-           (loop (cdr s))]
-          #;[(attr-list? node)
+              (append-string (string-append text " ") style #f current-alignment)
+              #;(eprintf "~a,~a paragraph: ~a~n" (current-block) current-alignment text))
+            (when (not (non-empty-string? text))
+              (eprintf "skipped newline char~n"))])
+         (loop (cdr s))]
+        #;[(attr-list? node)
            (printf "atrributes ~a~n" (cdr node))
            (loop (cdr s))]
-          [else
-           ;(printf "skip ~a~n" node)
-           (loop (cdr s))])))
+        [else
+         ;(printf "skip ~a~n" node)
+         (loop (cdr s))])))
     
-    void))
+    void)
 
 (define (render-html-to-text port canvas [img-ok? #f] [eval-ok? #f])
   (unless (input-port? port)

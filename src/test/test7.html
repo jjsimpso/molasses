@@ -1,0 +1,100 @@
+<HTML><BODY>
+<font size=+2>Line spacing test</font><br>
+How far Down are we?
+<prE>:004CBB70 C6051AF34C00<font color=red>01</font>  mov byte ptr [004CF31A], 01 ;bad flag</prE>
+<center>
+  <IMG SRC="bulletr.gif" ALT="red" ALIGN=BOTTOM WIDTH=13 HEIGHT=13 BORDER=0 VSPACE=0 HSPACE=0><A HREF="index.html">homepage</A>
+  <IMG SRC="bulletr.gif" ALT="red" ALIGN=BOTTOM WIDTH=13 HEIGHT=13 BORDER=0 VSPACE=0 HSPACE=0><A HREF="links.htm">links</A> 
+  <IMG SRC="bulletr.gif" ALT="red" ALIGN=BOTTOM WIDTH=13 HEIGHT=13 BORDER=0 VSPACE=0 HSPACE=0><A HREF="noanon.htm">anonymity</A> 
+  <IMG SRC="bulletr.gif" ALIGN=BOTTOM BORDER=0 VSPACE=0 HSPACE=0><A HREF="orc.htm">+ORC</A>
+
+  <IMG SRC="bulletr.gif" ALT="red" ALIGN=BOTTOM WIDTH=13 HEIGHT=13 BORDER=0 VSPACE=0 HSPACE=0><A HREF="student.htm">students' essays</A>
+
+  <IMG SRC="bulletr.gif" ALT="red" ALIGN=BOTTOM WIDTH=13 HEIGHT=13 BORDER=0 VSPACE=0 HSPACE=0><A HREF="academy.htm">academy database</A><br>
+
+  <IMG SRC="bulletr.gif" ALT="red" ALIGN=BOTTOM WIDTH=13 HEIGHT=13 BORDER=0 VSPACE=0 HSPACE=0><A HREF="tools.htm">tools</A>
+
+  <IMG SRC="bulletr.gif" ALT="red" ALIGN=BOTTOM WIDTH=13 HEIGHT=13 BORDER=0 VSPACE=0 HSPACE=0><A HREF="cocktail.htm">cocktails</A>
+
+  <IMG SRC="bulletr.gif" ALT="red" ALIGN=BOTTOM WIDTH=13 HEIGHT=13 BORDER=0 VSPACE=0 HSPACE=0><A HREF="ideale.htm">antismut CGI-scripts</A>
+
+  <IMG SRC="bulletr.gif" ALT="red" ALIGN=BOTTOM WIDTH=13 HEIGHT=13 BORDER=0 VSPACE=0 HSPACE=0><A HREF="searengi.htm">search_forms</A>
+
+  <IMG SRC="bulletr.gif" ALT="red" ALIGN=BOTTOM WIDTH=13 HEIGHT=13 BORDER=0 VSPACE=0 HSPACE=0><A HREF="info.htm">mail_fravia</A><br>
+
+  <IMG SRC="bulletr.gif" ALT="red" ALIGN=BOTTOM WIDTH=13 HEIGHT=13 --
+       --BORDER=0 VSPACE=0 HSPACE=0><A HREF="legal.htm">Is reverse --
+    --engineering legal?</A>
+
+</center>
+
+
+<prE>8    0    3    D    1    A    F    3    4    C    0   
+1000 0000 0011 1101 0001 1010 1111 0011 0100 1100 0000</prE>
+Now everything should be clear and you have your explanation before your eyes: hexadecimal code allows a precise 
+and immediate representation of the UNDERLYING binary code, which 
+as you (should) know is the only code that your computer is capable 
+to understand (power on / power off). Binary is elementarily simple:
+0=0000; 1=0001; 2=0010; 3= 0011; 4=0100; 5=0101; 6=0110; 7=0111 and so on.
+4 bits give 16 possibilities (0-F: 0000-1111, decimal 0-15); 
+8 bits (a byte) give 256 possibilities 
+and range from 0 (which is 00000000) to FF (which is 11111111 and 
+corresponds to 255... 0-255 are 256 possibilities).<br>
+The following three formats mean therefore all three the SAME 
+instruction:<pre>
+803D1AF34C0000
+10000000001111010001101011110011010011000000000000000000</prE>
+This means [compare what is inside the memory location number [004CF31A] 
+with zero]... or, if you prefer, [let's see if a zero has been stored inside that memory 
+location]... Technically, this 'compare' is considered an arithmetic operation, because 
+the source operand (here zero), is subtracted 
+from the destination operand (here the content of location [004CF31A]. 
+The result, however is used for setting the flags and it is not stored 
+anywhere. Flags are single (0/1) bits of a special register, which are VERY important, 
+inter alia, 
+for our cracking purposes... more about flag-bits and register-bytes 
+later.
+<pre>cmp byte ptr [004CF31A], 00<font color=purple>
+803D1AF34C0000 &lt;&lt;  HEXADECIMAL NOTATION</fonT>
+10000000001111010001101011110011010011000000000000000000</prE>
+hexadecimal expression, ... you will probably not yet understand this, 
+yet it should already result somehow more transparent... 
+Let's imagine that you know that 80 (like 3B) means (often enough) compare, i.e.'cmp', and 
+that 803D means specifically 'cmp byte ptr' (that is "compare a memory location I'm 
+pointing you to"), well, in that case 
+you would immediately guess that (after 803D)   
+the following part: 1A34C00, represents a memory location in inverted format, and 
+that the last byte, zero, correspond to the right operand of our instruction.<br>So, this is assembly 'reversed'... frop hexadecimal bytes to the relative instructions. In fact you'll NOT find 
+in many books (or for that matter on the Web itself) a 'raster' like 
+the following snippet (out of my own personal 'home-made' one), which is a very useful reference for OUR purposes):
+<pre>...
+8039E9                  cmp byte ptr [ecx], E9
+803A20                  cmp byte ptr [edx], 20
+803B22                  cmp byte ptr [ebx], 22
+803C0000                cmp byte ptr [eax+eax], 00
+803C1826                cmp byte ptr [eax+ebx], 26  
+803C2400                cmp byte ptr [esp], 00
+803D35E04C0000          cmp byte ptr [004CE035], 00  &lt;This is like 'our' instruction above
+... 
+803B22                  cmp byte ptr [ebx], 22
+807B0122                cmp byte ptr [ebx+01], 22
+807B4800                cmp byte ptr [ebx+48], 00
+...
+807E4800                cmp byte ptr [esi+48], 00
+80BC064C0100001A        cmp byte ptr [esi+eax+0000014C], 1A
+
+80F861                  cmp al, 61
+80F91A                  cmp cl, 1A
+80FA61                  cmp dl, 61 
+80FB20                  cmp bl, 20
+80FF64                  cmp bh, 64</prE>Now, 
+if take a couple of minutes out of your patience bag and look hard at the 
+hexadecimal codes of the raster above, 
+you'll make out some easy and clear patterns... Most of the compare instructions 
+above 
+regard the various REGISTERS of your microprocessor: ax (which 
+is divided into al and ah), bx, cx... and so on... more about registers  
+later.
+<hr>
+
+</BODY></HTML>
