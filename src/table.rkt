@@ -22,11 +22,11 @@
     (define xmargin horiz-margin)
     (define ymargin vert-margin)
     ;; upper left corner of cell in table's virtual canvas
-    (define x 0)
-    (define y 0)
+    (define canvas-x 0)
+    (define canvas-y 0)
     ;; size of cell not including borders, which are drawn by table
-    (define width 10)
-    (define height 10)
+    (define content-width 10)
+    (define content-height 10)
 
     (define snip-xmargin 5)
     (define snip-ymargin 2)
@@ -40,17 +40,17 @@
       dc)
 
     (define/public (get-position)
-      (values x y))
+      (values canvas-x canvas-y))
 
     (define/public (set-position posx posy)
-      (set! x posx)
-      (set! y posy))
+      (set! canvas-x posx)
+      (set! canvas-y posy))
     
-    (define/public (get-size)
-      (values width height))
+    (define/public (get-content-size)
+      (values content-width content-height))
 
     (define/public (get-drawable-size)
-      (define-values (w h) (get-size))
+      (define-values (w h) (get-content-size))
       (values (- w (* 2 xmargin))
               (- h (* 2 ymargin))))
 
@@ -721,8 +721,8 @@
 
     (define (reset-layout)
       (printf "resetting layout~n")
-      (set! width 10)
-      (set! height 10)
+      (set! content-width 10)
+      (set! content-height 10)
       (set! place-x 0)
       (set! place-y 0)
       
@@ -814,11 +814,11 @@
       (set-element-ypos! e y1)
 
       ; for cells the width will be set by the table
-      #;(when (> x2 canvas-width)
-        (set! canvas-width x2))
+      #;(when (> x2 content-width)
+        (set! content-width x2))
 
-      (when (> y2 height)
-        (set! height y2)))
+      (when (> y2 content-height)
+        (set! content-height y2)))
 
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       (printf "cell append-snip~n"))
