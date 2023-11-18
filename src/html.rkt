@@ -435,20 +435,27 @@
                 [else
                  (printf "unhandled href~n")]))]
            [(table)
-            (define table-snip (new table-snip%))
+            (define table-snip (new table-snip%
+                                    (drawing-context (send canvas get-dc))
+                                    (defstyle html-basic-style)))
             (parameterize ([current-container table-snip])
               (printf "start table~n")
               (loop (sxml:content node))
+              (send (current-container) finalize-table)
               (printf "end table~n"))]
            [(th)
             (printf "table header~n")]
            [(tr)
             (printf "start table row~n")
+            (send (current-container) start-row)
             (loop (sxml:content node))
+            (send (current-container) end-row)
             (printf "end table row~n")]
            [(td)
             (printf "start table cell~n")
+            (send (current-container) start-cell)
             (loop (sxml:content node))
+            (send (current-container) end-cell)
             (printf "end table cell~n")]
            [else
             (define style-copy (make-object style-delta% 'change-nothing))
