@@ -12,21 +12,26 @@
   (class object% (super-new)
     (init drawing-context
           defstyle
+          [valign 'middle]
           [horiz-margin 5]
           [vert-margin 5])
 
     (define dc drawing-context)
     (define default-style defstyle)
-
+    (define vert-align valign)
+    
     ;; 
     (define xmargin horiz-margin)
     (define ymargin vert-margin)
     ;; upper left corner of cell in table's virtual canvas
     (define canvas-x 0)
     (define canvas-y 0)
-    ;; size of cell not including borders, which are drawn by table
-    (define content-width 10)
-    (define content-height 10)
+    ;;
+    (define cell-width 10)
+    (define cell-height 10)
+    ;; size of cell's contents not including borders and margins
+    (define content-width 0)
+    (define content-height 0)
 
     (define snip-xmargin 5)
     (define snip-ymargin 2)
@@ -34,7 +39,6 @@
     ;; current position to place next element
     (define place-x 0)
     (define place-y 0)
-    
 
     (define/public (get-dc)
       dc)
@@ -45,12 +49,19 @@
     (define/public (set-position posx posy)
       (set! canvas-x posx)
       (set! canvas-y posy))
+
+    (define/public (get-size)
+      (values cell-width cell-height))
+
+    (define/public (set-size w h)
+      (set! cell-width w)
+      (set! cell-height h))
     
     (define/public (get-content-size)
       (values content-width content-height))
 
     (define/public (get-drawable-size)
-      (define-values (w h) (get-content-size))
+      (define-values (w h) (get-size))
       (values (- w (* 2 xmargin))
               (- h (* 2 ymargin))))
 
@@ -720,9 +731,9 @@
              (error "invalid alignment!")])))
 
     (define (reset-layout)
-      (printf "resetting layout~n")
-      (set! content-width 10)
-      (set! content-height 10)
+      (printf "resetting cell layout~n")
+      (set! content-width 0)
+      (set! content-height 0)
       (set! place-x 0)
       (set! place-y 0)
       
@@ -738,7 +749,7 @@
       
       (for ([e (in-dlist elements)])
         (place-element e place-x place-y)))
-    
+
     (define (handle-element-properties e)
       (define snip (element-snip e))
       (when (is-a? snip snip%)
@@ -756,7 +767,7 @@
              (define h (get-element-height e))
              (send snip resize w h)]))))
     
-    ;; places element in the cell and updates size of the cell (or the height anyways)
+    ;; places element in the cell and updates size of the cell's content
     ;; e is the new element and must be the new tail of the element list
     ;; x,y is position of element's upper left corner in canvas
     (define (place-element e x y)
@@ -771,8 +782,7 @@
       (set-element-cached-text-extent! e #f)
 
       (handle-element-properties e)
-      
-      ;; get extent of element
+
       (if (string? (element-snip e))
           ;; if snip is actually a string type
           (begin
@@ -813,18 +823,83 @@
       (set-element-xpos! e x1)
       (set-element-ypos! e y1)
 
-      ; for cells the width will be set by the table
-      #;(when (> x2 content-width)
+      (when (> x2 content-width)
         (set! content-width x2))
 
       (when (> y2 content-height)
         (set! content-height y2)))
 
+    ;; during first pass of adding elements we will calculate the min and max width of the cell
+    (define min-width 0)
+    (define max-width 0)
+
+    (define/public (get-min-width)
+      min-width)
+
+    (define/public (get-max-width)
+      max-width)
+    
+    (define/public (initial-place-element e x y)
+      ;; coordinates for element bounding region
+      ;; x2, y2 need to be set below
+      ;; x1, y1 may be changed below
+      (define-values (x1 y1 x2 y2) (values x y 0 0))
+
+      ;; for initial pass assume a large drawable width. ideally we wouldn't check the width
+      ;; at all during layout but that would require changing the layout algorithm a bit,
+      ;; so do this for now.
+      ;; TODO: this doesn't actually work if there is a right or center aligned element!
+      (define dw 10000)
+      
+      ;; for strings calculate word extents. only need to do this once for each string element.
+      ;; minimum width of the cell is equal to width of shortest word or smallest snip
+      (when (string? (element-snip e))
+        (calc-word-extents e)
+        (for/list ([w (element-words e)])
+          (printf "word width = ~a~n" (word-width w))
+          (when (> (word-width w) min-width)
+            (set! min-width (word-width w)))))
+      
+      ;; layout the element without word wrapping, so treat strings and snips the same
+      (let ([snip-w (box 0)]
+            [snip-h (box 0)]
+            [snip-descent (box 0)]
+            [snip-space (box 0)])
+        (get-extent e dc x y snip-w snip-h snip-descent snip-space #f #f)
+        (define snip-height (if (or (string? (element-snip e))
+                                    (is-a? (element-snip e) string-snip%))
+                                (- (unbox snip-h) (unbox snip-descent))
+                                (unbox snip-h)))
+        ; update min width for non-strings
+        (when (and (not (string? (element-snip e)))
+                   (> (unbox snip-w) min-width))
+          (printf "set min width to ~a~n" (unbox snip-w))
+          (set! min-width (unbox snip-w)))
+        (set!-values (x1 y1 x2 y2) (layout-snip e dw y (unbox snip-w) snip-height))
+        ; layout-goto-new-line needs the element's position to be set, so set it now
+        (set-element-xpos! e x1)
+        (set-element-ypos! e y1)
+        ; set position for adding next element
+        (when (element-end-of-line e)
+          ;(printf "snip end of line~n")
+          (layout-goto-new-line (next-line-y-pos y1))))
+
+      ;; set the max width if it exceeds previous
+      (when (> x2 max-width)
+        (set! max-width x2)))
+
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
-      (printf "cell append-snip~n"))
+      (printf "cell append-snip~n")
+      (define e (element s end-of-line alignment properties))
+      (initial-place-element e place-x place-y)
+      (dlist-append! elements e))
 
     (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned])
-      (printf "cell append-string~n"))
+      (printf "cell append-string~n")
+      (define e (element s end-of-line alignment '()))
+      (set-element-text-style! e (or style default-style))
+      (initial-place-element e place-x place-y)
+      (dlist-append! elements e))
 ))
 
 (define table-snip%
@@ -838,8 +913,8 @@
     
     (define num-rows 0)
     (define num-columns 0)
-    (define min-width 0)
-    (define max-width 0)
+    ;(define min-width 0)
+    ;(define max-width 0)
 
     ; temp variables used for calculation of min and max cell width
     (define min-left 0)
@@ -873,20 +948,20 @@
       (set! rip (cons c rip)))
 
     (define/public (end-cell)
-      void)
+      (printf "min/max width=~a/~a~n" (send (current-cell) get-min-width) (send (current-cell) get-max-width)))
 
     (define/public (finalize-table)
       (set! rows (reverse rows))
       (printf "finalize table ~ax~a, ~a~n" num-rows num-columns rows))
 
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
-      (when (current-cell)
-        (define c (car rip))
+      (define c (current-cell))
+      (when c
         (send c append-snip s end-of-line alignment properties)))
 
     (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned])
-      (when (current-cell)
-        (define c (car rip))
+      (define c (current-cell))
+      (when c
         (send c append-string s style end-of-line alignment)))
 
     ))
