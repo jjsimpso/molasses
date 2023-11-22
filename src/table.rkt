@@ -2,7 +2,8 @@
 
 (require racket/class
          racket/snip
-         racket/draw)
+         racket/draw
+         data/gvector)
 
 (require "dlist.rkt")
 
@@ -839,7 +840,7 @@
     (define/public (get-max-width)
       max-width)
     
-    (define/public (initial-place-element e x y)
+    (define (initial-place-element e x y)
       ;; coordinates for element bounding region
       ;; x2, y2 need to be set below
       ;; x1, y1 may be changed below
@@ -887,7 +888,7 @@
       ;; set the max width if it exceeds previous
       (when (> x2 max-width)
         (set! max-width x2)))
-
+    
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       (printf "cell append-snip~n")
       (define e (element s end-of-line alignment properties))
@@ -913,6 +914,8 @@
     
     (define num-rows 0)
     (define num-columns 0)
+    (define width 0)
+    (define height 0)
     ;(define min-width 0)
     ;(define max-width 0)
 
@@ -923,13 +926,60 @@
     (define max-right 0)
     (define min-unaligned 0)
     (define max-unaligned 0)
-    
+
+    (define/override (get-extent dc x y	 	 	 	 
+                                 [w #f]
+                                 [h #f]
+                                 [descent #f]
+                                 [space #f]
+                                 [lspace #f]
+                                 [rspace #f])
+      (define (maybe-set-box! b v) (when b (set-box! b v)))
+      (maybe-set-box! w width)
+      (maybe-set-box! h height)
+      (maybe-set-box! descent 0.0)
+      (maybe-set-box! space 0.0)
+      (maybe-set-box! lspace 0.0)
+      (maybe-set-box! rspace 0.0))
+
+    (struct column
+      ([min-width #:mutable]
+       [max-width  #:mutable]
+       [cells  #:mutable]) ; list of cells but not necessarily in row order
+      #:prefab)
+
     (define rows '())
+    ;; growable vector of column structs
+    (define columns (make-gvector))
     ;; row in progress
     (define rip #f)
 
     (define (current-cell)
       (and rip (car rip)))
+
+    ;; adds each cell in row to its respective column
+    ;; row is a list of cells in column order
+    (define (add-row-to-columns row)
+      (for/list ([cell (in-list row)]
+                 [i (in-naturals 0)])
+        ; init a new column
+        (when (= i (gvector-count columns))
+          (gvector-add! columns (column 0 0 '())))
+        (define col (gvector-ref columns i))
+        (set-column-cells! col (cons cell (column-cells col)))))
+    
+    (define (calc-column-widths layout-width)
+      ;; calculate the min and max width of each column
+      (for* ([col (in-gvector columns)]
+             [c (in-list (column-cells col))])
+        (when (> (send c get-min-width) (column-min-width col))
+          (set-column-min-width! col (send c get-min-width)))
+        (when (> (send c get-max-width) (column-max-width col))
+          (set-column-max-width! col (send c get-max-width)))
+        (printf "calc-column-widths: ~a - ~a~n" (column-min-width col) (column-max-width col)))
+
+      ;; calculate the width of each column
+      )
     
     (define/public (start-row)
       (set! rip '()))
@@ -941,6 +991,7 @@
         (set! num-columns num-cols))
       (set! num-rows (add1 num-rows))
       (set! rows (cons (reverse rip) rows))
+      (add-row-to-columns (car rows))
       (set! rip #f))
 
     (define/public (start-cell)
@@ -950,9 +1001,10 @@
     (define/public (end-cell)
       (printf "min/max width=~a/~a~n" (send (current-cell) get-min-width) (send (current-cell) get-max-width)))
 
-    (define/public (finalize-table)
+    (define/public (finalize-table layout-width)
       (set! rows (reverse rows))
-      (printf "finalize table ~ax~a, ~a~n" num-rows num-columns rows))
+      (printf "finalize table ~ax~a, ~a~n" num-rows num-columns rows)
+      (calc-column-widths layout-width))
 
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       (define c (current-cell))
@@ -1004,7 +1056,8 @@
   (send table end-cell)
   (send table end-row)
 
-  (send table finalize-table)
+  (define-values (dw dh) (send canvas get-drawable-size))
+  (send table finalize-table dw)
   
   (send canvas append-snip table)
   

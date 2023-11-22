@@ -441,7 +441,10 @@
             (parameterize ([current-container table-snip])
               (printf "start table~n")
               (loop (sxml:content node))
-              (send (current-container) finalize-table)
+              ;; todo: getting size from the canvas won't work for nested tables
+              (define-values (dw dh) (send canvas get-drawable-size))
+              (send (current-container) finalize-table dw)
+              (append-snip table-snip #t current-alignment)
               (printf "end table~n"))]
            [(th)
             (printf "table header~n")]
