@@ -855,7 +855,7 @@
       ;; minimum width of the cell is equal to width of shortest word or smallest snip
       (when (string? (element-snip e))
         (calc-word-extents e)
-        (for/list ([w (element-words e)])
+        (for ([w (in-list (element-words e))])
           (printf "word width = ~a~n" (word-width w))
           (when (> (word-width w) min-width)
             (set! min-width (word-width w)))))
