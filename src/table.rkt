@@ -58,6 +58,12 @@
       (set! cell-width w)
       (set! cell-height h))
     
+    (define/public (set-width w)
+      (set! cell-width w))
+
+    (define/public (set-height h)
+      (set! cell-height h))
+    
     (define/public (get-content-size)
       (values content-width content-height))
 
@@ -731,7 +737,7 @@
             [else
              (error "invalid alignment!")])))
 
-    (define (reset-layout)
+    (define/public (reset-layout)
       (printf "resetting cell layout~n")
       (set! content-width 0)
       (set! content-height 0)
@@ -880,6 +886,8 @@
         ; layout-goto-new-line needs the element's position to be set, so set it now
         (set-element-xpos! e x1)
         (set-element-ypos! e y1)
+        ; todo: calculate line width before advancing to next line
+        ; todo: then check line width against max width
         ; set position for adding next element
         (when (element-end-of-line e)
           ;(printf "snip end of line~n")
@@ -916,8 +924,8 @@
     (define num-columns 0)
     (define width 0)
     (define height 0)
-    ;(define min-width 0)
-    ;(define max-width 0)
+    (define min-width 0)
+    (define max-width 0)
 
     ; temp variables used for calculation of min and max cell width
     (define min-left 0)
@@ -945,8 +953,9 @@
     (struct column
       ([min-width #:mutable]
        [max-width  #:mutable]
-       [cells  #:mutable]) ; list of cells but not necessarily in row order
-      #:prefab)
+       [cells  #:mutable]
+       [width #:mutable #:auto]) ; list of cells but not necessarily in row order
+      #:prefab #:auto-value 0)
 
     (define rows '())
     ;; growable vector of column structs
@@ -968,7 +977,7 @@
         (define col (gvector-ref columns i))
         (set-column-cells! col (cons cell (column-cells col)))))
     
-    (define (calc-column-widths layout-width)
+    (define (calc-column-min/max-widths)
       ;; calculate the min and max width of each column
       (for* ([col (in-gvector columns)]
              [c (in-list (column-cells col))])
@@ -976,10 +985,61 @@
           (set-column-min-width! col (send c get-min-width)))
         (when (> (send c get-max-width) (column-max-width col))
           (set-column-max-width! col (send c get-max-width)))
-        (printf "calc-column-widths: ~a - ~a~n" (column-min-width col) (column-max-width col)))
+        (printf "calc-column-min/max-widths: ~a - ~a~n" (column-min-width col) (column-max-width col)))
+      ;; calculate the min and max width of the table
+      (define-values (table-min-width table-max-width)
+        (for/fold ([t-min-width 0]
+                   [t-max-width 0])
+                  ([col (in-gvector columns)])
+          (values (+ t-min-width (column-min-width col))
+                  (+ t-max-width (column-max-width col)))))
+      (set! min-width table-min-width)
+      (set! max-width table-max-width))
 
-      ;; calculate the width of each column
-      )
+    (define (calc-row-height row)
+      (define max-height 0)
+      (for ([c (in-list row)])
+        (define-values  (w h) (send c get-content-size))
+        (when (> h max-height)
+          (set! max-height h)))
+      max-height)
+
+    (define (set-row-height row height)
+      (for ([c (in-list row)])
+        (send c set-height height)))
+    
+    (define (set-column-widths layout-width)
+      ;; calculate the width of each column using autolayout algorithm
+      (cond
+        [(<= max-width layout-width)
+         ;; it all fits, set column widths to the max
+         (for ([col(in-gvector columns)])
+           (set-column-width! col (column-max-width col)))]
+        [(>= min-width layout-width)
+         ;; min is still too big, set column widths to min
+         (for ([col(in-gvector columns)])
+           (set-column-width! col (column-min-width col)))]
+        [else
+         ;; assign column widths
+         (define W (- layout-width min-width))
+         (define D (- max-width min-width))
+         (define W-over-D (/ W D))
+         (for ([col(in-gvector columns)])
+           (define d (- (column-max-width col) (column-min-width col)))
+           ;(printf "setting colmun width to ~a~n" (+ (column-min-width col) (floor (* d W-over-D))))
+           (set-column-width! col (+ (column-min-width col) (floor (* d W-over-D)))))])
+        
+      ;; set each cell's width to its column's width and run layout in each cell
+      (for* ([col (in-gvector columns)]
+             [c (in-list (column-cells col))])
+        (send c set-width (column-width col))
+        (send c reset-layout))
+      
+      ;; now we should know the content height of each cell and can set the cells
+      ;; in each row to a suitable height
+      (for ([row (in-list rows)])
+        (define height (calc-row-height row))
+        (set-row-height row height)))
     
     (define/public (start-row)
       (set! rip '()))
@@ -1004,8 +1064,17 @@
     (define/public (finalize-table layout-width)
       (set! rows (reverse rows))
       (printf "finalize table ~ax~a, ~a~n" num-rows num-columns rows)
-      (calc-column-widths layout-width))
-
+      (calc-column-min/max-widths)
+      (set-column-widths layout-width)
+      (printf "table rows are:~a~n" rows)
+      (for ([row (in-list rows)]
+            [i (in-naturals 0)])
+        (printf "row ~a: " i)
+        (for ([c (in-list row)])
+          (define-values (w h) (send c get-size))
+          (printf "~ax~a, " w h))
+        (printf "~n")))
+          
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       (define c (current-cell))
       (when c
@@ -1042,17 +1111,22 @@
 
   (send table start-row)
   (send table start-cell)
+  (send table append-string "1,1")
   (send table end-cell)
   (send table start-cell)
+  (send table append-string "1,2")
   (send table end-cell)
   (send table end-row)
   
   (send table start-row)
   (send table start-cell)
+  (send table append-string "2,1")
   (send table end-cell)
   (send table start-cell)
+  (send table append-string "2,2")
   (send table end-cell)
   (send table start-cell)
+  (send table append-string "2,3")
   (send table end-cell)
   (send table end-row)
 
