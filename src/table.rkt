@@ -847,6 +847,13 @@
       max-width)
     
     (define (initial-place-element e x y)
+      (define (unnecessary-margin)
+        ; TODO: this takes care of the most common cases, but not all
+        (or
+         (and (> layout-left-width 0) (= 0 (+ (unaligned-or-center-width) layout-right-width)) snip-xmargin)
+         (and (> (unaligned-or-center-width) 0) (= layout-right-width 0) snip-xmargin)
+         0))
+      
       ;; coordinates for element bounding region
       ;; x2, y2 need to be set below
       ;; x1, y1 may be changed below
@@ -886,16 +893,15 @@
         ; layout-goto-new-line needs the element's position to be set, so set it now
         (set-element-xpos! e x1)
         (set-element-ypos! e y1)
-        ; todo: calculate line width before advancing to next line
-        ; todo: then check line width against max width
+        ; calculate line width before advancing to next line
+        (define line-width (- (+ layout-left-width (unaligned-or-center-width) layout-right-width)
+                              (unnecessary-margin)))
+        (when (> line-width max-width)
+          (set! max-width line-width))
         ; set position for adding next element
         (when (element-end-of-line e)
           ;(printf "snip end of line~n")
-          (layout-goto-new-line (next-line-y-pos y1))))
-
-      ;; set the max width if it exceeds previous
-      (when (> x2 max-width)
-        (set! max-width x2)))
+          (layout-goto-new-line (next-line-y-pos y1)))))
     
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       (printf "cell append-snip~n")
