@@ -444,8 +444,8 @@
               ;; todo: getting size from the canvas won't work for nested tables
               (define-values (dw dh) (send canvas get-drawable-size))
               (send (current-container) finalize-table dw)
-              (append-snip table-snip #t current-alignment)
-              (printf "end table~n"))]
+              (printf "end table~n"))
+            (append-snip table-snip #t current-alignment)]
            [(th)
             (printf "table header~n")]
            [(tr)

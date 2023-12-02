@@ -57,6 +57,12 @@
     (define/public (set-size w h)
       (set! cell-width w)
       (set! cell-height h))
+
+    (define/public (get-width)
+      cell-width)
+
+    (define/public (get-height)
+      cell-height)
     
     (define/public (set-width w)
       (set! cell-width w))
@@ -65,7 +71,8 @@
       (set! cell-height h))
     
     (define/public (get-content-size)
-      (values content-width content-height))
+      (values (+ content-width (* 2 xmargin))
+              (+ content-height (* 2 ymargin))))
 
     (define/public (get-drawable-size)
       (define-values (w h) (get-size))
@@ -152,16 +159,37 @@
       (or (element-text-style e)
           (send (element-snip e) get-style)))
 
-    (define (draw-wrapped-text e dc left top)
+    (define (draw-wrapped-text e dc ox oy)
       (for ([line (in-list (element-lines e))])
-        ;(printf "draw-wrapped-text: (~a,~a) ~a~n" (wrapped-line-x line) (wrapped-line-y line) (substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)))
-        (send/apply dc draw-text `(,(substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)) ,(+ (- (wrapped-line-x line) left) xmargin) ,(+ (- (wrapped-line-y line) top) ymargin)))))
+        (printf "draw-wrapped-text: (~a,~a) ~a~n" (+ oy (wrapped-line-x line)) (+ oy (wrapped-line-y line)) (substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)))
+        (send/apply dc draw-text `(,(substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)) ,(+ (wrapped-line-x line) ox) ,(+ (wrapped-line-y line) oy)))))
     
     (define (draw-element e dc x y left top right bottom dx dy)
+      (printf "draw-element at ~a,~a~n" x y)
       (if (string? (element-snip e))
           (send dc draw-text (element-snip e) x y)
           (send (element-snip e) draw dc x y left top right bottom dx dy 'no-caret)))
 
+    ;; x and y are the upper left corner of the cell in canvas dc coordinates
+    (define/public (draw dc x y left top right bottom dx dy)
+      (define current-style #f)
+      (printf "drawing cell at ~a,~a~n" x y)
+
+      (for ([e (in-dlist elements)])
+        ;; set the style if it has changed
+        (when (not (eq? (get-style e) current-style))
+          (set! current-style (get-style e))
+          (send current-style switch-to dc #f))
+        (define-values (xpos ypos) (values (+ x (element-xpos e) xmargin)
+                                           (+ y (element-ypos e) ymargin)))
+        (if (string? (element-snip e))
+            (draw-wrapped-text e dc (+ x xmargin) (+ y xmargin))
+            (draw-element e dc
+                      xpos ypos
+                      xpos ypos
+                      (+ x (- cell-width xmargin)) (+ y (- cell-height ymargin))
+                      0 0))))
+    
     (define (calc-word-extents e)
       (define (line-break? c)
         (or (char=? c #\space)
@@ -841,10 +869,10 @@
     (define max-width 0)
 
     (define/public (get-min-width)
-      min-width)
+      (+ min-width (* 2 xmargin)))
 
     (define/public (get-max-width)
-      max-width)
+      (+ max-width (* 2 ymargin)))
     
     (define (initial-place-element e x y)
       (define (unnecessary-margin)
@@ -956,6 +984,37 @@
       (maybe-set-box! lspace 0.0)
       (maybe-set-box! rspace 0.0))
 
+    (define/override (draw dc x y left top right bottom dx dy draw-caret)
+      (define column-rule-width 0)
+      (define row-rule-height 0)
+      (define border-width 0)
+      (define xpos x)
+      (define ypos y)
+      (printf "drawing table~n")
+      (for ([row (in-list rows)])
+        (for ([c (in-list row)])
+          (send c draw dc xpos ypos left top right bottom dx dy)
+          (set! xpos (+ xpos (send c get-width) column-rule-width)))
+        (set! xpos x)
+        (set! ypos (+ ypos (row-height row) row-rule-height))))
+
+    (define (set-table-size)
+      (define column-rule-width 0)
+      (define row-rule-height 0)
+      (define border-width 0)
+      (define columns-width
+        (for/fold ([total-width 0])
+                  ([col (in-gvector columns)])
+          (+ total-width (column-width col))))
+      (define rows-height
+        (for/fold ([total-height 0])
+                  ([row (in-list rows)])
+          (define-values  (w h) (send (car row) get-content-size))
+          (+ total-height h)))
+      (set! width (+ columns-width border-width (* column-rule-width (sub1 num-columns))))
+      (set! height (+ rows-height border-width (* row-rule-height (sub1 num-rows))))
+      (printf "table size is ~ax~a~n" width height))
+    
     (struct column
       ([min-width #:mutable]
        [max-width  #:mutable]
@@ -1002,6 +1061,11 @@
       (set! min-width table-min-width)
       (set! max-width table-max-width))
 
+    (define (row-height row)
+      (if (car row)
+          (send (car row) get-height)
+          0))
+    
     (define (calc-row-height row)
       (define max-height 0)
       (for ([c (in-list row)])
@@ -1046,7 +1110,7 @@
       (for ([row (in-list rows)])
         (define height (calc-row-height row))
         (set-row-height row height)))
-    
+
     (define/public (start-row)
       (set! rip '()))
 
@@ -1079,8 +1143,9 @@
         (for ([c (in-list row)])
           (define-values (w h) (send c get-size))
           (printf "~ax~a, " w h))
-        (printf "~n")))
-          
+        (printf "~n"))
+      (set-table-size))
+    
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       (define c (current-cell))
       (when c
@@ -1107,7 +1172,7 @@
          (horiz-margin 5)
          (vert-margin 5)))
 
-  (send canvas set-canvas-background (make-color 33 33 33))
+  (send canvas set-canvas-background (make-color 200 200 200))
 
   (define standard-style
     (send (send canvas get-style-list) find-named-style "Standard"))
@@ -1115,6 +1180,8 @@
   (define table (new table-snip% (drawing-context (send canvas get-dc))
                                  (defstyle standard-style)))
 
+  (send canvas append-string "There is a table below this line:" #f #t)
+  
   (send table start-row)
   (send table start-cell)
   (send table append-string "1,1")
