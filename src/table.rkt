@@ -988,18 +988,26 @@
     (define column-rule-width 0)
     (define row-rule-height 0)
 
-    (define (draw-border x y w h thickness)
+    (define (calc-lit-color dc)
+      (make-object color% #xe8 #xe8 #xe8))
+
+    (define (calc-shadow-color dc)
+      (make-object color% #x72 #x72 #x72))
+    
+    (define (draw-table-border dc x y w h thickness)
       (define old-pen (send dc get-pen))
       (define old-smoothing (send dc get-smoothing))
       (define old-brush (send dc get-brush))
-
-      (send dc set-pen (make-object color% #xe8 #xe8 #xe8) thickness 'solid)
+      (define bg-color (send dc get-background))
+      
       (send dc set-smoothing 'aligned)
+      ; left and top edges are lit (brighter color)
+      (send dc set-pen (calc-lit-color dc) thickness 'solid)
       (send dc draw-line x (+ y h) x y)
       (send dc draw-line x y (+ x w) y)
+      ; bottom and right edges are in shadow (darker color)
+      (send dc set-pen (calc-shadow-color dc) thickness 'solid)
       (send dc draw-line (+ x w) y (+ x w) (+ y h))
-
-      (send dc set-pen (make-object color% #x72 #x72 #x72) thickness 'solid)
       (send dc draw-line x (+ y h) (+ x w) (+ y h))
 
       (send dc set-smoothing old-smoothing)
@@ -1010,7 +1018,7 @@
       (define startx (+ x border-width))
       (define ypos (+ y border-width))
       (printf "drawing table~n")
-      (draw-border x y width height 1)
+      (draw-table-border dc x y width height 1)
       (for ([row (in-list rows)])
         (define xpos startx)
         (for ([c (in-list row)])
