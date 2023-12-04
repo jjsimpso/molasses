@@ -984,24 +984,41 @@
       (maybe-set-box! lspace 0.0)
       (maybe-set-box! rspace 0.0))
 
+    (define border-width 3)
+    (define column-rule-width 0)
+    (define row-rule-height 0)
+
+    (define (draw-border x y w h thickness)
+      (define old-pen (send dc get-pen))
+      (define old-smoothing (send dc get-smoothing))
+      (define old-brush (send dc get-brush))
+
+      (send dc set-pen (make-object color% #xe8 #xe8 #xe8) thickness 'solid)
+      (send dc set-smoothing 'aligned)
+      (send dc draw-line x (+ y h) x y)
+      (send dc draw-line x y (+ x w) y)
+      (send dc draw-line (+ x w) y (+ x w) (+ y h))
+
+      (send dc set-pen (make-object color% #x72 #x72 #x72) thickness 'solid)
+      (send dc draw-line x (+ y h) (+ x w) (+ y h))
+
+      (send dc set-smoothing old-smoothing)
+      (send dc set-pen old-pen)
+      (send dc set-brush old-brush))
+    
     (define/override (draw dc x y left top right bottom dx dy draw-caret)
-      (define column-rule-width 0)
-      (define row-rule-height 0)
-      (define border-width 0)
-      (define xpos x)
-      (define ypos y)
+      (define startx (+ x border-width))
+      (define ypos (+ y border-width))
       (printf "drawing table~n")
+      (draw-border x y width height 1)
       (for ([row (in-list rows)])
+        (define xpos startx)
         (for ([c (in-list row)])
           (send c draw dc xpos ypos left top right bottom dx dy)
           (set! xpos (+ xpos (send c get-width) column-rule-width)))
-        (set! xpos x)
         (set! ypos (+ ypos (row-height row) row-rule-height))))
 
     (define (set-table-size)
-      (define column-rule-width 0)
-      (define row-rule-height 0)
-      (define border-width 0)
       (define columns-width
         (for/fold ([total-width 0])
                   ([col (in-gvector columns)])
@@ -1011,8 +1028,8 @@
                   ([row (in-list rows)])
           (define-values  (w h) (send (car row) get-content-size))
           (+ total-height h)))
-      (set! width (+ columns-width border-width (* column-rule-width (sub1 num-columns))))
-      (set! height (+ rows-height border-width (* row-rule-height (sub1 num-rows))))
+      (set! width (+ columns-width (* border-width 2) (* column-rule-width (sub1 num-columns))))
+      (set! height (+ rows-height (* border-width 2) (* row-rule-height (sub1 num-rows))))
       (printf "table size is ~ax~a~n" width height))
     
     (struct column
