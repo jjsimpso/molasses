@@ -161,11 +161,11 @@
 
     (define (draw-wrapped-text e dc ox oy)
       (for ([line (in-list (element-lines e))])
-        (printf "draw-wrapped-text: (~a,~a) ~a~n" (+ oy (wrapped-line-x line)) (+ oy (wrapped-line-y line)) (substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)))
+        ;(printf "draw-wrapped-text: (~a,~a) ~a~n" (+ oy (wrapped-line-x line)) (+ oy (wrapped-line-y line)) (substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)))
         (send/apply dc draw-text `(,(substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)) ,(+ (wrapped-line-x line) ox) ,(+ (wrapped-line-y line) oy)))))
     
     (define (draw-element e dc x y left top right bottom dx dy)
-      (printf "draw-element at ~a,~a~n" x y)
+      ;(printf "draw-element at ~a,~a~n" x y)
       (if (string? (element-snip e))
           (send dc draw-text (element-snip e) x y)
           (send (element-snip e) draw dc x y left top right bottom dx dy 'no-caret)))
@@ -1034,7 +1034,7 @@
       (define rows-height
         (for/fold ([total-height 0])
                   ([row (in-list rows)])
-          (define-values  (w h) (send (car row) get-content-size))
+          (define h (send (car row) get-height))
           (+ total-height h)))
       (set! width (+ columns-width (* border-width 2) (* column-rule-width (sub1 num-columns))))
       (set! height (+ rows-height (* border-width 2) (* row-rule-height (sub1 num-rows))))
@@ -1134,6 +1134,7 @@
       ;; in each row to a suitable height
       (for ([row (in-list rows)])
         (define height (calc-row-height row))
+        (printf "setting row height to ~a~n" height)
         (set-row-height row height)))
 
     (define/public (start-row)
@@ -1158,7 +1159,7 @@
 
     (define/public (finalize-table layout-width)
       (set! rows (reverse rows))
-      (printf "finalize table ~ax~a, ~a~n" num-rows num-columns rows)
+      (printf "finalize table ~ax~a, ~a~n" num-columns num-rows rows)
       (calc-column-min/max-widths)
       (set-column-widths layout-width)
       (printf "table rows are:~a~n" rows)
