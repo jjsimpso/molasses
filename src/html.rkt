@@ -241,6 +241,12 @@
     (if (is-block-element? elem)
         elem
         current-block))
+
+  (define (attr->number node attr)
+    (define attr-string (sxml:attr node attr))
+    (if attr-string
+        (string->number attr-string)
+        #f))
   
   (define (handle-body-attributes node)
     (for/list ([attr (in-list (sxml:attr-list node))])
@@ -435,9 +441,11 @@
                 [else
                  (printf "unhandled href~n")]))]
            [(table)
+            (define border (or (attr->number node 'border) 0))
             (define table-snip (new table-snip%
                                     (drawing-context (send canvas get-dc))
-                                    (defstyle html-basic-style)))
+                                    (defstyle html-basic-style)
+                                    (border border)))
             (parameterize ([current-container table-snip])
               (printf "start table~n")
               (loop (sxml:content node))

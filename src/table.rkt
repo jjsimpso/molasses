@@ -949,7 +949,10 @@
   (class snip% (super-new)
 
     (init drawing-context
-          defstyle)
+          defstyle
+          [border 0]
+          [cellspacing 2]
+          [cellpadding 1])
 
     (define dc drawing-context)
     (define default-style defstyle)
@@ -984,21 +987,24 @@
       (maybe-set-box! lspace 0.0)
       (maybe-set-box! rspace 0.0))
 
-    (define border-width 3)
-    (define column-rule-width 0)
-    (define row-rule-height 0)
+    (define border-line-width border)
+    (define border-width (+ border cellspacing))
+    (define cell-border-line-width border)
+    (define column-rule-width (add1 cellspacing))
+    (define row-rule-height (add1 cellspacing))
 
     (define (calc-lit-color dc)
+      (define bg-color (send dc get-background))
       (make-object color% #xe8 #xe8 #xe8))
 
     (define (calc-shadow-color dc)
+      (define bg-color (send dc get-background))
       (make-object color% #x72 #x72 #x72))
     
     (define (draw-table-border dc x y w h thickness)
       (define old-pen (send dc get-pen))
       (define old-smoothing (send dc get-smoothing))
       (define old-brush (send dc get-brush))
-      (define bg-color (send dc get-background))
       
       (send dc set-smoothing 'aligned)
       ; left and top edges are lit (brighter color)
@@ -1009,7 +1015,26 @@
       (send dc set-pen (calc-shadow-color dc) thickness 'solid)
       (send dc draw-line (+ x w) y (+ x w) (+ y h))
       (send dc draw-line x (+ y h) (+ x w) (+ y h))
+      
+      (send dc set-smoothing old-smoothing)
+      (send dc set-pen old-pen)
+      (send dc set-brush old-brush))
 
+    (define (draw-cell-border dc x y w h thickness)
+      (define old-pen (send dc get-pen))
+      (define old-smoothing (send dc get-smoothing))
+      (define old-brush (send dc get-brush))
+      
+      (send dc set-smoothing 'aligned)
+      ; left and top edges are in shadow (darker color)
+      (send dc set-pen (calc-shadow-color dc) thickness 'solid)
+      (send dc draw-line x (+ y h) x y)
+      (send dc draw-line x y (+ x w) y)
+      ; bottom and right edges are lit (brighter color)
+      (send dc set-pen (calc-lit-color dc) thickness 'solid)
+      (send dc draw-line (+ x w) y (+ x w) (+ y h))
+      (send dc draw-line x (+ y h) (+ x w) (+ y h))
+      
       (send dc set-smoothing old-smoothing)
       (send dc set-pen old-pen)
       (send dc set-brush old-brush))
@@ -1018,13 +1043,22 @@
       (define startx (+ x border-width))
       (define ypos (+ y border-width))
       (printf "drawing table~n")
-      (draw-table-border dc x y width height 1)
+      (when (> border-line-width 0)
+        (draw-table-border dc x y width height border-line-width))
       (for ([row (in-list rows)])
         (define xpos startx)
         (for ([c (in-list row)])
-          (send c draw dc xpos ypos left top right bottom dx dy)
-          (set! xpos (+ xpos (send c get-width) column-rule-width)))
-        (set! ypos (+ ypos (row-height row) row-rule-height))))
+          (define cwidth (send c get-width))
+          (define cheight (send c get-height))
+          (draw-cell-border dc
+                            xpos
+                            ypos
+                            (+ cwidth (* cell-border-line-width 2))
+                            (+ cheight (* cell-border-line-width 2))
+                            cell-border-line-width)
+          (send c draw dc (+ xpos cell-border-line-width) (+ ypos cell-border-line-width) left top right bottom dx dy)
+          (set! xpos (+ xpos cwidth (* cell-border-line-width 2) column-rule-width)))
+        (set! ypos (+ ypos (row-height row) (* cell-border-line-width 2) row-rule-height))))
 
     (define (set-table-size)
       (define columns-width
@@ -1036,8 +1070,8 @@
                   ([row (in-list rows)])
           (define h (send (car row) get-height))
           (+ total-height h)))
-      (set! width (+ columns-width (* border-width 2) (* column-rule-width (sub1 num-columns))))
-      (set! height (+ rows-height (* border-width 2) (* row-rule-height (sub1 num-rows))))
+      (set! width (+ columns-width (* border-width 2) (* 2 cell-border-line-width num-columns) (* column-rule-width (sub1 num-columns))))
+      (set! height (+ rows-height (* border-width 2) (* 2 cell-border-line-width num-rows) (* row-rule-height (sub1 num-rows))))
       (printf "table size is ~ax~a~n" width height))
     
     (struct column
@@ -1203,8 +1237,10 @@
   (define standard-style
     (send (send canvas get-style-list) find-named-style "Standard"))
   
-  (define table (new table-snip% (drawing-context (send canvas get-dc))
-                                 (defstyle standard-style)))
+  (define table (new table-snip%
+                     (drawing-context (send canvas get-dc))
+                     (defstyle standard-style)
+                     (border 1)))
 
   (send canvas append-string "There is a table below this line:" #f #t)
   
