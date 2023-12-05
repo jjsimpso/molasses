@@ -1060,6 +1060,12 @@
           (set! xpos (+ xpos cwidth (* cell-border-line-width 2) column-rule-width)))
         (set! ypos (+ ypos (row-height row) (* cell-border-line-width 2) row-rule-height))))
 
+    (define (table-border-rule-width)
+      (+ (* 2 border-width) (* (* 2 cell-border-line-width) num-columns) (* column-rule-width (sub1 num-columns))))
+
+    (define (table-border-rule-height)
+      (+ (* 2 border-width) (* (* 2 cell-border-line-width) num-rows) (* row-rule-height (sub1 num-rows))))
+      
     (define (set-table-size)
       (define columns-width
         (for/fold ([total-width 0])
@@ -1195,7 +1201,8 @@
       (set! rows (reverse rows))
       (printf "finalize table ~ax~a, ~a~n" num-columns num-rows rows)
       (calc-column-min/max-widths)
-      (set-column-widths layout-width)
+      (set-column-widths (- layout-width (table-border-rule-width)))
+      (printf "table border+rule size = ~a~n" (table-border-rule-width))
       (printf "table rows are:~a~n" rows)
       (for ([row (in-list rows)]
             [i (in-naturals 0)])
