@@ -13,6 +13,7 @@
   (class object% (super-new)
     (init drawing-context
           defstyle
+          [colspan 1]
           [valign 'middle]
           [horiz-margin 5]
           [vert-margin 5])
@@ -20,6 +21,7 @@
     (define dc drawing-context)
     (define default-style defstyle)
     (define vert-align valign)
+    (define column-span colspan)
     
     ;; 
     (define xmargin horiz-margin)
@@ -44,6 +46,9 @@
     (define/public (get-dc)
       dc)
 
+    (define/public (get-colspan)
+      column-span)
+    
     (define/public (get-position)
       (values canvas-x canvas-y))
 
@@ -1099,22 +1104,47 @@
     ;; adds each cell in row to its respective column
     ;; row is a list of cells in column order
     (define (add-row-to-columns row)
-      (for/list ([cell (in-list row)]
+      #;(for/list ([cell (in-list row)]
                  [i (in-naturals 0)])
         ; init a new column
         (when (= i (gvector-count columns))
           (gvector-add! columns (column 0 0 '())))
         (define col (gvector-ref columns i))
-        (set-column-cells! col (cons cell (column-cells col)))))
+        (set-column-cells! col (cons cell (column-cells col))))
+      (when (not (empty? row))
+        (let loop ([cell (car row)]
+                   [i 0]
+                   [row (cdr row)])
+          (define colspan (send cell get-colspan))
+          ; when a cell spans multiple columns, add it to each column
+          (for ([j (in-range 0 colspan)])
+            (define column-index (+ i j))
+            ; init a new column
+            (when (= column-index (gvector-count columns))
+              (gvector-add! columns (column 0 0 '())))
+            (define col (gvector-ref columns column-index))
+            (set-column-cells! col (cons cell (column-cells col))))
+          (when (not (empty? row))
+            (loop (car row)
+                  (+ i colspan)
+                  (cdr row))))))
     
     (define (calc-column-min/max-widths)
+      (define (cell-min-width c)
+        (define colspan (send c get-colspan))
+        (quotient (send c get-min-width) colspan))
+
+      (define (cell-max-width c)
+        (define colspan (send c get-colspan))
+        (quotient (send c get-max-width) colspan))
+      
       ;; calculate the min and max width of each column
       (for* ([col (in-gvector columns)]
              [c (in-list (column-cells col))])
-        (when (> (send c get-min-width) (column-min-width col))
-          (set-column-min-width! col (send c get-min-width)))
-        (when (> (send c get-max-width) (column-max-width col))
-          (set-column-max-width! col (send c get-max-width)))
+        (when (> (cell-min-width c) (column-min-width col))
+          (set-column-min-width! col (cell-min-width c)))
+        (when (> (cell-max-width c) (column-max-width col))
+          (set-column-max-width! col (cell-max-width c)))
         (printf "calc-column-min/max-widths: ~a - ~a~n" (column-min-width col) (column-max-width col)))
       ;; calculate the min and max width of the table
       (define-values (table-min-width table-max-width)
@@ -1165,10 +1195,18 @@
            (set-column-width! col (+ (column-min-width col) (floor (* d W-over-D)))))])
         
       ;; set each cell's width to its column's width and run layout in each cell
+      (define visited-cells (mutable-seteq))
       (for* ([col (in-gvector columns)]
              [c (in-list (column-cells col))])
-        (send c set-width (column-width col))
-        (send c reset-layout))
+        (if (set-member? visited-cells c)
+            (begin
+              (printf "spanning cell~n")
+              (send c set-width (+ (send c get-width) (column-width col) column-rule-width (* 2 cell-border-line-width)))
+              (send c reset-layout))
+            (begin
+              (send c set-width (column-width col))
+              (send c reset-layout)
+              (set-add! visited-cells c))))
       
       ;; now we should know the content height of each cell and can set the cells
       ;; in each row to a suitable height
@@ -1190,8 +1228,11 @@
       (add-row-to-columns (car rows))
       (set! rip #f))
 
-    (define/public (start-cell)
-      (define c (new cell% (drawing-context dc) (defstyle default-style)))
+    (define/public (start-cell #:colspan [colspan 1])
+      (define c (new cell%
+                     (drawing-context dc)
+                     (defstyle default-style)
+                     (colspan colspan)))
       (set! rip (cons c rip)))
 
     (define/public (end-cell)
@@ -1255,7 +1296,7 @@
   (send table start-cell)
   (send table append-string "1,1")
   (send table end-cell)
-  (send table start-cell)
+  (send table start-cell #:colspan 2)
   (send table append-string "1,2")
   (send table end-cell)
   (send table end-row)

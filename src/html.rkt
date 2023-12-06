@@ -464,7 +464,8 @@
             (printf "end table row~n")]
            [(td)
             (printf "start table cell~n")
-            (send (current-container) start-cell)
+            (define colspan (or (attr->number node 'colspan) 1))
+            (send (current-container) start-cell #:colspan colspan)
             (loop (sxml:content node))
             (send (current-container) end-cell)
             (printf "end table cell~n")]
