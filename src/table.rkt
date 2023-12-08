@@ -178,8 +178,10 @@
     ;; x and y are the upper left corner of the cell in canvas dc coordinates
     (define/public (draw dc x y left top right bottom dx dy)
       (define current-style #f)
-      (printf "drawing cell at ~a,~a~n" x y)
-
+      ;(printf "drawing cell at ~a,~a~n" x y)
+      ; save canvas coordinates for use in event handling
+      (set-position x y)
+      
       (for ([e (in-dlist elements)])
         ;; set the style if it has changed
         (when (not (eq? (get-style e) current-style))
@@ -194,6 +196,61 @@
                       xpos ypos
                       (+ x (- cell-width xmargin)) (+ y (- cell-height ymargin))
                       0 0))))
+
+    (define (clip-lines lines x y)
+      (for/or ([wl (in-dlist lines)])
+        (and (>= x (wrapped-line-x wl))
+             (>= y (wrapped-line-y wl))
+             (<= x (+ (wrapped-line-x wl) (wrapped-line-w wl)))
+             (<= y (+ (wrapped-line-y wl) (wrapped-line-h wl))))))
+    
+    (define (select-element x y)
+      (for/or ([e (in-dlist elements)]
+               #:when (and (>= y (element-ypos e))
+                           (>= x (element-xpos e))))                             
+        (define w (box 0))
+        (define h (box 0))
+        (get-extent e dc (element-xpos e) (element-ypos e) w h)
+        (and (<= y (+ (element-ypos e) (unbox h)))
+             (<= x (+ (element-xpos e) (unbox w)))
+             (or (false? (element-lines e))
+                 (clip-lines (element-lines e) x y))
+             e)))
+
+    ;; store the element that has mouse focus. send on-goodbye-event to an element's snip if it loses focus
+    (define element-with-focus #f)
+
+    (define/public (on-event dc x y event)
+      ; event coordinates in cell coords, ignoring cell padding
+      (define-values (cx cy) (values (- x canvas-x xmargin)
+                                     (- y canvas-y ymargin)))
+      (define e (select-element cx cy))
+
+      (printf "on-event ~ax~a, cell coord ~ax~a~n" x y cx cy)
+
+      (case (send event get-event-type)
+        [(left-down middle-down right-down motion)
+         ;; send on-goodby-event to snips that lose mouse focus
+         (when (not (eq? e element-with-focus))
+           (when (and element-with-focus (is-a? (element-snip element-with-focus) snip%))
+             (send (element-snip element-with-focus) on-goodbye-event dc x y (element-xpos element-with-focus) (element-ypos element-with-focus) event))
+           (set! element-with-focus e))
+                
+         (when (and e (is-a? (element-snip e) snip%))
+           #;(printf "on-event: pass event at ~ax~a to snip coords ~ax~a, canvas:~ax~a, element at ~ax~a~n"
+                 (send event get-x) (send event get-y)
+                 (+ (element-xpos e) xmargin) (+ (element-ypos e) ymargin)
+                 x y
+                 (element-xpos e) (element-ypos e))
+           (send (element-snip e) on-event
+                 dc
+                 (+ (element-xpos e) xmargin)
+                 (+ (element-ypos e) ymargin)
+                 (+ (element-xpos e) xmargin)
+                 (+ (element-ypos e) ymargin)
+                 event))]
+        [else
+         void]))
     
     (define (calc-word-extents e)
       (define (line-break? c)
@@ -1047,7 +1104,7 @@
     (define/override (draw dc x y left top right bottom dx dy draw-caret)
       (define startx (+ x border-width))
       (define ypos (+ y border-width))
-      (printf "drawing table~n")
+      ;(printf "drawing table~n")
       (when (> border-line-width 0)
         (draw-table-border dc x y width height border-line-width))
       (for ([row (in-list rows)])
@@ -1065,6 +1122,33 @@
           (set! xpos (+ xpos cwidth (* cell-border-line-width 2) column-rule-width)))
         (set! ypos (+ ypos (row-height row) (* cell-border-line-width 2) row-rule-height))))
 
+    (define (select-cell x y)
+      (for/or ([row (in-list rows)])
+        (for/or ([c (in-list row)])
+          (define-values (cx cy) (send c get-position))
+          (define-values (cw ch) (send c get-size))
+          (and (>= x cx)
+               (<= x (+ cx cw))
+               (>= y cy)
+               (<= y (+ cy ch))
+               c))))
+    
+    (define/override (on-event dc x y editorx editory event)
+      (case (send event get-event-type)
+        [(left-down middle-down right-down motion)
+         (define-values (ex ey) (values (send event get-x)
+                                        (send event get-y)))
+         (define-values (tx ty) (values (- ex x)
+                                        (- ey y)))
+         ;(printf "on-event: ~ax~a - ~ax~a = ~ax~a~n" ex ey x y tx ty)
+         ; use raw canvas coordinates rather than coords relative to the table's position to
+         ; select cell. each cell will save its raw canvas coordinates when drawn.
+         (define c (select-cell ex ey))
+         (when c
+           (send c on-event dc ex ey event))]
+        [else
+         void]))
+    
     (define (table-border-rule-width)
       (+ (* 2 border-width) (* (* 2 cell-border-line-width) num-columns) (* column-rule-width (sub1 num-columns))))
 
@@ -1104,13 +1188,6 @@
     ;; adds each cell in row to its respective column
     ;; row is a list of cells in column order
     (define (add-row-to-columns row)
-      #;(for/list ([cell (in-list row)]
-                 [i (in-naturals 0)])
-        ; init a new column
-        (when (= i (gvector-count columns))
-          (gvector-add! columns (column 0 0 '())))
-        (define col (gvector-ref columns i))
-        (set-column-cells! col (cons cell (column-cells col))))
       (when (not (empty? row))
         (let loop ([cell (car row)]
                    [i 0]
@@ -1200,7 +1277,7 @@
              [c (in-list (column-cells col))])
         (if (set-member? visited-cells c)
             (begin
-              (printf "spanning cell~n")
+              ;(printf "spanning cell~n")
               (send c set-width (+ (send c get-width) (column-width col) column-rule-width (* 2 cell-border-line-width)))
               (send c reset-layout))
             (begin
@@ -1240,12 +1317,12 @@
 
     (define/public (finalize-table layout-width)
       (set! rows (reverse rows))
-      (printf "finalize table ~ax~a, ~a~n" num-columns num-rows rows)
+      (printf "finalize table ~ax~a~n" num-columns num-rows)
       (calc-column-min/max-widths)
       (set-column-widths (- layout-width (table-border-rule-width)))
       (printf "table border+rule size = ~a~n" (table-border-rule-width))
-      (printf "table rows are:~a~n" rows)
-      (for ([row (in-list rows)]
+      ;(printf "table rows are:~a~n" rows)
+      #;(for ([row (in-list rows)]
             [i (in-naturals 0)])
         (printf "row ~a: " i)
         (for ([c (in-list row)])

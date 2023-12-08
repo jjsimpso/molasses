@@ -1263,8 +1263,11 @@
            (set! element-with-focus e))
                 
          (when (and e (is-a? (element-snip e) snip%))
-           #;(printf "on-event: pass event to snip ~ax~a, canvas:~ax~a, element at ~ax~a~n"
-                   (send event get-x) (send event get-y) x y (element-xpos e) (element-ypos e))
+         #;(printf "on-event: pass event at ~ax~a to snip coords ~ax~a, canvas:~ax~a, element at ~ax~a~n"
+                 (send event get-x) (send event get-y)
+                 (+ (- (element-xpos e) left) xmargin) (+ (- (element-ypos e) top) ymargin)
+                 x y
+                 (element-xpos e) (element-ypos e))
            (send (element-snip e) on-event
                  dc
                  (+ (- (element-xpos e) left) xmargin)
