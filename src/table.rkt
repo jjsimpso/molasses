@@ -1134,7 +1134,7 @@
       (for ([row (in-list rows)])
         (define xpos startx)
         ; only draw visible rows
-        (when (and (>= (+ ypos (send (car row) get-height)) top)
+        (when (and (>= (+ ypos (row-height row)) top)
                    (<= ypos bottom))
           (for ([c (in-list row)])
             (define cwidth (send c get-width))
@@ -1181,7 +1181,7 @@
 
     (define (table-border-rule-height)
       (+ (* 2 border-width) (* (* 2 cell-border-line-width) num-rows) (* row-rule-height (sub1 num-rows))))
-      
+
     (define (set-table-size)
       (define columns-width
         (for/fold ([total-width 0])
@@ -1190,7 +1190,7 @@
       (define rows-height
         (for/fold ([total-height 0])
                   ([row (in-list rows)])
-          (define h (send (car row) get-height))
+          (define h (row-height row))
           (+ total-height h)))
       (set! width (+ columns-width (* border-width 2) (* 2 cell-border-line-width num-columns) (* column-rule-width (sub1 num-columns))))
       (set! height (+ rows-height (* border-width 2) (* 2 cell-border-line-width num-rows) (* row-rule-height (sub1 num-rows))))
@@ -1261,9 +1261,9 @@
       (set! max-width table-max-width))
 
     (define (row-height row)
-      (if (car row)
-          (send (car row) get-height)
-          0))
+      (if (empty? row)
+          0
+          (send (car row) get-height)))
     
     (define (calc-row-height row)
       (define max-height 0)
