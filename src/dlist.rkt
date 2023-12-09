@@ -283,6 +283,8 @@
   (cond
     [(and (dlist-head dl) (dlink-prev (dlist-head dl)))
      (set-dlist-head! dl (dlink-prev (dlist-head dl)))
+     (when (not (dlist-tail dl))
+       (set-dlist-tail! dl (dlist-head-next dl)))
      (dlist-head dl)]
     [else #f]))
 
@@ -386,6 +388,23 @@
   (dlist-advance-tail! cursor)
   (dlist-advance-tail! cursor)
   (check-equal? (dlist-tail-value cursor) 5)
+
+  ; test advancing head until dlist has only one element, then retreat head
+  (dlist-advance-head! cursor)
+  (dlist-advance-head! cursor)
+  (dlist-advance-head! cursor)
+  (check-equal? (dlist-head-value cursor) 4)
+  (check-equal? (dlist-tail-value cursor) 5)
+  (dlist-advance-head! cursor)
+  (check-equal? (dlist-tail cursor) #f)
+  (check-equal? (dlist-head-value cursor) 5)
+  (check-equal? (dlist-tail-value cursor) 5)
+  (dlist-retreat-head! cursor)
+  (check-equal? (dlist-head-value cursor) 4)
+  (check-equal? (dlist-tail-value cursor) 5)
+  (dlist-retreat-head! cursor)
+  (dlist-retreat-head! cursor)
+  (dlist-retreat-head! cursor)
   ;;; ----------
   
   (dlist-pop! a-dlist)
