@@ -1104,22 +1104,25 @@
     (define/override (draw dc x y left top right bottom dx dy draw-caret)
       (define startx (+ x border-width))
       (define ypos (+ y border-width))
-      ;(printf "drawing table~n")
+      (printf "drawing table at ~ax~a~n" x y)
       (when (> border-line-width 0)
         (draw-table-border dc x y width height border-line-width))
       (for ([row (in-list rows)])
         (define xpos startx)
-        (for ([c (in-list row)])
-          (define cwidth (send c get-width))
-          (define cheight (send c get-height))
-          (draw-cell-border dc
-                            xpos
-                            ypos
-                            (+ cwidth (* cell-border-line-width 2))
-                            (+ cheight (* cell-border-line-width 2))
-                            cell-border-line-width)
-          (send c draw dc (+ xpos cell-border-line-width) (+ ypos cell-border-line-width) left top right bottom dx dy)
-          (set! xpos (+ xpos cwidth (* cell-border-line-width 2) column-rule-width)))
+        ; only draw visible rows
+        (when (and (>= (+ ypos (send (car row) get-height)) top)
+                   (<= ypos bottom))
+          (for ([c (in-list row)])
+            (define cwidth (send c get-width))
+            (define cheight (send c get-height))
+            (draw-cell-border dc
+                              xpos
+                              ypos
+                              (+ cwidth (* cell-border-line-width 2))
+                              (+ cheight (* cell-border-line-width 2))
+                              cell-border-line-width)
+            (send c draw dc (+ xpos cell-border-line-width) (+ ypos cell-border-line-width) left top right bottom dx dy)
+            (set! xpos (+ xpos cwidth (* cell-border-line-width 2) column-rule-width))))
         (set! ypos (+ ypos (row-height row) (* cell-border-line-width 2) row-rule-height))))
 
     (define (select-cell x y)

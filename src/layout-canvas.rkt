@@ -263,7 +263,7 @@
         (cond
           [(not e) void] ; should never happen
           [(element-visible? e top bottom)
-           ;(printf "adjust-visible-elements-back! loop 1~n")
+           ;(printf "adjust-visible-elements-back! loop 1, dlist-tail=~a~n" (dlist-tail cursor))
            (when (dlist-retreat-head! cursor)
              (loop (dlist-head-value cursor)))]
           [else
@@ -294,7 +294,7 @@
             (if (and head-element (element-visible? head-element top bottom))
                 (adjust-visible-elements-back! visible-elements top bottom)
                 (set-visible-elements!)))
-        #;(printf "update-visible-elements: # visible = ~a~n" (dlist-length visible-elements))))
+        #;(printf "update-visible-elements: # visible = ~a, first=~a~n" (dlist-length visible-elements) (element-snip (dlist-head-value visible-elements)))))
 
     ;; update the manual scrollbars range and hide/unhide them
     ;; new width and height are in pixels
@@ -1118,12 +1118,12 @@
               (send current-style switch-to dc #f))
             (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                          (+ (- (element-ypos e) top) ymargin)))
-            ;(printf "  snip at ~ax~a, text=~a~n" x y  (element-snip e))
+            ;(printf "  snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
             (if (and (wrap-text?) (string? (element-snip e)))
                 (draw-wrapped-text e dc left top)
                 (draw e dc
                       x y
-                      x y
+                      0 0
                       (- cw xmargin) (- ch ymargin)
                       0 0)))
           ;; clear top, bottom and right margins in case they were drawn to
