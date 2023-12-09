@@ -247,7 +247,24 @@
     (if attr-string
         (string->number attr-string)
         #f))
-  
+
+  (define (align-attr node default-alignment)
+    (case (and (sxml:attr node 'align)
+               (string-downcase (sxml:attr node 'align)))
+      [("left") 'left]
+      [("right") 'right]
+      [("center") 'center]
+      [else default-alignment]))
+
+  (define (valign-attr node default-alignment)
+    (case (and (sxml:attr node 'valign)
+               (string-downcase (sxml:attr node 'valign)))
+      [("top") 'top]
+      [("middle") 'middle]
+      [("bottom") 'bottom]
+      [("baseline") (error "valign baseline not supported")]
+      [else default-alignment]))
+
   (define (handle-body-attributes node)
     (for/list ([attr (in-list (sxml:attr-list node))])
       (eprintf "handling body attribute ~a~n" attr)
@@ -300,12 +317,7 @@
     (define value (sxml:attr node 'align))
     (if value
         (let ([prev-alignment current-alignment])
-          (set! current-alignment
-                (cond
-                  [(string-ci=? value "center") 'center]
-                  [(string-ci=? value "left") 'left]
-                  [(string-ci=? value "right") 'right]
-                  [else current-alignment]))
+          (set! current-alignment (align-attr node current-alignment))
           (list (lambda ()
                   (set! current-alignment prev-alignment))))
         '()))
@@ -315,13 +327,7 @@
       (define src-value (sxml:attr node 'src))
       (define request (send canvas get-current-request))
       (when request
-        (define align
-          (case (and (sxml:attr node 'align)
-                     (string-downcase (sxml:attr node 'align)))
-            [("left") 'left]
-            [("right") 'right]
-            [("center") 'center]
-            [else current-alignment]))
+        (define align (align-attr node current-alignment))
         (define bm (load-new-bitmap src-value request))
         (define snip (if url
                          (new html-link-img-snip% (url url) (base-url base-url) (browser-canvas canvas))
@@ -402,13 +408,7 @@
                       (cons 'width-pixels
                             (string->number width-value)))
                   '(width-percent . 100)))
-            (define align
-              (case (and (sxml:attr node 'align)
-                         (string-downcase (sxml:attr node 'align)))
-                [("left") 'left]
-                [("right") 'right]
-                [("center") 'center]
-                [else current-alignment]))
+            (define align (align-attr node current-alignment))
             (when (not (last-element-eol?))
               (insert-newline))
             (append-snip (new horz-line-snip%)
@@ -465,7 +465,8 @@
            [(td)
             (printf "start table cell~n")
             (define colspan (or (attr->number node 'colspan) 1))
-            (send (current-container) start-cell #:colspan colspan)
+            (define valign (valign-attr node 'middle))
+            (send (current-container) start-cell #:colspan colspan #:valign valign)
             (loop (sxml:content node))
             (send (current-container) end-cell)
             (printf "end table cell~n")]

@@ -36,12 +36,26 @@
     (define content-width 0)
     (define content-height 0)
 
+    (define valign-offset 0)
+    
     (define snip-xmargin 5)
     (define snip-ymargin 2)
 
     ;; current position to place next element
     (define place-x 0)
     (define place-y 0)
+
+    (define (set-valign-offset)
+      (define ypadding (* 2 ymargin))
+      (define height (- cell-height ypadding))
+      (set! valign-offset
+        (case vert-align
+          [(top) 0]
+          [(bottom)
+           (- height content-height)]
+          [else ;middle
+           (quotient (- height content-height) 2)]))
+      (printf "setting valign-offset to ~a~n" valign-offset))
 
     (define/public (get-dc)
       dc)
@@ -58,10 +72,11 @@
 
     (define/public (get-size)
       (values cell-width cell-height))
-
+    
     (define/public (set-size w h)
       (set! cell-width w)
-      (set! cell-height h))
+      (set! cell-height h)
+      (set-valign-offset))
 
     (define/public (get-width)
       cell-width)
@@ -73,7 +88,8 @@
       (set! cell-width w))
 
     (define/public (set-height h)
-      (set! cell-height h))
+      (set! cell-height h)
+      (set-valign-offset))
     
     (define/public (get-content-size)
       (values (+ content-width (* 2 xmargin))
@@ -179,6 +195,7 @@
     (define/public (draw dc x y left top right bottom dx dy)
       (define current-style #f)
       ;(printf "drawing cell at ~a,~a~n" x y)
+
       ; save canvas coordinates for use in event handling
       (set-position x y)
       
@@ -188,9 +205,9 @@
           (set! current-style (get-style e))
           (send current-style switch-to dc #f))
         (define-values (xpos ypos) (values (+ x (element-xpos e) xmargin)
-                                           (+ y (element-ypos e) ymargin)))
+                                           (+ y (element-ypos e) ymargin valign-offset)))
         (if (string? (element-snip e))
-            (draw-wrapped-text e dc (+ x xmargin) (+ y xmargin))
+            (draw-wrapped-text e dc (+ x xmargin) (+ y ymargin valign-offset))
             (draw-element e dc
                       xpos ypos
                       xpos ypos
@@ -226,7 +243,7 @@
                                      (- y canvas-y ymargin)))
       (define e (select-element cx cy))
 
-      (printf "on-event ~ax~a, cell coord ~ax~a~n" x y cx cy)
+      ;(printf "on-event ~ax~a, cell coord ~ax~a~n" x y cx cy)
 
       (case (send event get-event-type)
         [(left-down middle-down right-down motion)
@@ -868,6 +885,11 @@
     ;; e is the new element and must be the new tail of the element list
     ;; x,y is position of element's upper left corner in canvas
     (define (place-element e x y)
+      (define (element-is-vertical-whitespace? e)
+        (define s (element-snip e))
+        (and (string? s)
+             (not (non-empty-string? (string-trim s "\n" #:repeat? #t)))))
+      
       (define-values (dw dh) (get-drawable-size))
       
       ;; coordinates for element bounding region
@@ -922,8 +944,10 @@
 
       (when (> x2 content-width)
         (set! content-width x2))
-
-      (when (> y2 content-height)
+      
+      ;; don't adjust content hegiht if element is just vertical whitespace
+      ;; trailing vertical whitespace breaks vertical alignment of content
+      (when (and (> y2 content-height) (not (element-is-vertical-whitespace? e)))
         (set! content-height y2)))
 
     ;; during first pass of adding elements we will calculate the min and max width of the cell
@@ -1308,11 +1332,12 @@
       (add-row-to-columns (car rows))
       (set! rip #f))
 
-    (define/public (start-cell #:colspan [colspan 1])
+    (define/public (start-cell #:colspan [colspan 1] #:valign [valign 'middle])
       (define c (new cell%
                      (drawing-context dc)
                      (defstyle default-style)
-                     (colspan colspan)))
+                     (colspan colspan)
+                     (valign valign)))
       (set! rip (cons c rip)))
 
     (define/public (end-cell)
