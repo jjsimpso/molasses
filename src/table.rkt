@@ -1038,7 +1038,8 @@
           defstyle
           [border 0]
           [cellspacing 2]
-          [cellpadding 1])
+          [cellpadding 1]
+          [rules 'all])
 
     (define dc drawing-context)
     (define default-style defstyle)
@@ -1076,8 +1077,14 @@
     (define border-line-width border)
     (define border-width (+ border cellspacing))
     (define cell-border-line-width border)
-    (define column-rule-width (add1 cellspacing))
-    (define row-rule-height (add1 cellspacing))
+    (define column-rule-width
+      (if (or (eq? rules 'all) (eq? rules 'cols))
+          (add1 cellspacing)
+          0))
+    (define row-rule-height
+      (if (or (eq? rules 'all) (eq? rules 'rows))
+          (add1 cellspacing)
+          0))
 
     (define (calc-lit-color dc)
       (define bg-color (send dc get-background))
@@ -1128,6 +1135,23 @@
     (define/override (draw dc x y left top right bottom dx dy draw-caret)
       (define startx (+ x border-width))
       (define ypos (+ y border-width))
+      (define xpos-liminal-space
+        (if (> column-rule-width 0)
+            (+ (* cell-border-line-width 2) column-rule-width)
+            0))
+      (define ypos-liminal-space
+        (if (> row-rule-height 0)
+            (+ (* cell-border-line-width 2) row-rule-height)
+            0))
+      (define x-cell-border-width
+        (if (> column-rule-width 0)
+            cell-border-line-width
+            0))
+      (define y-cell-border-width
+        (if (> row-rule-height 0)
+            cell-border-line-width
+            0))
+      
       (printf "drawing table at ~ax~a~n" x y)
       (when (> border-line-width 0)
         (draw-table-border dc x y width height border-line-width))
@@ -1139,15 +1163,16 @@
           (for ([c (in-list row)])
             (define cwidth (send c get-width))
             (define cheight (send c get-height))
-            (draw-cell-border dc
-                              xpos
-                              ypos
-                              (+ cwidth (* cell-border-line-width 2))
-                              (+ cheight (* cell-border-line-width 2))
-                              cell-border-line-width)
-            (send c draw dc (+ xpos cell-border-line-width) (+ ypos cell-border-line-width) left top right bottom dx dy)
-            (set! xpos (+ xpos cwidth (* cell-border-line-width 2) column-rule-width))))
-        (set! ypos (+ ypos (row-height row) (* cell-border-line-width 2) row-rule-height))))
+            (when (and (> column-rule-width 0) (> row-rule-height 0))
+              (draw-cell-border dc
+                                xpos
+                                ypos
+                                (+ cwidth (* cell-border-line-width 2))
+                                (+ cheight (* cell-border-line-width 2))
+                                cell-border-line-width))
+            (send c draw dc (+ xpos x-cell-border-width) (+ ypos y-cell-border-width) left top right bottom dx dy)
+            (set! xpos (+ xpos cwidth xpos-liminal-space))))
+        (set! ypos (+ ypos (row-height row) ypos-liminal-space))))
 
     (define (select-cell x y)
       (for/or ([row (in-list rows)])

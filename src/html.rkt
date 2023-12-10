@@ -264,6 +264,16 @@
       [("bottom") 'bottom]
       [("baseline") (error "valign baseline not supported")]
       [else default-alignment]))
+  
+  (define (rules-attr node default-rules)
+    (case (and (sxml:attr node 'rules)
+               (string-downcase (sxml:attr node 'rules)))
+      [("none") 'none]
+      [("all") 'all]
+      [("groups") (error "rules groups not supported")]
+      [("rows") 'rows]
+      [("cols") 'cols]
+      [else default-rules]))
 
   (define (handle-body-attributes node)
     (for/list ([attr (in-list (sxml:attr-list node))])
@@ -442,10 +452,12 @@
                  (printf "unhandled href~n")]))]
            [(table)
             (define border (or (attr->number node 'border) 0))
+            (define rules (rules-attr node (if (= border 0) 'none 'all)))
             (define table-snip (new table-snip%
                                     (drawing-context (send canvas get-dc))
                                     (defstyle html-basic-style)
-                                    (border border)))
+                                    (border border)
+                                    (rules rules)))
             (parameterize ([current-container table-snip])
               (printf "start table~n")
               (loop (sxml:content node))
