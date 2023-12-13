@@ -30,8 +30,8 @@
     (define canvas-x 0)
     (define canvas-y 0)
     ;;
-    (define cell-width 10)
-    (define cell-height 10)
+    (define cell-width (* 2 horiz-margin))
+    (define cell-height (* 2 vert-margin))
     ;; size of cell's contents not including borders and margins
     (define content-width 0)
     (define content-height 0)
@@ -1043,21 +1043,26 @@
 
     (define dc drawing-context)
     (define default-style defstyle)
-    
+    (define cell-inner-margin cellpadding)
+
+    (define border-line-width border)
+    (define border-width (+ border cellspacing))
+    (define cell-border-line-width border)
+    (define column-rule-width
+      (if (or (eq? rules 'all) (eq? rules 'cols))
+          (add1 cellspacing)
+          0))
+    (define row-rule-height
+      (if (or (eq? rules 'all) (eq? rules 'rows))
+          (add1 cellspacing)
+          0))
+
     (define num-rows 0)
     (define num-columns 0)
     (define width 0)
     (define height 0)
     (define min-width 0)
     (define max-width 0)
-
-    ; temp variables used for calculation of min and max cell width
-    (define min-left 0)
-    (define max-left 0)
-    (define min-right 0)
-    (define max-right 0)
-    (define min-unaligned 0)
-    (define max-unaligned 0)
 
     (define/override (get-extent dc x y	 	 	 	 
                                  [w #f]
@@ -1073,18 +1078,6 @@
       (maybe-set-box! space 0.0)
       (maybe-set-box! lspace 0.0)
       (maybe-set-box! rspace 0.0))
-
-    (define border-line-width border)
-    (define border-width (+ border cellspacing))
-    (define cell-border-line-width border)
-    (define column-rule-width
-      (if (or (eq? rules 'all) (eq? rules 'cols))
-          (add1 cellspacing)
-          0))
-    (define row-rule-height
-      (if (or (eq? rules 'all) (eq? rules 'rows))
-          (add1 cellspacing)
-          0))
 
     (define (calc-lit-color dc)
       (define bg-color (send dc get-background))
@@ -1362,7 +1355,9 @@
                      (drawing-context dc)
                      (defstyle default-style)
                      (colspan colspan)
-                     (valign valign)))
+                     (valign valign)
+                     (horiz-margin cell-inner-margin)
+                     (vert-margin cell-inner-margin)))
       (set! rip (cons c rip)))
 
     (define/public (end-cell)
@@ -1418,6 +1413,7 @@
   (define table (new table-snip%
                      (drawing-context (send canvas get-dc))
                      (defstyle standard-style)
+                     ;(cellpadding 5)
                      (border 1)))
 
   (send canvas append-string "There is a table below this line:" #f #t)

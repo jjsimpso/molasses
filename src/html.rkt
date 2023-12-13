@@ -452,11 +452,15 @@
                  (printf "unhandled href~n")]))]
            [(table)
             (define border (or (attr->number node 'border) 0))
+            (define cellspacing (or (attr->number node 'cellspacing) 2))
+            (define cellpadding (or (attr->number node 'cellpadding) 1))
             (define rules (rules-attr node (if (= border 0) 'none 'all)))
             (define table-snip (new table-snip%
                                     (drawing-context (send canvas get-dc))
                                     (defstyle html-basic-style)
                                     (border border)
+                                    (cellspacing cellspacing)
+                                    (cellpadding cellpadding)
                                     (rules rules)))
             (parameterize ([current-container table-snip])
               (printf "start table~n")
