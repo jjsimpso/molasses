@@ -482,8 +482,17 @@
             (printf "start table cell~n")
             (define colspan (or (attr->number node 'colspan) 1))
             (define valign (valign-attr node 'middle))
-            (send (current-container) start-cell #:colspan colspan #:valign valign)
-            (loop (sxml:content node))
+            (define bgcolor (if (sxml:attr node 'bgcolor)
+                                (parse-color (sxml:attr node 'bgcolor))
+                                #f))
+            (send (current-container) start-cell #:colspan colspan #:valign valign #:bgcolor bgcolor)
+            ; style could be changed by cell's contents
+            (define style-copy (make-object style-delta% 'change-nothing))
+            (send style-copy copy (current-style-delta))
+            (parameterize ([current-style-delta style-copy])
+              (when bgcolor
+                (send (current-style-delta) set-delta-background bgcolor))
+              (loop (sxml:content node)))
             (send (current-container) end-cell)
             (printf "end table cell~n")]
            [else

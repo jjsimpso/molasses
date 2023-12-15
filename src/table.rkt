@@ -15,6 +15,7 @@
           defstyle
           [colspan 1]
           [valign 'middle]
+          [bgcolor #f]
           [horiz-margin 5]
           [vert-margin 5])
 
@@ -22,6 +23,7 @@
     (define default-style defstyle)
     (define vert-align valign)
     (define column-span colspan)
+    (define background-color bgcolor)
     
     ;; 
     (define xmargin horiz-margin)
@@ -191,6 +193,20 @@
           (send dc draw-text (element-snip e) x y)
           (send (element-snip e) draw dc x y left top right bottom dx dy 'no-caret)))
 
+    (define (draw-background dc x y)
+      (define old-pen (send dc get-pen))
+      (define old-smoothing (send dc get-smoothing))
+      (define old-brush (send dc get-brush))
+      
+      (send dc set-smoothing 'aligned)
+      (send dc set-pen (make-color 0 0 0) 0 'transparent)
+      (send dc set-brush background-color 'solid)
+      (send dc draw-rectangle x y cell-width cell-height)
+      
+      (send dc set-smoothing old-smoothing)
+      (send dc set-pen old-pen)
+      (send dc set-brush old-brush))
+    
     ;; x and y are the upper left corner of the cell in canvas dc coordinates
     (define/public (draw dc x y left top right bottom dx dy)
       (define current-style #f)
@@ -198,6 +214,9 @@
 
       ; save canvas coordinates for use in event handling
       (set-position x y)
+
+      (when background-color
+        (draw-background dc x y))
       
       (for ([e (in-dlist elements)])
         ;; set the style if it has changed
@@ -1350,12 +1369,13 @@
       (add-row-to-columns (car rows))
       (set! rip #f))
 
-    (define/public (start-cell #:colspan [colspan 1] #:valign [valign 'middle])
+    (define/public (start-cell #:colspan [colspan 1] #:valign [valign 'middle] #:bgcolor [bgcolor #f])
       (define c (new cell%
                      (drawing-context dc)
                      (defstyle default-style)
                      (colspan colspan)
                      (valign valign)
+                     (bgcolor bgcolor)
                      (horiz-margin cell-inner-margin)
                      (vert-margin cell-inner-margin)))
       (set! rip (cons c rip)))
@@ -1419,7 +1439,7 @@
   (send canvas append-string "There is a table below this line:" #f #t)
   
   (send table start-row)
-  (send table start-cell)
+  (send table start-cell #:bgcolor (make-color 200 0 0))
   (send table append-string "1,1")
   (send table end-cell)
   (send table start-cell #:colspan 2)
