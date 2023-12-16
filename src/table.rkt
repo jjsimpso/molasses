@@ -1069,11 +1069,11 @@
     (define cell-border-line-width border)
     (define column-rule-width
       (if (or (eq? rules 'all) (eq? rules 'cols))
-          (add1 cellspacing)
+          cellspacing
           0))
     (define row-rule-height
       (if (or (eq? rules 'all) (eq? rules 'rows))
-          (add1 cellspacing)
+          cellspacing
           0))
 
     (define num-rows 0)
@@ -1110,16 +1110,19 @@
       (define old-pen (send dc get-pen))
       (define old-smoothing (send dc get-smoothing))
       (define old-brush (send dc get-brush))
+
+      (define x2 (sub1 (+ x w)))
+      (define y2 (sub1 (+ y h)))
       
       (send dc set-smoothing 'aligned)
       ; left and top edges are lit (brighter color)
       (send dc set-pen (calc-lit-color dc) thickness 'solid)
-      (send dc draw-line x (+ y h) x y)
-      (send dc draw-line x y (+ x w) y)
+      (send dc draw-line x y2 x y)
+      (send dc draw-line x y x2 y)
       ; bottom and right edges are in shadow (darker color)
       (send dc set-pen (calc-shadow-color dc) thickness 'solid)
-      (send dc draw-line (+ x w) y (+ x w) (+ y h))
-      (send dc draw-line x (+ y h) (+ x w) (+ y h))
+      (send dc draw-line x2 y x2 y2)
+      (send dc draw-line x y2 x2 y2)
       
       (send dc set-smoothing old-smoothing)
       (send dc set-pen old-pen)
@@ -1129,16 +1132,19 @@
       (define old-pen (send dc get-pen))
       (define old-smoothing (send dc get-smoothing))
       (define old-brush (send dc get-brush))
+
+      (define x2 (sub1 (+ x w)))
+      (define y2 (sub1 (+ y h)))
       
       (send dc set-smoothing 'aligned)
       ; left and top edges are in shadow (darker color)
       (send dc set-pen (calc-shadow-color dc) thickness 'solid)
-      (send dc draw-line x (+ y h) x y)
-      (send dc draw-line x y (+ x w) y)
+      (send dc draw-line x y2 x y)
+      (send dc draw-line x y x2 y)
       ; bottom and right edges are lit (brighter color)
       (send dc set-pen (calc-lit-color dc) thickness 'solid)
-      (send dc draw-line (+ x w) y (+ x w) (+ y h))
-      (send dc draw-line x (+ y h) (+ x w) (+ y h))
+      (send dc draw-line x2 y x2 y2)
+      (send dc draw-line x y2 x2 y2)
       
       (send dc set-smoothing old-smoothing)
       (send dc set-pen old-pen)
