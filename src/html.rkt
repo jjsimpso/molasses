@@ -468,6 +468,8 @@
             (define cellspacing (or (attr->number node 'cellspacing) 2))
             (define cellpadding (or (attr->number node 'cellpadding) 1))
             (define rules (rules-attr node (if (= border 0) 'none 'all)))
+            (define resizable-property
+              (cons 'resizable 100))
             (define table-snip (new table-snip%
                                     (drawing-context (send canvas get-dc))
                                     (defstyle html-basic-style)
@@ -482,7 +484,7 @@
               (define-values (dw dh) (send canvas get-drawable-size))
               (send (current-container) finalize-table dw)
               (printf "end table~n"))
-            (append-snip table-snip #t current-alignment)]
+            (append-snip table-snip #t current-alignment (list resizable-property))]
            [(th)
             (printf "table header~n")]
            [(tr)

@@ -16,6 +16,7 @@
           [colspan 1]
           [valign 'middle]
           [bgcolor #f]
+          [width #f]
           [horiz-margin 5]
           [vert-margin 5])
 
@@ -24,6 +25,7 @@
     (define vert-align valign)
     (define column-span colspan)
     (define background-color bgcolor)
+    (define fixed-width width)
     
     ;; 
     (define xmargin horiz-margin)
@@ -478,14 +480,14 @@
                     [ypos y]
                     [x (- total-width layout-right-width)]
                     [max-width 0])
-           (printf "loop right: start=~a, ypos=~a, x=~a, max-width=~a~n" line-start-pos ypos x max-width)
+           ;(printf "loop right: start=~a, ypos=~a, x=~a, max-width=~a~n" line-start-pos ypos x max-width)
            (define-values (last-word width remaining-words)
              (layout-remainder-of-line words (- total-width layout-left-width (unaligned-or-center-width) layout-right-width)))
            ;(printf " last-word=~a, width=~a, remaining=~a~n" last-word width remaining-words)
            (cond
              [(and (false? last-word) (empty? remaining-words))
               ; final iteration
-              (printf " final iteration~n")
+              ;(printf " final iteration~n")
               ;; add last line to layout element list
               (set! layout-right-elements (cons (car lines) layout-right-elements))
               (set! layout-right-width (+ layout-right-width (wrapped-line-w (car lines))))
@@ -495,7 +497,7 @@
               (values x y (+ x max-width) (+ ypos font-height))]
              [(and (false? last-word) (empty? (unaligned-or-center-elements)) (empty? layout-left-elements) (empty? layout-right-elements))
               ; first word is too long to fit on a line, just place it at the beginning of line
-              (printf " unable to wrap word ~a, place it anyway~n" (word-str (car remaining-words)))
+              ;(printf " unable to wrap word ~a, place it anyway~n" (word-str (car remaining-words)))
               (define xpos 0)
               (define new-ypos ypos)
               (when (not (empty? (cdr remaining-words)))
@@ -864,7 +866,7 @@
              (error "invalid alignment!")])))
 
     (define/public (reset-layout)
-      (printf "resetting cell layout~n")
+      ;(printf "resetting cell layout~n")
       (set! content-width 0)
       (set! content-height 0)
       (set! place-x 0)
@@ -886,20 +888,16 @@
     (define (handle-element-properties e)
       (define snip (element-snip e))
       (when (is-a? snip snip%)
-        (define-values (dw dh) (get-drawable-size))
         (for ([prop (in-list (element-properties e))])
           (printf "handle element property ~a~n" prop)
           (case (car prop)
-            [(width-percent)
+            [(resizable)
+             (define-values (dw dh) (get-drawable-size))
              (define space-available (- dw layout-left-width (unaligned-or-center-width) layout-right-width))
              (define w (* space-available (/ (cdr prop) 100.0)))
              (define h (get-element-height e))
-             (send snip resize w h)]
-            [(width-pixels)
-             (define w (cdr prop))
-             (define h (get-element-height e))
              (send snip resize w h)]))))
-    
+
     ;; places element in the cell and updates size of the cell's content
     ;; e is the new element and must be the new tail of the element list
     ;; x,y is position of element's upper left corner in canvas
@@ -964,7 +962,7 @@
       (when (> x2 content-width)
         (set! content-width x2))
       
-      ;; don't adjust content hegiht if element is just vertical whitespace
+      ;; don't adjust content height if element is just vertical whitespace
       ;; trailing vertical whitespace breaks vertical alignment of content
       (when (and (> y2 content-height) (not (element-is-vertical-whitespace? e)))
         (set! content-height y2)))
@@ -974,10 +972,16 @@
     (define max-width 0)
 
     (define/public (get-min-width)
-      (+ min-width (* 2 xmargin)))
+      (define auto-min-width (+ min-width (* 2 xmargin)))
+      (if fixed-width
+          (if (> fixed-width auto-min-width) fixed-width auto-min-width)
+          auto-min-width))
 
     (define/public (get-max-width)
-      (+ max-width (* 2 ymargin)))
+      (define auto-max-width (+ max-width (* 2 ymargin)))
+      (if fixed-width
+          (if (> auto-max-width fixed-width) auto-max-width fixed-width)
+          auto-max-width))
     
     (define (initial-place-element e x y)
       (define (unnecessary-margin)
@@ -995,7 +999,6 @@
       ;; for initial pass assume a large drawable width. ideally we wouldn't check the width
       ;; at all during layout but that would require changing the layout algorithm a bit,
       ;; so do this for now.
-      ;; TODO: this doesn't actually work if there is a right or center aligned element!
       (define dw 10000)
       
       ;; for strings calculate word extents. only need to do this once for each string element.
@@ -1003,7 +1006,7 @@
       (when (string? (element-snip e))
         (calc-word-extents e)
         (for ([w (in-list (element-words e))])
-          (printf "word width = ~a~n" (word-width w))
+          ;(printf "word width = ~a~n" (word-width w))
           (when (> (word-width w) min-width)
             (set! min-width (word-width w)))))
       
@@ -1098,6 +1101,12 @@
       (maybe-set-box! lspace 0.0)
       (maybe-set-box! rspace 0.0))
 
+    (define/override (resize w h)
+      (printf "resize table to width ~a~n" w)
+      ;(calc-column-min/max-widths)
+      (set-column-widths (- w (table-border-rule-width)))
+      (calc/set-table-size))
+    
     (define (calc-lit-color dc)
       (define bg-color (send dc get-background))
       (make-object color% #xe8 #xe8 #xe8))
@@ -1225,7 +1234,7 @@
     (define (table-border-rule-height)
       (+ (* 2 border-width) (* (* 2 cell-border-line-width) num-rows) (* row-rule-height (sub1 num-rows))))
 
-    (define (set-table-size)
+    (define (calc/set-table-size)
       (define columns-width
         (for/fold ([total-width 0])
                   ([col (in-gvector columns)])
@@ -1375,7 +1384,11 @@
       (add-row-to-columns (car rows))
       (set! rip #f))
 
-    (define/public (start-cell #:colspan [colspan 1] #:valign [valign 'middle] #:bgcolor [bgcolor #f])
+    (define/public (start-cell #:colspan [colspan 1] #:valign [valign 'middle] #:bgcolor [bgcolor #f] #:width [width #f])
+      (define fixed-width
+        (and width (pair? width) (eq? (car width) 'width-pixels) (cdr width)))
+      (define relative-width
+        (and width (pair? width) (eq? (car width) 'width-percent) (cdr width)))
       (define c (new cell%
                      (drawing-context dc)
                      (defstyle default-style)
@@ -1403,7 +1416,7 @@
           (define-values (w h) (send c get-size))
           (printf "~ax~a, " w h))
         (printf "~n"))
-      (set-table-size))
+      (calc/set-table-size))
     
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       (define c (current-cell))
