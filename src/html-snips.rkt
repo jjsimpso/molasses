@@ -127,10 +127,12 @@
 
     (init-field
      ; the left margin/horizontal inset of the editor-canvas<%>
-     [horz-offset 5])
+     [horz-offset 5]
+     [w 100]
+     [h 8])
 
-    (define width 100)
-    (define height 8)
+    (define width w)
+    (define height h)
     
     (define/override (get-extent dc x y
                                    [w #f]

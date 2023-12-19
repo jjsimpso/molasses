@@ -929,17 +929,13 @@
     (define (handle-element-properties e)
       (define snip (element-snip e))
       (when (is-a? snip snip%)
-        (define-values (dw dh) (get-drawable-size))
         (for ([prop (in-list (element-properties e))])
           (printf "handle element property ~a~n" prop)
           (case (car prop)
-            [(width-percent)
+            [(resizable)
+             (define-values (dw dh) (get-drawable-size))
              (define space-available (- dw layout-left-width (unaligned-or-center-width) layout-right-width))
              (define w (* space-available (/ (cdr prop) 100.0)))
-             (define h (get-element-height e))
-             (send snip resize w h)]
-            [(width-pixels)
-             (define w (cdr prop))
              (define h (get-element-height e))
              (send snip resize w h)]))))
     
@@ -1137,7 +1133,7 @@
     (define/override (on-scroll event)
       (define-values (dw dh) (get-drawable-size))
 
-      (printf "on-scroll: ~a ~a~n" (send event get-direction) (send event get-position))
+      ;(printf "on-scroll: ~a ~a~n" (send event get-direction) (send event get-position))
       
       (if (eq? (send event get-direction) 'vertical)
           (let* ([top (send event get-position)]

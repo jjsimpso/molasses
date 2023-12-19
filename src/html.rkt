@@ -248,6 +248,16 @@
         (string->number attr-string)
         #f))
 
+  ; returns #f if no width attribute
+  (define (width-attr node)
+    (define width-value (sxml:attr node 'width))
+    (and width-value
+         (if (string-contains? width-value "%")
+             (cons 'width-percent
+                   (string->number (car (string-split width-value "%"))))
+             (cons 'width-pixels
+                   (string->number width-value)))))
+  
   (define (align-attr node default-alignment)
     (case (and (sxml:attr node 'align)
                (string-downcase (sxml:attr node 'align)))
@@ -409,22 +419,25 @@
            [(br)
             (insert-newline)]
            [(hr)
-            (define width-value (sxml:attr node 'width))
             (define width-property
-              (if width-value
-                  (if (string-contains? width-value "%")
-                      (cons 'width-percent
-                            (string->number (car (string-split width-value "%"))))
-                      (cons 'width-pixels
-                            (string->number width-value)))
+              (or (width-attr node)
                   '(width-percent . 100)))
+            (define width-pixels
+              (if (eq? (car width-property) 'width-pixels)
+                  (cdr width-property)
+                  ; default width in pixels
+                  100))
+            (define resizable-property
+              (if (eq? (car width-property) 'width-percent)
+                  (cons 'resizable (cdr width-property))
+                  #f))
             (define align (align-attr node current-alignment))
             (when (not (last-element-eol?))
               (insert-newline))
-            (append-snip (new horz-line-snip%)
+            (append-snip (new horz-line-snip% [w width-pixels])
                          #t
                          align
-                         (list width-property))
+                         (if resizable-property (list resizable-property) '()))
             #;(insert-newline)]
            [(img)
             (handle-img node)]
