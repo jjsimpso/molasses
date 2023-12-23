@@ -468,15 +468,20 @@
             (define cellspacing (or (attr->number node 'cellspacing) 2))
             (define cellpadding (or (attr->number node 'cellpadding) 1))
             (define rules (rules-attr node (if (= border 0) 'none 'all)))
+            (define width (width-attr node))
+            (define width-pixels (and width (eq? (car width) 'width-pixels) (cdr width)))
             (define resizable-property
-              (cons 'resizable 100))
+              (if (not width)
+                  (cons 'resizable 100)
+                  #f))
             (define table-snip (new table-snip%
                                     (drawing-context (send canvas get-dc))
                                     (defstyle html-basic-style)
                                     (border border)
                                     (cellspacing cellspacing)
                                     (cellpadding cellpadding)
-                                    (rules rules)))
+                                    (rules rules)
+                                    (w width-pixels)))
             (parameterize ([current-container table-snip])
               (printf "start table~n")
               (loop (sxml:content node))
@@ -484,7 +489,12 @@
               (define-values (dw dh) (send canvas get-drawable-size))
               (send (current-container) finalize-table dw)
               (printf "end table~n"))
-            (append-snip table-snip #t current-alignment (list resizable-property))]
+            (append-snip table-snip
+                         #t
+                         current-alignment
+                         (if resizable-property
+                             (list resizable-property)
+                             '()))]
            [(th)
             (printf "table header~n")]
            [(tr)
@@ -500,7 +510,8 @@
             (define bgcolor (if (sxml:attr node 'bgcolor)
                                 (parse-color (sxml:attr node 'bgcolor))
                                 #f))
-            (send (current-container) start-cell #:colspan colspan #:valign valign #:bgcolor bgcolor)
+            (define width (width-attr node))
+            (send (current-container) start-cell #:colspan colspan #:valign valign #:bgcolor bgcolor #:width width)
             ; style could be changed by cell's contents
             (define style-copy (make-object style-delta% 'change-nothing))
             (send style-copy copy (current-style-delta))

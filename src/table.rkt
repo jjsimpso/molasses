@@ -25,7 +25,7 @@
     (define vert-align valign)
     (define column-span colspan)
     (define background-color bgcolor)
-    (define fixed-width width)
+    (define fixed-width (or width 0))
     
     ;; 
     (define xmargin horiz-margin)
@@ -66,6 +66,11 @@
 
     (define/public (get-colspan)
       column-span)
+
+    (define/public (get-fixed-width)
+      (if (> fixed-width 0)
+          (+ fixed-width (* 2 xmargin))
+          0))
     
     (define/public (get-position)
       (values canvas-x canvas-y))
@@ -973,14 +978,16 @@
 
     (define/public (get-min-width)
       (define auto-min-width (+ min-width (* 2 xmargin)))
-      (if fixed-width
-          (if (> fixed-width auto-min-width) fixed-width auto-min-width)
+      (define fw (+ fixed-width (* 2 xmargin)))
+      (if (> fw 0)
+          (if (> fw auto-min-width) fw auto-min-width)
           auto-min-width))
 
     (define/public (get-max-width)
       (define auto-max-width (+ max-width (* 2 ymargin)))
-      (if fixed-width
-          (if (> auto-max-width fixed-width) auto-max-width fixed-width)
+      (define fw (+ fixed-width (* 2 xmargin)))
+      (if (> fw 0)
+          (if (> auto-max-width fw) auto-max-width fw)
           auto-max-width))
     
     (define (initial-place-element e x y)
@@ -1046,7 +1053,7 @@
       (dlist-append! elements e))
 
     (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned])
-      (printf "cell append-string~n")
+      (printf "cell append-string ~a~n" s)
       (define e (element s end-of-line alignment '()))
       (set-element-text-style! e (or style default-style))
       (initial-place-element e place-x place-y)
@@ -1061,7 +1068,8 @@
           [border 0]
           [cellspacing 2]
           [cellpadding 1]
-          [rules 'all])
+          [rules 'all]
+          [w #f])
 
     (define dc drawing-context)
     (define default-style defstyle)
@@ -1079,6 +1087,8 @@
           cellspacing
           0))
 
+    (define desired-width w)
+    
     (define num-rows 0)
     (define num-columns 0)
     (define width 0)
@@ -1251,8 +1261,9 @@
     (struct column
       ([min-width #:mutable]
        [max-width  #:mutable]
-       [cells  #:mutable]
-       [width #:mutable #:auto]) ; list of cells but not necessarily in row order
+       [cells  #:mutable] ; list of cells but not necessarily in row order
+       [width #:mutable #:auto]
+       [fixed-width  #:mutable #:auto])
       #:prefab #:auto-value 0)
 
     (define rows '())
@@ -1293,14 +1304,22 @@
       (define (cell-max-width c)
         (define colspan (send c get-colspan))
         (quotient (send c get-max-width) colspan))
+
+      (define (cell-fixed-width c)
+        (define colspan (send c get-colspan))
+        (quotient (send c get-fixed-width) colspan))
       
       ;; calculate the min and max width of each column
+      ;; also determine if the column should have a fixed width
       (for* ([col (in-gvector columns)]
              [c (in-list (column-cells col))])
+        (printf "cell min/max/fixed = ~a/~a/~a~n" (cell-min-width c) (cell-max-width c) (cell-fixed-width c))
         (when (> (cell-min-width c) (column-min-width col))
           (set-column-min-width! col (cell-min-width c)))
         (when (> (cell-max-width c) (column-max-width col))
           (set-column-max-width! col (cell-max-width c)))
+        (when (> (cell-fixed-width c) (column-fixed-width col))
+          (set-column-fixed-width! col (cell-fixed-width c)))
         (printf "calc-column-min/max-widths: ~a - ~a~n" (column-min-width col) (column-max-width col)))
       ;; calculate the min and max width of the table
       (define-values (table-min-width table-max-width)
@@ -1330,26 +1349,52 @@
         (send c set-height height)))
     
     (define (set-column-widths layout-width)
-      ;; calculate the width of each column using autolayout algorithm
-      (cond
-        [(<= max-width layout-width)
-         ;; it all fits, set column widths to the max
-         (for ([col(in-gvector columns)])
-           (set-column-width! col (column-max-width col)))]
-        [(>= min-width layout-width)
-         ;; min is still too big, set column widths to min
-         (for ([col(in-gvector columns)])
-           (set-column-width! col (column-min-width col)))]
-        [else
-         ;; assign column widths
-         (define W (- layout-width min-width))
-         (define D (- max-width min-width))
-         (define W-over-D (/ W D))
-         (for ([col(in-gvector columns)])
-           (define d (- (column-max-width col) (column-min-width col)))
-           ;(printf "setting colmun width to ~a~n" (+ (column-min-width col) (floor (* d W-over-D))))
-           (set-column-width! col (+ (column-min-width col) (floor (* d W-over-D)))))])
-        
+      (if desired-width
+          ;; calculate the width of each column using fixed width algorithm
+          (let ([default-column-width (/ desired-width num-columns)]
+                [remaining-width desired-width]
+                [remaining-columns num-columns])
+            ; set width of columns with a specified width
+            (for ([col (in-gvector columns)])
+              (define w (column-fixed-width col))
+              (when (> w 0)
+                (when (< w (column-min-width col))
+                  (printf "column fixed width < min width, setting to min width~n")
+                  (set! w (column-min-width col)))
+                (printf "setting column width to ~a~n" w)
+                (set-column-width! col w)
+                (set! remaining-columns (sub1 remaining-columns))
+                (set! remaining-width (- remaining-width w))))
+            ; divide the remaining space evenly among the rest of the columns
+            (when (> remaining-columns 0)
+              (define w (/ remaining-width remaining-columns))
+              (for ([col (in-gvector columns)])
+                (when (= (column-fixed-width col) 0)
+                  (if (>= w (column-min-width col))
+                      (begin
+                        (printf "setting column width to ~a~n" w)
+                        (set-column-width! col w))
+                      (set-column-width! col (column-min-width col)))))))
+          ;; calculate the width of each column using autolayout algorithm
+          (cond
+            [(<= max-width layout-width)
+             ;; it all fits, set column widths to the max
+             (for ([col(in-gvector columns)])
+               (set-column-width! col (column-max-width col)))]
+            [(>= min-width layout-width)
+             ;; min is still too big, set column widths to min
+             (for ([col(in-gvector columns)])
+               (set-column-width! col (column-min-width col)))]
+            [else
+             ;; assign column widths
+             (define W (- layout-width min-width))
+             (define D (- max-width min-width))
+             (define W-over-D (/ W D))
+             (for ([col (in-gvector columns)])
+               (define d (- (column-max-width col) (column-min-width col)))
+               ;(printf "setting colmun width to ~a~n" (+ (column-min-width col) (floor (* d W-over-D))))
+               (set-column-width! col (+ (column-min-width col) (floor (* d W-over-D)))))]))
+      
       ;; set each cell's width to its column's width and run layout in each cell
       (define visited-cells (mutable-seteq))
       (for* ([col (in-gvector columns)]
@@ -1395,6 +1440,7 @@
                      (colspan colspan)
                      (valign valign)
                      (bgcolor bgcolor)
+                     (width fixed-width)
                      (horiz-margin cell-inner-margin)
                      (vert-margin cell-inner-margin)))
       (set! rip (cons c rip)))
@@ -1453,13 +1499,14 @@
                      (drawing-context (send canvas get-dc))
                      (defstyle standard-style)
                      ;(cellpadding 5)
+                     (w 120)
                      (border 1)))
 
   (send canvas append-string "There is a table below this line:" #f #t)
   
   (send table start-row)
-  (send table start-cell #:bgcolor (make-color 200 0 0))
-  (send table append-string "1,1")
+  (send table start-cell #:bgcolor (make-color 200 0 0) #:width '(width-pixels . 9))
+  (send table append-string "~" #f)
   (send table end-cell)
   (send table start-cell #:colspan 2)
   (send table append-string "1,2")
@@ -1468,7 +1515,7 @@
   
   (send table start-row)
   (send table start-cell)
-  (send table append-string "2,1")
+  (send table append-string "~")
   (send table end-cell)
   (send table start-cell)
   (send table append-string "2,2")
