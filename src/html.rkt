@@ -511,6 +511,9 @@
                                 (parse-color (sxml:attr node 'bgcolor))
                                 #f))
             (define width (width-attr node))
+            (define prev-alignment current-alignment)
+            ; todo: use value from table, row, or column as default value if present
+            (set! current-alignment (align-attr node 'left))
             (send (current-container) start-cell #:colspan colspan #:valign valign #:bgcolor bgcolor #:width width)
             ; style could be changed by cell's contents
             (define style-copy (make-object style-delta% 'change-nothing))
@@ -520,6 +523,7 @@
                 (send (current-style-delta) set-delta-background bgcolor))
               (loop (sxml:content node)))
             (send (current-container) end-cell)
+            (set! current-alignment prev-alignment)
             (printf "end table cell~n")]
            [else
             (define style-copy (make-object style-delta% 'change-nothing))

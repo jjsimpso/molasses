@@ -59,7 +59,7 @@
            (- height content-height)]
           [else ;middle
            (quotient (- height content-height) 2)]))
-      (printf "setting valign-offset to ~a~n" valign-offset))
+      (printf "setting valign-offset to ~a(~a/~a)~n" valign-offset height content-height))
 
     (define/public (get-dc)
       dc)
@@ -476,6 +476,8 @@
       (define-values (font-width font-height font-descent font-space) (send dc get-text-extent "a" font)) ; only need height, so string doesn't matter
       (define height (- font-height font-descent))
       (define to-next-y (+ font-height snip-ymargin))
+
+      ;(printf "layout-string: tw=~a, y=~a~n" total-width y)
       
       (case (element-alignment e)
         [(right)
@@ -569,7 +571,7 @@
          (define width 0)
          (define baseline (+ ypos height))
 
-         ;(printf "space avail=~a, x=~a~n" space-available x)
+         ;(printf "center: width=~a, x=~a~n" width x)
          
          (if (> baseline layout-baseline-pos)
              (when (not (empty? layout-center-elements))
@@ -582,6 +584,7 @@
            (define space-available (- total-width layout-left-width layout-right-width))
            (set! x (+ layout-left-width (/ space-available 2)))
            (define start-pos (word-pos (car words))) ; line's starting position (an index into the string)
+           (define last-word (last words))
            (for ([w (in-list words)])
              (if (< (+ width (word-to-next w)) space-available)
                  (set! width (+ width (word-to-next w)))
@@ -590,18 +593,23 @@
                    (if (<=  w-width space-available)
                        (let* ([margin (/ (- space-available w-width) 2)]
                               [xpos (+ layout-left-width margin)])
+                         ;(printf " wrapping, word fits on current line~n")
                          (set! lines (cons (wrapped-line start-pos (word-end-pos w) xpos ypos w-width font-height) lines))
                          (set! start-pos (word-end-pos w))
                          (when (> w-width max-width)
                            (set! max-width w-width))
-                         ;; advance to the new line
-                         (set! ypos (+ ypos to-next-y))
-                         (set! width 0)
-                         (layout-goto-new-line ypos)
+                         ;; if we advance to the new line if there aren't any words to follow,
+                         ;; it screws up the height calculation for the cell. 
+                         (unless (eq? w last-word)
+                           ;; advance to the new line
+                           (set! ypos (+ ypos to-next-y))
+                           (set! width 0)
+                           (layout-goto-new-line ypos))
                          (when (< xpos x)
                            (set! x xpos)))
                        (let* ([margin (/ (- space-available width) 2)]
                               [xpos (+ layout-left-width margin)])
+                         ;(printf " wrapping, word doesn't fit on current line~n")
                          (set! lines (cons (wrapped-line start-pos (word-pos w) xpos ypos width font-height) lines))
                          (set! start-pos (word-pos w))
                          (when (> width max-width)
