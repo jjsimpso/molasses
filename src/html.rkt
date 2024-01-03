@@ -179,6 +179,7 @@
   (define current-style-delta (make-parameter (make-object style-delta% 'change-nothing)))
   (define current-block (make-parameter #f))
   (define current-container (make-parameter #f))
+  (define end-text-with-space (make-parameter #f))
   ;; alignment is a special case since it isn't controlled by a style and must be applied to each paragraph
   (define current-alignment 'unaligned)  
   ;; don't use a parameter for link color since it will change so rarely
@@ -236,6 +237,26 @@
   (define (is-paragraph-element? elem)
     (define para-elements '(h1 h2 h3 h4 h5 h6 p pre center))
     (memq elem para-elements))
+
+  (define (is-text-element? elem)
+    (define text-elements '(a b u i big font))
+    (memq elem text-elements))
+
+  (define (next-element-is-text? s)
+    (define following (cdr s))
+    (define next (and (not (empty? following)) (car following)))
+    (define next-element (and next (sxml:element-name next)))
+    ;(eprintf " next-element=~a~n" next-element)
+    (and next-element (is-text-element? next-element)))
+
+  (define (next-element-is-string? s)
+    (define following (cdr s))
+    (and (not (empty? following)) (string? (car following))))
+    
+  (define (append-space-if-needed s text)
+    (if (or (end-text-with-space) (next-element-is-text? s))
+        (string-append text " ")
+        text))
   
   (define (update-block current-block elem)
     (if (is-block-element? elem)
@@ -529,11 +550,16 @@
             (define style-copy (make-object style-delta% 'change-nothing))
             (send style-copy copy (current-style-delta))
             (parameterize ([current-style-delta style-copy]
+                           [end-text-with-space (and (is-text-element? (sxml:element-name node))
+                                                     (or (next-element-is-string? s)
+                                                         (next-element-is-text? s)))]
                            [current-block (update-block (current-block) (car node))])
               ;; handle the element. returns a list of functions to call when closing the tag
               ;; will also update the current style
               (define close-tag-funcs (handle-element node))
-              
+
+              (eprintf "handling ~a,etws=~a~n" (car node) (end-text-with-space))
+
               ;; recurse into the element
               (loop (cdr node))
               
@@ -564,7 +590,7 @@
             (define text (string-normalize-spaces node))
             (when (non-empty-string? text)
               (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
-              (append-string (string-append text " ") style #f current-alignment)
+              (append-string (append-space-if-needed s text) style #f current-alignment)
               #;(eprintf "~a,~a paragraph: ~a~n" (current-block) current-alignment text))
             (when (not (non-empty-string? text))
               (eprintf "skipped newline char~n"))])
