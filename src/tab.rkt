@@ -309,7 +309,7 @@ END
   (define html-standard-delta (make-object style-delta%))
   (send* html-standard-delta
     (set-family 'roman)
-    (set-delta 'change-size 12)
+    (set-delta 'change-size 11)
     (set-delta-foreground html-text-fg-color)
     (set-delta-background html-text-bg-color))
   (send html-standard set-delta html-standard-delta)
