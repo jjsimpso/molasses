@@ -1416,24 +1416,49 @@
                          (loop (- diff delta)))
                        (printf "  no more space available~n"))]))))
           ;; calculate the width of each column using autolayout algorithm
-          (cond
-            [(<= max-width layout-width)
-             ;; it all fits, set column widths to the max
-             (for ([col(in-gvector columns)])
-               (set-column-width! col (column-max-width col)))]
-            [(>= min-width layout-width)
-             ;; min is still too big, set column widths to min
-             (for ([col(in-gvector columns)])
-               (set-column-width! col (column-min-width col)))]
-            [else
-             ;; assign column widths
-             (define W (- layout-width min-width))
-             (define D (- max-width min-width))
-             (define W-over-D (/ W D))
-             (for ([col (in-gvector columns)])
-               (define d (- (column-max-width col) (column-min-width col)))
-               ;(printf "setting colmun width to ~a~n" (+ (column-min-width col) (floor (* d W-over-D))))
-               (set-column-width! col (+ (column-min-width col) (floor (* d W-over-D)))))]))
+          (let ([rem-layout-width layout-width]
+                [rem-max-width max-width]
+                [rem-min-width min-width])
+            (printf "running auto layout algorithm~n")
+            ;; first set any fixed width columns
+            (for ([col (in-gvector columns)])
+              (define fw (column-fixed-width col))
+              (when (and (> fw 0)
+                         (>= fw (column-min-width col)))
+                (printf "  set column to fixed width ~a~n" fw)
+                (set-column-width! col fw)
+                (set! rem-layout-width (- rem-layout-width fw))
+                (set! rem-max-width (- rem-max-width (column-max-width col)))
+                (set! rem-min-width (- rem-min-width (column-min-width col)))))
+            (cond
+              [(<= rem-max-width rem-layout-width)
+               ;; it all fits, set column widths to the max
+               (for ([col (in-gvector columns)])
+                 (when (= (column-fixed-width col) 0)
+                   (set-column-width! col (column-max-width col))))]
+              [(>= min-width layout-width)
+               ;; min is still too big, set column widths to min including fixed width columns
+               (for ([col (in-gvector columns)])
+                 (set-column-width! col (column-min-width col)))]
+              [(>= rem-min-width rem-layout-width)
+               ;; as else case but recalculate fixed width columns
+               (define W (- layout-width min-width))
+               (define D (- max-width min-width))
+               (define W-over-D (/ W D))
+               (for ([col (in-gvector columns)])
+                 (define d (- (column-max-width col) (column-min-width col)))
+                 ;(printf "setting colmun width to ~a~n" (+ (column-min-width col) (floor (* d W-over-D))))
+                 (set-column-width! col (+ (column-min-width col) (floor (* d W-over-D)))))]
+              [else
+               ;; assign column widths
+               (define W (- rem-layout-width rem-min-width))
+               (define D (- rem-max-width rem-min-width))
+               (define W-over-D (/ W D))
+               (for ([col (in-gvector columns)])
+                 (when (= (column-fixed-width col) 0)
+                   (define d (- (column-max-width col) (column-min-width col)))
+                   ;(printf "setting colmun width to ~a~n" (+ (column-min-width col) (floor (* d W-over-D))))
+                   (set-column-width! col (+ (column-min-width col) (floor (* d W-over-D))))))])))
       
       ;; set each cell's width to its column's width and run layout in each cell
       (define visited-cells (mutable-seteq))
