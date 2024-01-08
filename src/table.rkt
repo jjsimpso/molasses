@@ -1444,7 +1444,9 @@
                ;; as else case but recalculate fixed width columns
                (define W (- layout-width min-width))
                (define D (- max-width min-width))
-               (define W-over-D (/ W D))
+               (define W-over-D (if (> D 0)
+                                    (/ W D)
+                                    0))
                (for ([col (in-gvector columns)])
                  (define d (- (column-max-width col) (column-min-width col)))
                  ;(printf "setting colmun width to ~a~n" (+ (column-min-width col) (floor (* d W-over-D))))
@@ -1453,7 +1455,9 @@
                ;; assign column widths
                (define W (- rem-layout-width rem-min-width))
                (define D (- rem-max-width rem-min-width))
-               (define W-over-D (/ W D))
+               (define W-over-D (if (> D 0)
+                                    (/ W D)
+                                    0))
                (for ([col (in-gvector columns)])
                  (when (= (column-fixed-width col) 0)
                    (define d (- (column-max-width col) (column-min-width col)))
