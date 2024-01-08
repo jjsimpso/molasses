@@ -215,7 +215,7 @@
   
   (define (insert-newline)
     ;(eprintf "inserting newline~n")
-    (append-string "\n" #f #t))
+    (append-string "\n" #f #t current-alignment))
 
   (define (start-new-paragraph)
     (when (not (last-element-eol?))
@@ -359,9 +359,10 @@
     (if value
         (let ([prev-alignment current-alignment])
           (set! current-alignment (align-attr node current-alignment))
-          (list (lambda ()
+          (list insert-newline
+                (lambda ()
                   (set! current-alignment prev-alignment))))
-        '()))
+        (list insert-newline)))
   
   (define (handle-img node [url #f] [base-url #f])
     (when img-ok?
@@ -414,12 +415,13 @@
       [(pre)
        (start-new-paragraph)
        (send (current-style-delta) set-delta 'change-family 'modern)
-       '()]
+       (list insert-newline)]
       [(center)
        (start-new-paragraph)
        (define prev-alignment current-alignment)
        (set! current-alignment 'center)
-       (list (lambda ()
+       (list insert-newline
+             (lambda ()
                (set! current-alignment prev-alignment)))]
       [(body)
        (handle-body-attributes node)]
@@ -571,7 +573,6 @@
             ;; insert a newline after a "paragraph" element unless the next element is a <br> or <hr>
             ;; don't do this for 'center' elements
             (when (is-paragraph-element? (car node))
-              (insert-newline)
               (when (and (not (empty? (cdr s)))
                          (not (eq? (car node) 'center)) ; center elements don't need space below
                          (not (followed-by-newline? (cadr s))))
