@@ -493,10 +493,11 @@
             (define rules (rules-attr node (if (= border 0) 'none 'all)))
             (define width (width-attr node))
             (define width-pixels (and width (eq? (car width) 'width-pixels) (cdr width)))
+            (define width-percent (and width (eq? (car width) 'width-percent) (/ (cdr width) 100)))
             (define resizable-property
-              (if (not width)
-                  (cons 'resizable 100)
-                  #f))
+              (if width-pixels
+                  #f
+                  (cons 'resizable 100)))
             (define table-snip (new table-snip%
                                     (drawing-context (send canvas get-dc))
                                     (defstyle html-basic-style)
@@ -504,7 +505,7 @@
                                     (cellspacing cellspacing)
                                     (cellpadding cellpadding)
                                     (rules rules)
-                                    (w width-pixels)))
+                                    (w (or width-pixels width-percent))))
             (parameterize ([current-container table-snip])
               (printf "start table~n")
               (loop (sxml:content node))

@@ -461,7 +461,7 @@
           (- original snip-ymargin)])))
     
     (define (layout-goto-new-line new-y)
-      ;(printf "layout-goto-new-line: ~a~n" new-y)
+      (printf "layout-goto-new-line: ~a~n" new-y)
       (set! place-x 0) ; place-x value isn't currently used in layout mode
       (set! place-y new-y)
       (set! layout-baseline-pos new-y)
@@ -935,6 +935,7 @@
             [(resizable)
              (define-values (dw dh) (get-drawable-size))
              (define space-available (- dw layout-left-width (unaligned-or-center-width) layout-right-width))
+             (printf "handle resizable: dw=~a, space-available=~a~n" dw space-available)
              (define w (* space-available (/ (cdr prop) 100.0)))
              (define h (get-element-height e))
              (send snip resize w h)]))))
@@ -1018,7 +1019,7 @@
                (calc-word-extents e))
              (set!-values (x1 y1 x2 y2) (layout-string e dw y))
              (set-element-cached-text-extent! e (text-extent (- x2 x1) (- y2 y1) 0 0)) 
-             ;(printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
+             (printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
              ;; set position for adding next element
              (when (element-end-of-line e)
                  (layout-goto-new-line (next-line-y-pos y1)))]
@@ -1395,6 +1396,7 @@
            (update-scrollbars vx vy)
            (append-element e))]
         [else
+         (printf "append-string ~a, eol:~a~n" s end-of-line)
          (define e (element s end-of-line alignment '()))
          (set-element-text-style! e (or style default-style))
          (place-element e place-x place-y)
