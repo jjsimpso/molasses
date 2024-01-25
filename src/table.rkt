@@ -25,8 +25,14 @@
     (define vert-align valign)
     (define column-span colspan)
     (define background-color bgcolor)
-    (define fixed-width (or width 0))
-    
+    (define fixed-width
+      (if (and width (> width 1))
+          width
+          0))
+    (define relative-width
+      (if (and width (< width 1) (> width 0))
+          width
+          0))
     ;; 
     (define xmargin horiz-margin)
     (define ymargin vert-margin)
@@ -71,7 +77,19 @@
       (if (> fixed-width 0)
           (+ fixed-width (* 2 xmargin))
           0))
-    
+
+    (define/public (get-relative-width)
+      relative-width)
+
+    (define/public (calc-relative-width table-width)
+      (if (= relative-width 0)
+          0
+          (let ([w (* table-width relative-width)]
+                [margin (* 2 xmargin)])
+            (if (< margin w)
+                (- w margin)
+                margin))))
+
     (define/public (get-position)
       (values canvas-x canvas-y))
 
@@ -1274,7 +1292,8 @@
        [max-width  #:mutable]
        [cells  #:mutable] ; list of cells but not necessarily in row order
        [width #:mutable #:auto]
-       [fixed-width  #:mutable #:auto])
+       [fixed-width  #:mutable #:auto]
+       [relative-width  #:mutable #:auto])
       #:prefab #:auto-value 0)
 
     (define rows '())
@@ -1306,7 +1325,16 @@
             (loop (car row)
                   (+ i colspan)
                   (cdr row))))))
-    
+
+    (define (calc-column-relative-width relative-width table-width)
+      (if (= relative-width 0)
+          0
+          (let ([w (* table-width relative-width)]
+                [margin (* 2 cell-inner-margin)])
+            (if (< margin w)
+                (- w margin)
+                margin))))
+
     (define (calc-column-min/max-widths)
       (define (cell-min-width c)
         (define colspan (send c get-colspan))
@@ -1319,6 +1347,10 @@
       (define (cell-fixed-width c)
         (define colspan (send c get-colspan))
         (quotient (send c get-fixed-width) colspan))
+
+      (define (cell-relative-width c)
+        (define colspan (send c get-colspan))
+        (/ (send c get-relative-width) colspan))
       
       ;; calculate the min and max width of each column
       ;; also determine if the column should have a fixed width
@@ -1331,6 +1363,8 @@
           (set-column-max-width! col (cell-max-width c)))
         (when (> (cell-fixed-width c) (column-fixed-width col))
           (set-column-fixed-width! col (cell-fixed-width c)))
+        (when (> (cell-relative-width c) (column-relative-width col))
+          (set-column-relative-width! col (cell-relative-width c)))
         #;(printf "calc-column-min/max-widths: ~a - ~a~n" (column-min-width col) (column-max-width col)))
       ;; calculate the min and max width of the table
       (define-values (table-min-width table-max-width)
@@ -1359,12 +1393,21 @@
       (for ([c (in-list row)])
         (send c set-height height)))
     
+    (define (reset-column-widths)
+      (for ([col (in-gvector columns)])
+        (set-column-width! col 0)))
+
     (define (set-column-widths layout-width)
       (define desired-width
         (and desired-table-width
              (if (> desired-table-width 1)
                  (- desired-table-width (table-border-rule-width))
                  (* layout-width desired-table-width))))
+      
+      ;; algorithm relies on knowing which columns have had a width set on this pass,
+      ;; so discard previous width calc results
+      (reset-column-widths)
+      
       (if desired-width
           ;; calculate the width of each column using fixed width algorithm
           (let ([default-column-width (/ desired-width num-columns)]
@@ -1382,12 +1425,27 @@
                 (set-column-width! col w)
                 (set! remaining-columns (sub1 remaining-columns))
                 (set! remaining-width (- remaining-width w))))
+            ; set width of columns with a relative width
+            (for ([col (in-gvector columns)])
+              (define rel-w (column-relative-width col))
+              (when (and (> rel-w 0) (= (column-fixed-width col) 0))
+                (define w (calc-column-relative-width rel-w desired-width))
+                (cond
+                  [(< w (column-min-width col))
+                   (printf "  column relative width < min width, skipping~n")]
+                  [(>= w remaining-width)
+                   (printf "  column relative width > available width, skipping~n")]
+                  [else
+                   (printf "  setting column with relative width ~a to width ~a~n" rel-w w)
+                   (set-column-width! col w)
+                   (set! remaining-columns (sub1 remaining-columns))
+                   (set! remaining-width (- remaining-width w))])))
             ; divide the remaining space evenly among the rest of the columns
             (when (> remaining-columns 0)
               (define w (/ remaining-width remaining-columns))
-              #;(printf "divide remaining space of ~a, cols=~a, w=~a~n" remaining-width remaining-columns w)
+              (printf "divide remaining space of ~a, cols=~a, w=~a~n" remaining-width remaining-columns w)
               (for ([col (in-gvector columns)])
-                (when (= (column-fixed-width col) 0)
+                (when (= (column-width col) 0)
                   (if (>= w (column-min-width col))
                       (begin
                         #;(printf "  setting column width to ~a~n" w)
@@ -1399,7 +1457,7 @@
                         (set-column-width! col (column-min-width col)))))))
             ;; if table exceeds desired width, try to shrink columns
             (when (< remaining-width 0)
-              #;(printf "table exceeds desired width, try to shrink some columns~n")
+              (printf "table exceeds desired width by ~a, try to shrink some columns~n" (abs remaining-width))
               (define column-diffs (make-vector num-columns 0))
               (for ([col (in-gvector columns)]
                     [i (in-naturals 0)])
@@ -1410,12 +1468,12 @@
                   [(<= diff 0) void]
                   [else
                    (define next-largest-diff (vector-argmax cdr column-diffs))
-                   #;(printf "  next largest diff=~a~n" next-largest-diff) 
+                   (printf "  next largest diff=~a (~a still needed) ~n" next-largest-diff diff)
                    (if (> (cdr next-largest-diff) 0)
                        (let ([col (gvector-ref columns (car next-largest-diff))]
                              [index (car next-largest-diff)]
                              [delta (min diff (cdr next-largest-diff))])
-                         #;(printf "  shrink column ~a by ~a~n" index delta)
+                         (printf "  shrink column ~a by ~a~n" index delta)
                          (set-column-width! col (- (column-width col) delta))
                          (vector-set! column-diffs index (cons index 0))
                          (loop (- diff delta)))
@@ -1435,11 +1493,27 @@
                 (set! rem-layout-width (- rem-layout-width fw))
                 (set! rem-max-width (- rem-max-width (column-max-width col)))
                 (set! rem-min-width (- rem-min-width (column-min-width col)))))
+            ;; next set any relative width columns
+            (for ([col (in-gvector columns)])
+              (define rel-w (column-relative-width col))
+              (when (and (> rel-w 0) (= (column-fixed-width col) 0))
+                (define w (calc-column-relative-width rel-w layout-width))
+                (cond
+                  [(< w (column-min-width col))
+                   (printf "  column relative width < min width, skipping~n")]
+                  [(>= w rem-layout-width)
+                   (printf "  column relative width > available width, skipping~n")]
+                  [else
+                   (printf "  setting column with relative width ~a to width ~a~n" rel-w w)
+                   (set-column-width! col w)
+                   (set! rem-layout-width (- rem-layout-width w))
+                   (set! rem-max-width (- rem-max-width (column-max-width col)))
+                   (set! rem-min-width (- rem-min-width (column-min-width col)))])))
             (cond
               [(<= rem-max-width rem-layout-width)
                ;; it all fits, set column widths to the max
                (for ([col (in-gvector columns)])
-                 (when (= (column-fixed-width col) 0)
+                 (when (= (column-width col) 0)
                    (set-column-width! col (column-max-width col))))]
               [(>= min-width layout-width)
                ;; min is still too big, set column widths to min including fixed width columns
@@ -1464,7 +1538,7 @@
                                     (/ W D)
                                     0))
                (for ([col (in-gvector columns)])
-                 (when (= (column-fixed-width col) 0)
+                 (when (= (column-width col) 0)
                    (define d (- (column-max-width col) (column-min-width col)))
                    #;(printf "setting colmun width to ~a~n" (+ (column-min-width col) (floor (* d W-over-D))))
                    (set-column-width! col (+ (column-min-width col) (floor (* d W-over-D))))))])))
@@ -1507,14 +1581,14 @@
       (define fixed-width
         (and width (pair? width) (eq? (car width) 'width-pixels) (cdr width)))
       (define relative-width
-        (and width (pair? width) (eq? (car width) 'width-percent) (cdr width)))
+        (and width (pair? width) (eq? (car width) 'width-percent) (/ (cdr width) 100)))
       (define c (new cell%
                      (drawing-context dc)
                      (defstyle default-style)
                      (colspan colspan)
                      (valign valign)
                      (bgcolor bgcolor)
-                     (width fixed-width)
+                     (width (or fixed-width relative-width))
                      (horiz-margin cell-inner-margin)
                      (vert-margin cell-inner-margin)))
       (set! rip (cons c rip)))
