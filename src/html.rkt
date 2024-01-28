@@ -117,6 +117,11 @@
      (make-color (string->number (substring c-string 1 3) 16)
                  (string->number (substring c-string 3 5) 16)
                  (string->number (substring c-string 5 7) 16))]
+    [(and (= (string-length c-string) 6)
+          (string->number (string-append "#x" c-string)))
+     (make-color (string->number (substring c-string 0 2) 16)
+                 (string->number (substring c-string 2 4) 16)
+                 (string->number (substring c-string 4 6) 16))]
     [else
      (define named-color (send the-color-database find-color c-string))
      (if named-color
@@ -168,6 +173,23 @@
        (printf "skip ~a~n" node)
        (walk-sxml (cdr s))])))
 
+(define null-container%
+  (class object% (super-new)
+    (define/public (start-cell #:colspan [colspan 1] #:valign [valign 'middle] #:bgcolor [bgcolor #f] #:width [width #f])
+      void)
+    (define/public (end-cell)
+      void)
+    (define/public (start-row)
+      void)
+    (define/public (end-row)
+      void)
+    (define/public (finalize-table layout-width)
+      void)
+    (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned])
+      void)
+    (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
+      void)))
+
 (define (convert-html a-port canvas img-ok?)
   (define content (parse-html a-port))
   (define style-list (send canvas get-style-list))
@@ -178,7 +200,7 @@
   (define current-style (make-parameter html-basic-style))
   (define current-style-delta (make-parameter (make-object style-delta% 'change-nothing)))
   (define current-block (make-parameter #f))
-  (define current-container (make-parameter #f))
+  (define current-container (make-parameter (make-object null-container%)))
   (define end-text-with-space (make-parameter #f))
   ;; alignment is a special case since it isn't controlled by a style and must be applied to each paragraph
   (define current-alignment 'unaligned)  
@@ -191,12 +213,12 @@
 
   ;; need to abstract functions which add elements in order to handle tables
   (define (append-string s . rest-args)
-    (if (current-container)
+    (if (not (is-a? (current-container) null-container%))
         (send/apply (current-container) append-string s `(,@rest-args))
         (send/apply canvas append-string s `(,@rest-args))))
 
   (define (append-snip s . rest-args)
-    (if (current-container)
+    (if (not (is-a? (current-container) null-container%))
         (send/apply (current-container) append-snip s `(,@rest-args))
         (send/apply canvas append-snip s `(,@rest-args))))
   
