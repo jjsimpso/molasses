@@ -284,7 +284,7 @@
     (define/public (on-event dc x y event)
       ; event coordinates in cell coords, ignoring cell padding
       (define-values (cx cy) (values (- x canvas-x xmargin)
-                                     (- y canvas-y ymargin)))
+                                     (- y canvas-y ymargin valign-offset)))
       (define e (select-element cx cy))
 
       ;(printf "on-event ~ax~a, cell coord ~ax~a~n" x y cx cy)
@@ -300,15 +300,15 @@
          (when (and e (is-a? (element-snip e) snip%))
            #;(printf "on-event: pass event at ~ax~a to snip coords ~ax~a, canvas:~ax~a, element at ~ax~a~n"
                  (send event get-x) (send event get-y)
-                 (+ (element-xpos e) xmargin) (+ (element-ypos e) ymargin)
+                 (+ (element-xpos e) xmargin) (+ (element-ypos e) ymargin valign-offset)
                  x y
                  (element-xpos e) (element-ypos e))
            (send (element-snip e) on-event
                  dc
                  (+ (element-xpos e) xmargin)
-                 (+ (element-ypos e) ymargin)
+                 (+ (element-ypos e) ymargin valign-offset)
                  (+ (element-xpos e) xmargin)
-                 (+ (element-ypos e) ymargin)
+                 (+ (element-ypos e) ymargin valign-offset)
                  event))]
         [else
          void]))
