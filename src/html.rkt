@@ -549,15 +549,13 @@
                          (if resizable-property
                              (list resizable-property)
                              '()))]
-           [(th)
-            (printf "table header~n")]
            [(tr)
             (printf "start table row~n")
             (send (current-container) start-row)
             (loop (sxml:content node))
             (send (current-container) end-row)
             (printf "end table row~n")]
-           [(td)
+           [(td th)
             (printf "start table cell~n")
             (define colspan (or (attr->number node 'colspan) 1))
             (define valign (valign-attr node 'middle))
