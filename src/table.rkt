@@ -1338,15 +1338,15 @@
     (define (calc-column-min/max-widths)
       (define (cell-min-width c)
         (define colspan (send c get-colspan))
-        (quotient (send c get-min-width) colspan))
+        (floor (/ (send c get-min-width) colspan)))
 
       (define (cell-max-width c)
         (define colspan (send c get-colspan))
-        (quotient (send c get-max-width) colspan))
+        (floor (/ (send c get-max-width) colspan)))
 
       (define (cell-fixed-width c)
         (define colspan (send c get-colspan))
-        (quotient (send c get-fixed-width) colspan))
+        (floor (/ (send c get-fixed-width) colspan)))
 
       (define (cell-relative-width c)
         (define colspan (send c get-colspan))
