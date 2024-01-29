@@ -285,15 +285,23 @@
         elem
         current-block))
 
+  (define (sxml:attr-safer obj attr-name)
+    (define attrib (assq attr-name (sxml:attr-list obj)))
+    (cond 
+      [(and (pair? attrib)
+            (not (empty? (cdr attrib))))
+       (cadr attrib)]
+      [else #f]))
+
   (define (attr->number node attr)
-    (define attr-string (sxml:attr node attr))
+    (define attr-string (sxml:attr-safer node attr))
     (if attr-string
         (string->number attr-string)
         #f))
 
   ; returns #f if no width attribute
   (define (width-attr node)
-    (define width-value (sxml:attr node 'width))
+    (define width-value (sxml:attr-safer node 'width))
     (and width-value
          (if (string-contains? width-value "%")
              (cons 'width-percent
@@ -302,7 +310,7 @@
                    (string->number width-value)))))
   
   (define (align-attr node default-alignment)
-    (case (and (sxml:attr node 'align)
+    (case (and (sxml:attr-safer node 'align)
                (string-downcase (sxml:attr node 'align)))
       [("left") 'left]
       [("right") 'right]
@@ -310,7 +318,7 @@
       [else default-alignment]))
 
   (define (valign-attr node default-alignment)
-    (case (and (sxml:attr node 'valign)
+    (case (and (sxml:attr-safer node 'valign)
                (string-downcase (sxml:attr node 'valign)))
       [("top") 'top]
       [("middle") 'middle]
@@ -319,7 +327,7 @@
       [else default-alignment]))
   
   (define (rules-attr node default-rules)
-    (case (and (sxml:attr node 'rules)
+    (case (and (sxml:attr-safer node 'rules)
                (string-downcase (sxml:attr node 'rules)))
       [("none") 'none]
       [("all") 'all]
@@ -357,8 +365,8 @@
   
   (define (handle-font-attributes node)
     (define font-size-vec #(7/12 5/6 1.0 1.125 1.5 2.0 3.0))  ; 7 10 12 13.5 18 24 36
-    (define size-value (sxml:attr node 'size))
-    (define color-value (sxml:attr node 'color))
+    (define size-value (sxml:attr-safer node 'size))
+    (define color-value (sxml:attr-safer node 'color))
 
     ;; changes current style only, no need for close tag function
     (when color-value
@@ -377,7 +385,7 @@
         '()))
   
   (define (handle-paragraph-attributes node)
-    (define value (sxml:attr node 'align))
+    (define value (sxml:attr-safer node 'align))
     (if value
         (let ([prev-alignment current-alignment])
           (set! current-alignment (align-attr node current-alignment))
@@ -388,7 +396,7 @@
   
   (define (handle-img node [url #f] [base-url #f])
     (when img-ok?
-      (define src-value (sxml:attr node 'src))
+      (define src-value (sxml:attr-safer node 'src))
       (define request (send canvas get-current-request))
       (when request
         (define align (align-attr node current-alignment))
@@ -488,7 +496,7 @@
             (handle-img node)]
            [(a)
             (define content (sxml:content node))
-            (define href-value (sxml:attr node 'href))
+            (define href-value (sxml:attr-safer node 'href))
             (define base-url (request->url (send canvas get-current-request)))
             (when (not (empty? content))
               (cond
@@ -553,8 +561,8 @@
             (printf "start table cell~n")
             (define colspan (or (attr->number node 'colspan) 1))
             (define valign (valign-attr node 'middle))
-            (define bgcolor (if (sxml:attr node 'bgcolor)
-                                (parse-color (sxml:attr node 'bgcolor))
+            (define bgcolor (if (sxml:attr-safer node 'bgcolor)
+                                (parse-color (sxml:attr-safer node 'bgcolor))
                                 #f))
             (define width (width-attr node))
             (define prev-alignment current-alignment)
