@@ -237,7 +237,8 @@
   
   (define (insert-newline)
     ;(eprintf "inserting newline~n")
-    (append-string "\n" #f #t current-alignment))
+    (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
+    (append-string "\n" style #t current-alignment))
 
   (define (start-new-paragraph)
     (when (not (last-element-eol?))
