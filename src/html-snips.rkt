@@ -1,4 +1,4 @@
-#lang racket
+#lang racket/gui
 
 (require racket/class
          racket/snip
@@ -262,17 +262,23 @@
                                     url
                                     (replace-final-path-element (request-path/selector base-req) url))])))))
 
+    (define/override (adjust-cursor dc x y editorx editory event)
+      (when (send event entering?)
+        (eprintf "adjust-cursor: mouse entering~n")
+        (send browser-canvas set-cursor (make-object cursor% 'hand))))
+      
     (define/override (on-event dc x y editorx editory event)
-      (eprintf "html-link-snip% mouse event ~a~n" (send event get-event-type))
+      ;(eprintf "html-link-snip% mouse event ~a~n" (send event get-event-type))
       (cond
         [(send event moving?)
-         (eprintf "mouse motion event~n")
+         ;(eprintf "mouse motion event~n")
          (send browser-canvas update-status status-text)]
         [(send event button-down? 'left)
          (follow-link)]))
 
     (define/override (on-goodbye-event dc x y editorx editory event)
-      ;(eprintf "goodbye event~n")
+      (eprintf "goodbye event~n")
+      (send browser-canvas set-cursor #f)
       (send browser-canvas update-status "Ready"))))
 
 (define html-link-snip% (html-link-mixin string-snip%))

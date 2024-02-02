@@ -1240,6 +1240,16 @@
 
     ;; store the element that has mouse focus. send on-goodbye-event to an element's snip if it loses focus
     (define element-with-focus #f)
+
+    (define (check-element-enter-leave e x y event)
+      (when (not (eq? e element-with-focus))
+        ;; send on-goodbye-event to snips that lose mouse focus
+        (when (and element-with-focus (is-a? (element-snip element-with-focus) snip%))
+          (send (element-snip element-with-focus) on-goodbye-event dc x y (element-xpos element-with-focus) (element-ypos element-with-focus) event))
+        ;; send enter event when a new snip gets focus
+        (when (and e (is-a? (element-snip e) snip%))
+          (send (element-snip e) adjust-cursor dc x y (- x (element-xpos e)) (- y (element-ypos e)) (new mouse-event% [event-type 'enter])))
+        (set! element-with-focus e)))
     
     (define/override (on-event event)
       (case (send event get-event-type)
@@ -1253,11 +1263,7 @@
 
          ;(printf "on-event: ~ax~a ~ax~a~n" (send event get-x) (send event get-y) x y)
 
-         ;; send on-goodby-event to snips that lose mouse focus
-         (when (not (eq? e element-with-focus))
-           (when (and element-with-focus (is-a? (element-snip element-with-focus) snip%))
-             (send (element-snip element-with-focus) on-goodbye-event dc x y (element-xpos element-with-focus) (element-ypos element-with-focus) event))
-           (set! element-with-focus e))
+         (check-element-enter-leave e x y event)
                 
          (when (and e (is-a? (element-snip e) snip%))
          #;(printf "on-event: pass event at ~ax~a to snip coords ~ax~a, canvas:~ax~a, element at ~ax~a~n"

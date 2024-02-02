@@ -94,6 +94,7 @@
       (values canvas-x canvas-y))
 
     (define/public (set-position posx posy)
+      ;(printf " set cell position to ~a,~a~n" posx posy)
       (set! canvas-x posx)
       (set! canvas-y posy))
 
@@ -237,9 +238,6 @@
       (define current-style #f)
       ;(printf "drawing cell at ~a,~a~n" x y)
 
-      ; save canvas coordinates for use in event handling
-      (set-position x y)
-
       (when background-color
         (draw-background dc x y))
       
@@ -281,22 +279,37 @@
     ;; store the element that has mouse focus. send on-goodbye-event to an element's snip if it loses focus
     (define element-with-focus #f)
 
+    (define (check-element-enter-leave e x y event)
+      (when (not (eq? e element-with-focus))
+        ;; send on-goodbye-event to snips that lose mouse focus
+        (when (and element-with-focus (is-a? (element-snip element-with-focus) snip%))
+          (send (element-snip element-with-focus) on-goodbye-event dc x y (element-xpos element-with-focus) (element-ypos element-with-focus) event))
+        ;; send enter event when a new snip gets focus
+        (when (and e (is-a? (element-snip e) snip%))
+          (send (element-snip e) adjust-cursor dc x y (- x (element-xpos e)) (- y (element-ypos e)) (new mouse-event% [event-type 'enter])))
+        (set! element-with-focus e)))
+
+    ;; if mouse moves quickly, the cell could lose focus without receiving any mouse events,
+    ;; so we need a function to clean things up. called by cell's table.
+    (define/public (leave-cell dc x y event)
+      (printf "leave-cell~n")
+      (when element-with-focus
+        (when (and element-with-focus (is-a? (element-snip element-with-focus) snip%))
+          (send (element-snip element-with-focus) on-goodbye-event dc x y (element-xpos element-with-focus) (element-ypos element-with-focus) event))
+        (set! element-with-focus #f)))
+    
     (define/public (on-event dc x y event)
       ; event coordinates in cell coords, ignoring cell padding
       (define-values (cx cy) (values (- x canvas-x xmargin)
                                      (- y canvas-y ymargin valign-offset)))
       (define e (select-element cx cy))
 
-      ;(printf "on-event ~ax~a, cell coord ~ax~a~n" x y cx cy)
+      ;(printf "cell on-event ~ax~a, canvas ~ax~a, cell coord ~ax~a~n" x y canvas-x canvas-y cx cy)
 
       (case (send event get-event-type)
         [(left-down middle-down right-down motion)
-         ;; send on-goodby-event to snips that lose mouse focus
-         (when (not (eq? e element-with-focus))
-           (when (and element-with-focus (is-a? (element-snip element-with-focus) snip%))
-             (send (element-snip element-with-focus) on-goodbye-event dc x y (element-xpos element-with-focus) (element-ypos element-with-focus) event))
-           (set! element-with-focus e))
-                
+         (check-element-enter-leave e cx cy event)
+         
          (when (and e (is-a? (element-snip e) snip%))
            #;(printf "on-event: pass event at ~ax~a to snip coords ~ax~a, canvas:~ax~a, element at ~ax~a~n"
                  (send event get-x) (send event get-y)
@@ -1125,6 +1138,21 @@
     (define min-width 0)
     (define max-width 0)
 
+    ;; first row of table's upper left corner in canvas coordinates
+    ;; set when draw function is called by canvas
+    (define first-row-x 0)
+    (define first-row-y 0)
+    (define (get-first-row-position)
+      (values first-row-x first-row-y))
+
+    (define (set-first-row-position posx posy)
+      (set! first-row-x posx)
+      (set! first-row-y posy))
+
+    (define (table-position-changed? x y)
+      (or (not (= x first-row-x))
+          (not (= y first-row-y))))
+    
     (define/override (get-extent dc x y	 	 	 	 
                                  [w #f]
                                  [h #f]
@@ -1218,7 +1246,20 @@
             cell-border-line-width
             0))
       
-      #;(printf "drawing table at ~ax~a~n" x y)
+      (printf "drawing table at ~ax~a~n" x y)
+
+      ; if table position on canvas changes, update canvas coordinates of each cell
+      (when (table-position-changed? startx ypos)
+        (printf "table position changed~n")
+        (set-first-row-position startx ypos)
+        (for/fold ([rowy ypos])
+                  ([row (in-list rows)])
+          (for/fold ([rowx startx])
+                    ([c (in-list row)])
+            (send c set-position rowx rowy)
+            (+ rowx (send c get-width) xpos-liminal-space))
+          (+ rowy (row-height row) ypos-liminal-space)))
+      
       (when (> border-line-width 0)
         (draw-table-border dc x y width height border-line-width))
       (for ([row (in-list rows)])
@@ -1250,7 +1291,9 @@
                (>= y cy)
                (<= y (+ cy ch))
                c))))
-    
+
+    (define cell-with-focus #f)
+
     (define/override (on-event dc x y editorx editory event)
       (case (send event get-event-type)
         [(left-down middle-down right-down motion)
@@ -1262,6 +1305,10 @@
          ; use raw canvas coordinates rather than coords relative to the table's position to
          ; select cell. each cell will save its raw canvas coordinates when drawn.
          (define c (select-cell ex ey))
+         (when (and cell-with-focus (not (eq? c cell-with-focus)))
+           (send cell-with-focus leave-cell dc ex ey event))
+         (unless (eq? c cell-with-focus)
+           (set! cell-with-focus c))
          (when c
            (send c on-event dc ex ey event))]
         [else
