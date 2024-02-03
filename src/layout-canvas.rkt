@@ -12,7 +12,7 @@
      (style '(hscroll vscroll resize-corner)))
     (init [horiz-margin 5]
           [vert-margin 5])
-    (init-field [wheel-step 5]
+    (init-field [wheel-step 10]
                 [smooth-scrolling #f]
                 [smooth-scroll-steps 10])
     (inherit get-dc
@@ -1210,7 +1210,7 @@
                (max 0 (- scroll-pos wheel-step))
                (min max-scroll (+ scroll-pos wheel-step))))
          (printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
-         (scroll-to new-scroll-pos smooth-scrolling)]
+         (scroll-to new-scroll-pos #f)]
         [(up down)
          (define max-scroll (get-scroll-range 'vertical))
          (define scroll-pos (get-scroll-pos 'vertical))
