@@ -570,106 +570,104 @@
                     (min xpos x)
                     (max width max-width))]))]
         [(center)
-         (define words (element-words e))
-         (define lines '())
-         (define max-width 0)
-         (define x total-width) ; just default to something large and shrink as we add lines
-         (define ypos y)
-         ;; if there is a partial line of centered elements, finish the line and deal with the remaining words below
-         (when (not (empty? layout-center-elements))
-           (define-values (last-word width remaining-words)
-             (layout-remainder-of-line words (- total-width layout-left-width layout-center-width layout-right-width)))
-           (when (false? last-word)
-             (set! ypos (next-line-y-pos y))
-             (layout-goto-new-line ypos))
-           (when last-word
-             ;; shift existing elements over to make room
-             (define old-margin ( / (- total-width layout-left-width layout-center-width layout-right-width) 2))
-             (define margin ( / (- total-width layout-left-width layout-center-width layout-right-width width) 2))
-             (define diff (- margin old-margin))
-             ;(printf "shift centered elements over: lcw=~a, width =~a, margin ~a to ~a, diff=~a~n" layout-center-width width old-margin margin diff)
-             (adjust-elements-xpos! layout-center-elements diff)
-             ;;
-             (set! x (+ layout-left-width margin layout-center-width))
-             (set! lines (cons (wrapped-line 0 (word-end-pos last-word) x y width font-height) lines))
-             (set! words remaining-words)
-             (set! max-width width)
-             (set! layout-center-width (+ layout-center-width width))
-             (when (not (empty? remaining-words))
-               (set! ypos (+ y to-next-y))
-               (layout-goto-new-line ypos))))
-
-         (define width 0)
-         (define baseline (+ ypos height))
-
-         ;(printf "center: width=~a, x=~a~n" width x)
-         
-         (if (> baseline layout-baseline-pos)
+         (define baseline (+ y height))
+         (when (> baseline layout-baseline-pos)
              (when (not (empty? layout-center-elements))
                (define diff (- baseline layout-baseline-pos))
                (adjust-elements-ypos! layout-center-elements diff))
-             (let ([diff (- layout-baseline-pos baseline)])
-               (set! ypos (+ ypos diff))))
+             (set! layout-baseline-pos baseline))
          
-         (when (not (empty? words))
-           (define space-available (- total-width layout-left-width layout-right-width))
-           (set! x (+ layout-left-width (/ space-available 2)))
-           (define start-pos (word-pos (car words))) ; line's starting position (an index into the string)
-           (define last-word (last words))
-           (for ([w (in-list words)])
-             (if (< (+ width (word-to-next w)) space-available)
-                 (set! width (+ width (word-to-next w)))
-                 (let ([w-width (+ width (word-width w))])
-                   ;; wrap to next line, but first check if w fits on the current line
-                   (if (<=  w-width space-available)
-                       (let* ([margin (/ (- space-available w-width) 2)]
-                              [xpos (+ layout-left-width margin)])
-                         ;(printf " wrapping, word fits on current line~n")
-                         (set! lines (cons (wrapped-line start-pos (word-end-pos w) xpos ypos w-width font-height) lines))
-                         (set! start-pos (word-end-pos w))
-                         (when (> w-width max-width)
-                           (set! max-width w-width))
-                         ;; if we advance to the new line if there aren't any words to follow,
-                         ;; it screws up the height calculation for the cell. 
-                         (unless (eq? w last-word)
-                           ;; advance to the new line
-                           (set! ypos (+ ypos to-next-y))
-                           (set! width 0)
-                           (layout-goto-new-line ypos))
-                         (when (< xpos x)
-                           (set! x xpos)))
-                       (let* ([margin (/ (- space-available width) 2)]
-                              [xpos (+ layout-left-width margin)])
-                         ;(printf " wrapping, word doesn't fit on current line~n")
-                         (set! lines (cons (wrapped-line start-pos (word-pos w) xpos ypos width font-height) lines))
-                         (set! start-pos (word-pos w))
-                         (when (> width max-width)
-                           (set! max-width width))
-                         ;; advance to the new line
-                         (set! ypos (+ ypos to-next-y))
-                         (set! width 0)
-                         (layout-goto-new-line ypos)
-                         (when (< xpos x)
-                           (set! x xpos)))))))
-           ;; add last line of element
-           (when (< start-pos (string-length (element-snip e)))
-             (define-values (last-line-width unused-h unused-d unused-s) (send dc get-text-extent (substring (element-snip e) start-pos) font))
-             (when (> last-line-width max-width)
-               (set! max-width last-line-width))
-             (set! layout-center-width last-line-width)
-             (define margin (/ (- space-available last-line-width) 2))
-             (define xpos (+ layout-left-width margin))
-             (when (< xpos x)
-               (set! x xpos))
-             ;(printf "adding last line of element (~a,~a) ~ax~a~n" xpos ypos last-line-width font-height)
-             (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) xpos ypos last-line-width font-height) lines))))
-         ;; update the baseline position after all lines are placed
-         (set! layout-baseline-pos (+ ypos height))
-         ;; add last line to layout list
-         (set! layout-center-elements (cons (car lines) layout-center-elements))
-         ;; set the element's lines field and put the lines in order
-         (set-element-lines! e (reverse lines))
-         (values x y (+ x max-width) (+ ypos font-height))]
+         (let loop ([words (element-words e)]
+                    [lines '()]
+                    [line-start-pos 0]
+                    [ypos (- layout-baseline-pos height)]
+                    [x total-width]
+                    [max-width 0])
+           ;(printf "loop center: start=~a, ypos=~a, x=~a, max-width=~a~n" line-start-pos ypos x max-width)
+           (define-values (last-word width remaining-words)
+             (layout-remainder-of-line words (- total-width layout-left-width layout-center-width layout-right-width)))
+           ;(printf " last-word=~a, width=~a, remaining=~a~n" last-word width remaining-words)
+           (cond
+             [(and (false? last-word) (empty? remaining-words))
+              ; final iteration
+              ;(printf " final iteration~n")
+              ;; update the baseline position after all lines are placed
+              (set! layout-baseline-pos (+ ypos height))
+              ;; add last line to layout element list
+              (set! layout-center-elements (cons (car lines) layout-center-elements))
+              (set! layout-center-width (+ layout-center-width (wrapped-line-w (car lines))))
+              ;(printf " end line width=~a, lcw=~a~n" (wrapped-line-w (car lines)) layout-center-width)
+              ;; set the element's lines field and put the lines in order
+              (set-element-lines! e (reverse lines))
+              (values x y (+ x max-width) (+ ypos font-height))]
+             [(and (not (empty? layout-center-elements)) (false? last-word))
+              ; there is a partial line of centered elements
+              ; first word is too long, advance line and try again
+              (define new-ypos (+ ypos to-next-y))
+              (layout-goto-new-line new-ypos)
+              (loop remaining-words
+                    lines
+                    line-start-pos
+                    new-ypos
+                    x
+                    max-width)]
+             [(not (empty? layout-center-elements))
+              ; there is a partial line of centered elements, shift existing elements over to make room
+              (define old-margin ( / (- total-width layout-left-width layout-center-width layout-right-width) 2))
+              (define margin ( / (- total-width layout-left-width layout-center-width layout-right-width width) 2))
+              (define diff (- margin old-margin))
+              ;(printf "shift centered elements over: lcw=~a, width =~a, margin ~a to ~a, diff=~a~n" layout-center-width width old-margin margin diff)
+              (adjust-elements-xpos! layout-center-elements diff)
+              ;;
+              (define xpos (+ layout-left-width margin layout-center-width))
+              (define new-ypos ypos)
+              (when (not (empty? remaining-words))
+                (set! new-ypos (+ ypos to-next-y))
+                (layout-goto-new-line new-ypos))
+              (loop remaining-words
+                    (cons (wrapped-line line-start-pos (word-end-pos last-word) xpos ypos width font-height) lines)
+                    (word-end-pos last-word)
+                    new-ypos
+                    (min xpos x)
+                    (max width max-width))]
+              [(and (false? last-word) (empty? layout-center-elements) (empty? layout-left-elements) (empty? layout-right-elements))
+              ; first word is too long to fit on a line, just place it at the beginning of line
+              ;(printf " unable to wrap word ~a, place it anyway~n" (word-str (car remaining-words)))
+              (define xpos 0)
+              (define new-ypos ypos)
+              (when (not (empty? (cdr remaining-words)))
+                (set! new-ypos (+ ypos to-next-y))
+                (layout-goto-new-line new-ypos))
+              (loop (cdr remaining-words)
+                    (cons (wrapped-line line-start-pos (word-end-pos (car remaining-words)) xpos ypos (word-width (car remaining-words)) font-height) lines)
+                    (word-end-pos (car remaining-words))
+                    new-ypos
+                    (min xpos x)
+                    (max width max-width))]
+             [(false? last-word)
+              ; first word is too long, advance line and try again
+              (define new-ypos (+ ypos to-next-y))
+              (layout-goto-new-line new-ypos)
+              (loop remaining-words
+                    lines
+                    line-start-pos
+                    new-ypos
+                    x
+                    max-width)]
+             [else
+              (define space-available (- total-width layout-left-width layout-right-width))
+              (define space-leftover (- space-available width))
+              (define xpos (+ layout-left-width (/ space-leftover 2)))
+              (define new-ypos ypos)
+              (when (not (empty? remaining-words))
+                (set! new-ypos (+ ypos to-next-y))
+                (layout-goto-new-line new-ypos))
+              (loop remaining-words
+                    (cons (wrapped-line line-start-pos (word-end-pos last-word) xpos ypos width font-height) lines)
+                    (word-end-pos last-word)
+                    new-ypos
+                    (min xpos x)
+                    (max width max-width))]))]
         [(left)
          (let loop ([words (element-words e)]
                     [lines '()]
@@ -973,6 +971,7 @@
             (set!-values (x1 y1 x2 y2) (layout-string e dw y))
             (set-element-cached-text-extent! e (text-extent (- x2 x1) (- y2 y1) 0 0)) 
             ;(printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
+            (printf "layout placed ~a string at (~a,~a)-(~a,~a), cw=~a, xmargin=~a~n" (element-alignment e) x1 y1 x2 y2 cell-width xmargin)
             ;; set position for adding next element
             (when (element-end-of-line e)
               (layout-goto-new-line (next-line-y-pos y1))))
@@ -1529,7 +1528,7 @@
           (let ([rem-layout-width layout-width]
                 [rem-max-width max-width]
                 [rem-min-width min-width])
-            #;(printf "running auto layout algorithm~n")
+            (printf "running auto layout algorithm~n")
             ;; first set any fixed width columns
             (for ([col (in-gvector columns)])
               (define fw (column-fixed-width col))
@@ -1587,7 +1586,7 @@
                (for ([col (in-gvector columns)])
                  (when (= (column-width col) 0)
                    (define d (- (column-max-width col) (column-min-width col)))
-                   #;(printf "setting colmun width to ~a~n" (+ (column-min-width col) (floor (* d W-over-D))))
+                   (printf "setting colmun width to ~a~n" (+ (column-min-width col) (floor (* d W-over-D))))
                    (set-column-width! col (+ (column-min-width col) (floor (* d W-over-D))))))])))
       
       ;; set each cell's width to its column's width and run layout in each cell
