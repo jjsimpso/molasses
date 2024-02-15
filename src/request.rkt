@@ -92,7 +92,7 @@
   (cond
     [(string-prefix? selector "URL:")
      (string-trim selector "URL:" #:right? #f)]
-    [(string=? selector "GET /")
+    [(string-prefix? selector "GET /")
      (string-append "http://" (request-host req) ":" (number->string (request-port req)))]
     [else
      selector]))
