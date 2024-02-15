@@ -939,7 +939,7 @@
             [(resizable)
              (define-values (dw dh) (get-drawable-size))
              (define space-available (- dw layout-left-width (unaligned-or-center-width) layout-right-width))
-             (printf "handle resizable: dw=~a, space-available=~a~n" dw space-available)
+             (printf "handle resizable: dw=~a, space-available=~a, xmargin=~a~n" dw space-available xmargin)
              (define w (* space-available (/ (cdr prop) 100.0)))
              (define h (get-element-height e))
              (send snip resize w h)]))))
@@ -1320,6 +1320,8 @@
                 0
                 y)))
 
+      (printf "scroll-to ~a~n" y)
+      
       (when (not (= new-scroll-pos old-scroll-pos))
         (when smooth
           (let* ([step-size (/ (- new-scroll-pos old-scroll-pos) smooth-scroll-steps)]
@@ -1375,7 +1377,16 @@
       (if (and visible-elements (dlist-head-value visible-elements))
           (element-snip (dlist-head-value visible-elements))
           #f))
-          
+
+    (define/public (find-anchor-position name)
+      (printf "find-anchor-position: name=~a~n" name)
+      (for*/first ([e (in-dlist elements)]
+                   [prop (in-list (element-properties e))]
+                   #:when (and (eq? (car prop) 'anchor)
+                               (equal? (cdr prop) name)))
+        (printf "find-anchor-position ~a~n" prop)
+        (element-ypos e)))
+    
     ;; add element e to the end of the elements dlist and update visible elements
     (define (append-element e)
       (define-values (dw dh) (get-drawable-size))
@@ -1392,14 +1403,14 @@
       (append-element e))
     
     ;; append a string using the default style and alignment (or provided style and alignment)
-    (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned])
+    (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned] [properties '()])
       (case mode
         [(plaintext wrapped)
          ;; for text modes, insert each line in string as an element
          ;; default to adding newline after each line/element
          (define p (open-input-string s))
          (for ([line (in-lines p)])
-           (define e (element line end-of-line alignment '()))
+           (define e (element line end-of-line alignment properties))
            (set-element-text-style! e (or style default-style))
            (place-element e place-x place-y)
            (define-values (vx vy) (get-virtual-size))
@@ -1407,7 +1418,7 @@
            (append-element e))]
         [else
          (printf "append-string ~a, eol:~a~n" s end-of-line)
-         (define e (element s end-of-line alignment '()))
+         (define e (element s end-of-line alignment properties))
          (set-element-text-style! e (or style default-style))
          (place-element e place-x place-y)
          (define-values (vx vy) (get-virtual-size))
@@ -1556,7 +1567,7 @@
   (init-styles (send canvas get-style-list))
   (send canvas set-canvas-background canvas-bg-color)
 
-  (define layout-test #f)
+  (define layout-test 'text2)
   (if layout-test
       (send canvas set-mode 'layout)
       (send canvas set-mode 'wrapped))
@@ -1589,6 +1600,7 @@
            (send canvas append-snip square)]
           
           [(text2)
+           (send canvas append-string "" #f #f 'unaligned (list (cons 'anchor "top")))
            (send canvas append-snip tall-left #f 'left)
            (send canvas append-string "Here is some left aligned text. Here is some left aligned text. Here is some left aligned text." #f #t 'left)
            (send canvas append-string "\n" #f #t 'left)

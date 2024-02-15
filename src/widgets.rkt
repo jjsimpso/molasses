@@ -126,6 +126,9 @@
                           canvas
                           #t
                           #f)
+     (when initial-selection-pos
+       (define y (send canvas find-anchor-position initial-selection-pos))
+       (and y (send canvas scroll-to y)))
      (close-input-port (gopher-response-data-port resp))]
     [(equal? item-type #\I) ; image
      (define img (make-object image-snip%
@@ -1229,7 +1232,7 @@
            ;; TODO display error to user?
            (eprintf "Invalid request protocol!~n")])))
     
-    (define/public (go req)
+    (define/public (go req [initial-selection-pos #f])
       (define (download-only-type? type)
         (or (equal? type #\5)
             (equal? type #\9)))
@@ -1260,6 +1263,8 @@
          ; URL, probably http, open in external browser
          (eprintf "opening ~a in browser~n" (gopher-url-request->url req))
          (send-url (gopher-url-request->url req) #t)]
+        [(equal? (request-type req) #\h) ; html file
+         (load-page req initial-selection-pos)]
         [else
          (load-page req)]))
 

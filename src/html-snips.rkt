@@ -196,7 +196,7 @@
 (define (html-link-mixin %)
   (class %
     (init-field [url ""]
-                [base-url ""]
+                [base-req #f]
                 [browser-canvas #f])
     (inherit get-flags set-flags)
     (super-new)
@@ -241,26 +241,44 @@
           #\h))
 
     (define (follow-link)
-      (eprintf "following html link: ~a~n" url)
-      (if (regexp-match #px"^(\\w+://).*" url)
-          (cond
-            [(string-prefix? url "gemini://")
-             (send browser-canvas go (url->request url))]
-            [(string-prefix? url "gopher://")
-             (send browser-canvas go (url->request url))]
-            [(or (string-prefix? url "http://")
-                 (string-prefix? url "https://"))
-             (send-url url #t)])
-          ;; handle partial URLs
-          (let ([base-req (url->request base-url)])
-            (send browser-canvas go
-                  (struct-copy request
-                               base-req
-                               [type (guess-type-from-filename url)]
-                               [path/selector
-                                (if (equal? (string-ref url 0) #\/)
-                                    url
-                                    (replace-final-path-element (request-path/selector base-req) url))])))))
+      (define (request-from-partial-url url)
+        (struct-copy request
+                     base-req
+                     [type (guess-type-from-filename url)]
+                     [path/selector
+                      (if (equal? (string-ref url 0) #\/)
+                          url
+                          (replace-final-path-element (request-path/selector base-req) url))]))
+      
+      (eprintf "following html link: ~a, base-req path=~a~n" url (request-path/selector base-req))
+      (cond
+        [(string-contains? url "#")
+         (define base-file (last (string-split (request-path/selector base-req) "/")))
+         (define link-file (string-trim url #px"#.+" #:left? #f))
+         (define anchor (string-trim url #px".*#" #:right? #f))
+         (if (or (equal? (string-ref url 0) #\#)
+                 (equal? base-file link-file))
+             ;; jump to anchor location on current page
+             (let ([y (send browser-canvas find-anchor-position anchor)])
+               (and y (send browser-canvas scroll-to y)))
+             (send browser-canvas go
+                   (struct-copy request
+                     base-req
+                     [type #\h]
+                     [path/selector link-file])
+                   anchor))]
+        [(regexp-match #px"^(\\w+://).*" url)
+         (cond
+           [(string-prefix? url "gemini://")
+            (send browser-canvas go (url->request url))]
+           [(string-prefix? url "gopher://")
+            (send browser-canvas go (url->request url))]
+           [(or (string-prefix? url "http://")
+                (string-prefix? url "https://"))
+            (send-url url #t)])]
+        [else
+         ;; handle partial URLs
+         (send browser-canvas go (request-from-partial-url url))]))
 
     (define/override (adjust-cursor dc x y editorx editory event)
       (when (send event entering?)

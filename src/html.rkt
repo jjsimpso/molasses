@@ -185,7 +185,7 @@
       void)
     (define/public (finalize-table layout-width)
       void)
-    (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned])
+    (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned] [properties '()])
       void)
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       void)))
@@ -221,6 +221,12 @@
     (if (not (is-a? (current-container) null-container%))
         (send/apply (current-container) append-snip s `(,@rest-args))
         (send/apply canvas append-snip s `(,@rest-args))))
+
+  (define (append-anchor name)
+    (when name
+      ;; create an empty string to serve as the anchor point
+      (printf "************ ~a~n" (list (cons 'anchor name)))
+      (append-string "" #f #f current-alignment (list (cons 'anchor name)))))
   
   (define (last-element-eol?)
     (send canvas last-element-eol?))
@@ -395,7 +401,7 @@
                   (set! current-alignment prev-alignment))))
         (list insert-newline)))
   
-  (define (handle-img node [url #f] [base-url #f])
+  (define (handle-img node [url #f] [base-req #f] [name-value #f])
     (when img-ok?
       (define src-value (sxml:attr-safer node 'src))
       (define request (send canvas get-current-request))
@@ -403,10 +409,10 @@
         (define align (align-attr node current-alignment))
         (define bm (load-new-bitmap src-value request))
         (define snip (if url
-                         (new html-link-img-snip% (url url) (base-url base-url) (browser-canvas canvas))
+                         (new html-link-img-snip% (url url) (base-req base-req) (browser-canvas canvas))
                          (make-object image-snip%)))
         (send snip set-bitmap bm)
-        (append-snip snip #f align))))
+        (append-snip snip #f align (if name-value `((anchor . ,name-value)) '())))))
   
   ;; handle each element based on the element type
   ;; return a list of functions to call when closing the element
@@ -498,12 +504,14 @@
            [(a)
             (define content (sxml:content node))
             (define href-value (sxml:attr-safer node 'href))
-            (define base-url (request->url (send canvas get-current-request)))
+            (define name-value (sxml:attr-safer node 'name))
+            (define base-req (send canvas get-current-request))
             (if href-value
                 ;; create link
                 (cond
                   [(empty? content)
-                   (printf "unhandled href, no content~n")]
+                   (printf "unhandled href, no content~n")
+                   (append-anchor name-value)]
                   [(non-empty-string? (car content))
                    (printf "handle text href ~a~n" content)
                    (define text (car content))
@@ -512,18 +520,21 @@
                    (send style-copy set-delta-foreground current-link-color)
                    (send style-copy set-delta 'change-underline #t)
                    (define style (send style-list find-or-create-style (current-style) style-copy))
-                   (define link-snip (new html-link-snip% (url href-value) (base-url base-url) (browser-canvas canvas)))
+                   (define link-snip (new html-link-snip% (url href-value) (base-req base-req) (browser-canvas canvas)))
                    (send link-snip set-style style)
                    (send link-snip insert text (string-length text))
-                   (append-snip link-snip #f current-alignment)]
+                   (append-snip link-snip #f current-alignment (if name-value (list (cons 'anchor name-value)) '()))]
                   [((ntype-names?? '(img)) (car content))
                    (printf "handle img href~n")
-                   (handle-img (car content) href-value base-url)]
+                   (handle-img (car content) href-value base-req name-value)]
                   [else
-                   (printf "unhandled href~n")
+                   ;; we don't actually create a link here but we do add the child elements
+                   (append-anchor name-value)
                    (loop content)])
                 ;; handle non-link content
-                (loop content))]
+                (begin
+                  (append-anchor name-value)
+                  (loop content)))]
            [(table)
             (define border (or (attr->number node 'border) 0))
             (define cellspacing (or (attr->number node 'cellspacing) 2))
