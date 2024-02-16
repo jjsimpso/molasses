@@ -25,6 +25,8 @@
 
 (provide render-html-to-text)
 
+(define font-size-vec #(7/12 5/6 1.0 1.125 1.5 2.0 3.0))  ; 7 10 12 13.5 18 24 36
+
 (define delta:subscript
   (let ([d (make-object style-delta%)])
     (send d set-alignment-on 'bottom)
@@ -371,7 +373,6 @@
          (lambda () void)])))
   
   (define (handle-font-attributes node)
-    (define font-size-vec #(7/12 5/6 1.0 1.125 1.5 2.0 3.0))  ; 7 10 12 13.5 18 24 36
     (define size-value (sxml:attr-safer node 'size))
     (define color-value (sxml:attr-safer node 'color))
 
@@ -390,7 +391,21 @@
           (list (lambda ()
                   (set! current-font-size prev-size))))
         '()))
-  
+
+  (define (handle-big)
+    (define prev-size current-font-size)
+    (set! current-font-size (min 7 (add1 current-font-size)))
+    (send (current-style-delta) set-size-mult (vector-ref font-size-vec (sub1 current-font-size)))
+    (list (lambda ()
+            (set! current-font-size prev-size))))
+
+  (define (handle-small)
+    (define prev-size current-font-size)
+    (set! current-font-size (max 1 (sub1 current-font-size)))
+    (send (current-style-delta) set-size-mult (vector-ref font-size-vec (sub1 current-font-size)))
+    (list (lambda ()
+            (set! current-font-size prev-size))))
+
   (define (handle-paragraph-attributes node)
     (define value (sxml:attr-safer node 'align))
     (if value
@@ -464,6 +479,10 @@
        (handle-body-attributes node)]
       [(font)
        (handle-font-attributes node)]
+      [(big)
+       (handle-big)]
+      [(small)
+       (handle-small)]
       [else
        '()]))
   
