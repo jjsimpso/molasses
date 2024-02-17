@@ -58,11 +58,17 @@
                                  selector
                                  "I"
                                  (request-port request)))
-  (define new-bitmap (make-object bitmap%
-                                (gopher-response-data-port response)
-                                'unknown))
-  (close-input-port (gopher-response-data-port response))
-  new-bitmap)
+  (with-handlers
+    ([exn:fail?
+      (lambda (exn)
+        (close-input-port (gopher-response-data-port response))
+        ; hack to generate the 'missing image' bitmap. don't know how to reference this bitmap directly.
+        (make-object bitmap% "/invalid/path/a40aiduuhsth3"))])
+    (define new-bitmap (make-object bitmap%
+                                    (gopher-response-data-port response)
+                                    'unknown))
+    (close-input-port (gopher-response-data-port response))
+    new-bitmap))
 
 #;(define (join-strings c)
   (let loop ([accum-s (string-normalize-spaces (car c))]
