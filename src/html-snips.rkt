@@ -265,7 +265,10 @@
                    (struct-copy request
                      base-req
                      [type #\h]
-                     [path/selector link-file])
+                     [path/selector
+                      (if (equal? (string-ref link-file 0) #\/)
+                          link-file
+                          (replace-final-path-element (request-path/selector base-req) link-file))])
                    anchor))]
         [(regexp-match #px"^(\\w+://).*" url)
          (cond
