@@ -1,0 +1,9 @@
+This is a local copy of the html-parsing package by Neil Van Dyke. It
+is licensed under LGPLv3. See official site at:
+
+http://www.neilvandyke.org/racket/html-parsing/.
+
+This copy is branched from version 11:0 and has been modified to
+better support 1990s html. These changes could potentially cause
+problems with modern HTML. Once development stabilizes, the plan is to
+see if these changes can be accepted into the official package.

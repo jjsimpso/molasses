@@ -4,13 +4,13 @@
            xml
            net/url)
 
-(require html-parsing
-         (except-in html make-object)
+(require (except-in html make-object)
          xml
          sxml
          net/url)
 
-(require "config.rkt"
+(require "third-party/html-parsing/html-parsing.rkt"
+         "config.rkt"
          "html-snips.rkt"
          "table.rkt"
          "gopher.rkt"
