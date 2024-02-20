@@ -266,13 +266,13 @@
   (define (is-block-element? elem)
     ;; treat head, title, and body as blocks even though they aren't technically block elements
     ;; head and title need special treatment but body currently doesn't
-    (define block-elements '(head title body h1 h2 h3 h4 h5 h6 p pre center))
+    (define block-elements '(head title body h1 h2 h3 h4 h5 h6 p pre div center))
     (memq elem block-elements))
 
   ;; defines elements that create paragraphs and require a newline or two after closing
   ;; may eventually get rid of this function
   (define (is-paragraph-element? elem)
-    (define para-elements '(h1 h2 h3 h4 h5 h6 p pre center))
+    (define para-elements '(h1 h2 h3 h4 h5 h6 p pre))
     (memq elem para-elements))
 
   (define (is-text-element? elem)
@@ -421,7 +421,16 @@
                 (lambda ()
                   (set! current-alignment prev-alignment))))
         (list insert-newline)))
-  
+
+  (define (handle-div-attributes node)
+    (define value (sxml:attr-safer node 'align))
+    (if value
+        (let ([prev-alignment current-alignment])
+          (set! current-alignment (align-attr node current-alignment))
+          (list (lambda ()
+                  (set! current-alignment prev-alignment))))
+        '()))
+
   (define (handle-img node [url #f] [base-req #f] [name-value #f])
     (when img-ok?
       (define src-value (sxml:attr-safer node 'src))
@@ -474,6 +483,9 @@
        (start-new-paragraph)
        (send (current-style-delta) set-delta 'change-family 'modern)
        (list insert-newline)]
+      [(div)
+       (start-new-paragraph)
+       (handle-paragraph-attributes node)]
       [(center)
        (start-new-paragraph)
        (define prev-alignment current-alignment)
@@ -609,7 +621,11 @@
             (define width (width-attr node))
             (define prev-alignment current-alignment)
             ; todo: use value from table, row, or column as default value if present
-            (set! current-alignment (align-attr node 'left))
+            (set! current-alignment
+                  (align-attr node
+                              (if (eq? (sxml:element-name node) 'th)
+                                  'center
+                                  'left)))
             (send (current-container) start-cell #:colspan colspan #:valign valign #:bgcolor bgcolor #:width width)
             ; style could be changed by cell's contents
             (define style-copy (make-object style-delta% 'change-nothing))
@@ -647,7 +663,6 @@
             ;; don't do this for 'center' elements
             (when (is-paragraph-element? (car node))
               (when (and (not (empty? (cdr s)))
-                         (not (eq? (car node) 'center)) ; center elements don't need space below
                          (not (followed-by-newline? (cadr s))))
                 (eprintf "inserting newline after 'paragraph'~n")
                 (insert-newline)))])
