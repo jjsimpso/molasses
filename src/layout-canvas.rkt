@@ -1391,7 +1391,7 @@
     (define (append-element e)
       (define-values (dw dh) (get-drawable-size))
       (dlist-append! elements e)
-      ; send a positive value to for change argument to trigger a check to expand tail of the visible-elements list
+      ; send a positive value for change argument to trigger a check to expand tail of the visible-elements list
       (update-visible-elements! 1 scroll-y (+ scroll-y dh)))
     
     ;; append a snip. snips have their own style
@@ -1417,7 +1417,7 @@
            (update-scrollbars vx vy)
            (append-element e))]
         [else
-         (printf "append-string ~a, eol:~a~n" s end-of-line)
+         (printf "append-string: |~a|, eol:~a~n" s end-of-line)
          (define e (element s end-of-line alignment properties))
          (set-element-text-style! e (or style default-style))
          (place-element e place-x place-y)
@@ -1436,6 +1436,18 @@
           (element-end-of-line last-element)
           ;; true if no elements
           #t))
+
+    ;; last element ends with whitespace
+    (define/public (last-element-ews?)
+      (define last-element
+        (for/or ([e (in-dlist-reverse elements)]
+                 #:when (or (eq? (element-alignment e) 'unaligned)
+                            (eq? (element-alignment e) 'center)))
+          e))
+      (if last-element
+          (or (and (string? (element-snip last-element)) (string-suffix? (element-snip last-element) " "))
+              (element-end-of-line last-element))
+          #f))
     
     (define/public (get-style-list) styles)
 

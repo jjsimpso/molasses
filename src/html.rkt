@@ -9,8 +9,10 @@
          sxml
          net/url)
 
-(require "third-party/html-parsing/html-parsing.rkt"
-         "config.rkt"
+(require "third-party/html-parsing/html-parsing.rkt")
+;(require html-parsing)
+
+(require "config.rkt"
          "html-snips.rkt"
          "table.rkt"
          "gopher.rkt"
@@ -81,7 +83,7 @@
        (string-normalize-spaces accum-s)])))
 
 (define (join-strings c)
-  (string-normalize-spaces (string-join (takef c string?))))
+  (string-normalize-spaces (string-join (takef c string?)) #:trim? #f))
 
 (define (skip-strings c)
   (dropf c string?))
@@ -209,7 +211,6 @@
   (define current-style-delta (make-parameter (make-object style-delta% 'change-nothing)))
   (define current-block (make-parameter #f))
   (define current-container (make-parameter (make-object null-container%)))
-  (define end-text-with-space (make-parameter #f))
   ;; alignment is a special case since it isn't controlled by a style and must be applied to each paragraph
   (define current-alignment 'unaligned)  
   ;; don't use a parameter for link color since it will change so rarely
@@ -238,6 +239,9 @@
   
   (define (last-element-eol?)
     (send canvas last-element-eol?))
+
+  (define (last-element-ews?)
+    (send canvas last-element-ews?))
   
   (define (followed-by-newline? node)
     ;(eprintf "followed-by-newline? ~a~n" node)
@@ -250,7 +254,7 @@
        #f]))
   
   (define (insert-newline)
-    ;(eprintf "inserting newline~n")
+    (eprintf "inserting newline~n")
     (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
     (append-string "\n" style #t current-alignment))
 
@@ -279,22 +283,6 @@
     (define text-elements '(a b u i big font))
     (memq elem text-elements))
 
-  (define (next-element-is-text? s)
-    (define following (cdr s))
-    (define next (and (not (empty? following)) (car following)))
-    (define next-element (and next (sxml:element-name next)))
-    ;(eprintf " next-element=~a~n" next-element)
-    (and next-element (is-text-element? next-element)))
-
-  (define (next-element-is-string? s)
-    (define following (cdr s))
-    (and (not (empty? following)) (string? (car following))))
-    
-  (define (append-space-if-needed s text)
-    (if (or (end-text-with-space) (next-element-is-text? s))
-        (string-append text " ")
-        text))
-  
   (define (update-block current-block elem)
     (if (is-block-element? elem)
         elem
@@ -641,15 +629,12 @@
             (define style-copy (make-object style-delta% 'change-nothing))
             (send style-copy copy (current-style-delta))
             (parameterize ([current-style-delta style-copy]
-                           [end-text-with-space (and (is-text-element? (sxml:element-name node))
-                                                     (or (next-element-is-string? s)
-                                                         (next-element-is-text? s)))]
                            [current-block (update-block (current-block) (car node))])
               ;; handle the element. returns a list of functions to call when closing the tag
               ;; will also update the current style
               (define close-tag-funcs (handle-element node))
 
-              (eprintf "handling ~a,etws=~a~n" (car node) (end-text-with-space))
+              (eprintf "handling ~a~n" (car node))
 
               ;; recurse into the element
               (loop (cdr node))
@@ -676,12 +661,15 @@
             (append-string node style (string-suffix? node "\n"))
             #;(eprintf "pre: ~aEND~n" node)]
            [else
-            (define text (string-normalize-spaces node))
-            (when (non-empty-string? text)
-              (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
-              (append-string (append-space-if-needed s text) style #f current-alignment)
-              #;(eprintf "~a,~a paragraph: ~a~n" (current-block) current-alignment text))
-            (when (not (non-empty-string? text))
+            ;; attempt to normalize spacing when one string ends with whitespace and the following
+            ;; string starts with whitespace. skip strings that are whitespace only.
+            (define text (if (regexp-match #px"^\\s+$" node)
+                             ""
+                             (string-trim node #:right? #f #:left? (last-element-ews?))))
+            (if (non-empty-string? text)
+              (let ([style (send style-list find-or-create-style (current-style) (current-style-delta))])
+                (append-string text style #f current-alignment)
+                #;(eprintf "~a,~a paragraph: ~a~n" (current-block) current-alignment text))
               (eprintf "skipped newline char~n"))])
          (loop (cdr s))]
         #;[(attr-list? node)
