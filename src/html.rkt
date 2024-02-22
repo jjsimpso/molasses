@@ -516,7 +516,7 @@
               (if (eq? (car width-property) 'width-percent)
                   (cons 'resizable (cdr width-property))
                   #f))
-            (define align (align-attr node current-alignment))
+            (define align (align-attr node 'center))
             (when (not (last-element-eol?))
               (insert-newline))
             (append-snip (new horz-line-snip% [w width-pixels])
