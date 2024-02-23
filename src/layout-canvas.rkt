@@ -426,21 +426,21 @@
                   (pop-layout-list (cdr ll) (- lwidth w (if (wrapped-line? e) 0 snip-xmargin)) new-y)
                   (values ll lwidth))))))
 
+    (define (bottom-edge-of-elements ll)
+      (if (not (empty? ll))
+          (+ (get-element-y (car ll))
+             (get-element-height (car ll)))
+          (error "empty list")))
+    
+    ;; center and unaligned elements should be considered to all be on one line
+    ;; the bottom edge is the bottom edge of the entire line and not just the
+    ;; last element.
+    (define (bottom-edge-of-line ll)
+      (apply max (map (lambda (e) (+ (get-element-y e)
+                                     (get-element-height e)))
+                      ll)))
+    
     (define (next-line-y-pos original)
-      (define (bottom-edge-of-elements ll)
-        (if (not (empty? ll))
-            (+ (get-element-y (car ll))
-               (get-element-height (car ll)))
-            (error "empty list")))
-
-      ;; center and unaligned elements should be considered to all be on one line
-      ;; the bottom edge is the bottom edge of the entire line and not just the
-      ;; last element.
-      (define (bottom-edge-of-line ll)
-        (apply max (map (lambda (e) (+ (get-element-y e)
-                                 (get-element-height e)))
-                  ll)))
-      
       (+ snip-ymargin
        (cond
          [(not (empty? layout-unaligned-elements))
@@ -497,7 +497,15 @@
       (define font (send (get-style e) get-font))
       (define-values (font-width font-height font-descent font-space) (send dc get-text-extent "a" font)) ; only need height, so string doesn't matter
       (define height (- font-height font-descent))
-      (define to-next-y (+ font-height snip-ymargin))
+      (define to-next-y (+ font-height 1))
+      ;; unaligned and center elements must consider the lowest point on the line
+      ;; some text on the line could be in a different font and have a lower descent
+      ;; from the baseline
+      (define (calc-next-line-y y ll)
+        (if (empty? ll)
+            (+ y to-next-y)
+            (max (+ y to-next-y)
+                 (+ (bottom-edge-of-line ll) 1))))
       
       (case (element-alignment e)
         [(right)
@@ -507,14 +515,14 @@
                     [ypos y]
                     [x (- total-width layout-right-width)]
                     [max-width 0])
-           (printf "loop right: start=~a, ypos=~a, x=~a, max-width=~a~n" line-start-pos ypos x max-width)
+           ;(printf "loop right: start=~a, ypos=~a, x=~a, max-width=~a~n" line-start-pos ypos x max-width)
            (define-values (last-word width remaining-words)
              (layout-remainder-of-line words (- total-width layout-left-width (unaligned-or-center-width) layout-right-width)))
            ;(printf " last-word=~a, width=~a, remaining=~a~n" last-word width remaining-words)
            (cond
              [(and (false? last-word) (empty? remaining-words))
               ; final iteration
-              (printf " final iteration~n")
+              ;(printf " final iteration~n")
               ;; add last line to layout element list
               (set! layout-right-elements (cons (car lines) layout-right-elements))
               (set! layout-right-width (+ layout-right-width (wrapped-line-w (car lines))))
@@ -592,7 +600,7 @@
              [(and (not (empty? layout-center-elements)) (false? last-word))
               ; there is a partial line of centered elements
               ; first word is too long, advance line and try again
-              (define new-ypos (+ ypos to-next-y))
+              (define new-ypos (calc-next-line-y ypos layout-center-elements))
               (layout-goto-new-line new-ypos)
               (loop remaining-words
                     lines
@@ -611,7 +619,7 @@
               (define xpos (+ layout-left-width margin layout-center-width))
               (define new-ypos ypos)
               (when (not (empty? remaining-words))
-                (set! new-ypos (+ ypos to-next-y))
+                (set! new-ypos (calc-next-line-y ypos layout-center-elements))
                 (layout-goto-new-line new-ypos))
               (loop remaining-words
                     (cons (wrapped-line line-start-pos (word-end-pos last-word) xpos ypos width font-height) lines)
@@ -625,7 +633,7 @@
               (define xpos 0)
               (define new-ypos ypos)
               (when (not (empty? (cdr remaining-words)))
-                (set! new-ypos (+ ypos to-next-y))
+                (set! new-ypos (calc-next-line-y ypos layout-center-elements))
                 (layout-goto-new-line new-ypos))
               (loop (cdr remaining-words)
                     (cons (wrapped-line line-start-pos (word-end-pos (car remaining-words)) xpos ypos (word-width (car remaining-words)) font-height) lines)
@@ -635,7 +643,7 @@
                     (max width max-width))]
              [(false? last-word)
               ; first word is too long, advance line and try again
-              (define new-ypos (+ ypos to-next-y))
+              (define new-ypos (calc-next-line-y ypos layout-center-elements))
               (layout-goto-new-line new-ypos)
               (loop remaining-words
                     lines
@@ -649,7 +657,7 @@
               (define xpos (+ layout-left-width (/ space-leftover 2)))
               (define new-ypos ypos)
               (when (not (empty? remaining-words))
-                (set! new-ypos (+ ypos to-next-y))
+                (set! new-ypos (calc-next-line-y ypos layout-center-elements))
                 (layout-goto-new-line new-ypos))
               (loop remaining-words
                     (cons (wrapped-line line-start-pos (word-end-pos last-word) xpos ypos width font-height) lines)
@@ -717,6 +725,7 @@
                     (max width max-width))]))]
         [(unaligned)
          (define baseline (+ y height))
+         ;(printf "unaligned baseline=~a/~a, y=~a, height=~a, font-height=~a~n" layout-baseline-pos baseline y height font-height) 
          (when (> baseline layout-baseline-pos)
              (when (not (empty? layout-unaligned-elements))
                (define diff (- baseline layout-baseline-pos))
@@ -752,7 +761,7 @@
               (define xpos 0)
               (define new-ypos ypos)
               (when (not (empty? (cdr remaining-words)))
-                (set! new-ypos (+ ypos to-next-y))
+                (set! new-ypos (calc-next-line-y ypos layout-unaligned-elements))
                 (layout-goto-new-line new-ypos))
               (loop (cdr remaining-words)
                     (cons (wrapped-line line-start-pos (word-end-pos (car remaining-words)) xpos ypos (word-width (car remaining-words)) font-height) lines)
@@ -762,7 +771,7 @@
                     (max width max-width))]
              [(false? last-word)
               ; first word is too long, advance line and try again
-              (define new-ypos (+ ypos to-next-y))
+              (define new-ypos (calc-next-line-y ypos layout-unaligned-elements))
               (layout-goto-new-line new-ypos)
               (loop remaining-words
                     lines
@@ -774,7 +783,7 @@
               (define xpos (+ layout-left-width layout-unaligned-width))
               (define new-ypos ypos)
               (when (not (empty? remaining-words))
-                (set! new-ypos (+ ypos to-next-y))
+                (set! new-ypos (calc-next-line-y ypos layout-unaligned-elements))
                 (layout-goto-new-line new-ypos))
               (loop remaining-words
                     (cons (wrapped-line line-start-pos (word-end-pos last-word) xpos ypos width font-height) lines)
@@ -1023,7 +1032,7 @@
                (calc-word-extents e))
              (set!-values (x1 y1 x2 y2) (layout-string e dw y))
              (set-element-cached-text-extent! e (text-extent (- x2 x1) (- y2 y1) 0 0)) 
-             (printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
+             (printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una/center:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width (unaligned-or-center-width) layout-right-width)
              ;; set position for adding next element
              (when (element-end-of-line e)
                  (layout-goto-new-line (next-line-y-pos y1)))]
