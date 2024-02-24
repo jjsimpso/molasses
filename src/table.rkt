@@ -435,21 +435,21 @@
                   (pop-layout-list (cdr ll) (- lwidth w (if (wrapped-line? e) 0 snip-xmargin)) new-y)
                   (values ll lwidth))))))
 
-    (define (next-line-y-pos original)
-      (define (bottom-edge-of-elements ll)
-        (if (not (empty? ll))
-            (+ (get-element-y (car ll))
-               (get-element-height (car ll)))
-            (error "empty list")))
+    (define (bottom-edge-of-elements ll)
+      (if (not (empty? ll))
+          (+ (get-element-y (car ll))
+             (get-element-height (car ll)))
+          (error "empty list")))
+    
+    ;; center and unaligned elements should be considered to all be on one line
+    ;; the bottom edge is the bottom edge of the entire line and not just the
+    ;; last element.
+    (define (bottom-edge-of-line ll)
+      (apply max (map (lambda (e) (+ (get-element-y e)
+                                     (get-element-height e)))
+                      ll)))
 
-      ;; center and unaligned elements should be considered to all be on one line
-      ;; the bottom edge is the bottom edge of the entire line and not just the
-      ;; last element.
-      (define (bottom-edge-of-line ll)
-        (apply max (map (lambda (e) (+ (get-element-y e)
-                                 (get-element-height e)))
-                  ll)))
-      
+    (define (next-line-y-pos original)
       (+ snip-ymargin
        (cond
          [(not (empty? layout-unaligned-elements))
@@ -506,7 +506,15 @@
       (define font (send (get-style e) get-font))
       (define-values (font-width font-height font-descent font-space) (send dc get-text-extent "a" font)) ; only need height, so string doesn't matter
       (define height (- font-height font-descent))
-      (define to-next-y (+ font-height snip-ymargin))
+      (define to-next-y (+ font-height 1))
+      ;; unaligned and center elements must consider the lowest point on the line
+      ;; some text on the line could be in a different font and have a lower descent
+      ;; from the baseline
+      (define (calc-next-line-y y ll)
+        (if (empty? ll)
+            (+ y to-next-y)
+            (max (+ y to-next-y)
+                 (+ (bottom-edge-of-line ll) 1))))
 
       ;(printf "layout-string: tw=~a, y=~a~n" total-width y)
       
@@ -603,7 +611,7 @@
              [(and (not (empty? layout-center-elements)) (false? last-word))
               ; there is a partial line of centered elements
               ; first word is too long, advance line and try again
-              (define new-ypos (+ ypos to-next-y))
+              (define new-ypos (calc-next-line-y ypos layout-center-elements))
               (layout-goto-new-line new-ypos)
               (loop remaining-words
                     lines
@@ -622,7 +630,7 @@
               (define xpos (+ layout-left-width margin layout-center-width))
               (define new-ypos ypos)
               (when (not (empty? remaining-words))
-                (set! new-ypos (+ ypos to-next-y))
+                (set! new-ypos (calc-next-line-y ypos layout-center-elements))
                 (layout-goto-new-line new-ypos))
               (loop remaining-words
                     (cons (wrapped-line line-start-pos (word-end-pos last-word) xpos ypos width font-height) lines)
@@ -636,7 +644,7 @@
               (define xpos 0)
               (define new-ypos ypos)
               (when (not (empty? (cdr remaining-words)))
-                (set! new-ypos (+ ypos to-next-y))
+                (set! new-ypos (calc-next-line-y ypos layout-center-elements))
                 (layout-goto-new-line new-ypos))
               (loop (cdr remaining-words)
                     (cons (wrapped-line line-start-pos (word-end-pos (car remaining-words)) xpos ypos (word-width (car remaining-words)) font-height) lines)
@@ -646,7 +654,7 @@
                     (max width max-width))]
              [(false? last-word)
               ; first word is too long, advance line and try again
-              (define new-ypos (+ ypos to-next-y))
+              (define new-ypos (calc-next-line-y ypos layout-center-elements))
               (layout-goto-new-line new-ypos)
               (loop remaining-words
                     lines
@@ -660,7 +668,7 @@
               (define xpos (+ layout-left-width (/ space-leftover 2)))
               (define new-ypos ypos)
               (when (not (empty? remaining-words))
-                (set! new-ypos (+ ypos to-next-y))
+                (set! new-ypos (calc-next-line-y ypos layout-center-elements))
                 (layout-goto-new-line new-ypos))
               (loop remaining-words
                     (cons (wrapped-line line-start-pos (word-end-pos last-word) xpos ypos width font-height) lines)
@@ -763,7 +771,7 @@
               (define xpos 0)
               (define new-ypos ypos)
               (when (not (empty? (cdr remaining-words)))
-                (set! new-ypos (+ ypos to-next-y))
+                (set! new-ypos (calc-next-line-y ypos layout-unaligned-elements))
                 (layout-goto-new-line new-ypos))
               (loop (cdr remaining-words)
                     (cons (wrapped-line line-start-pos (word-end-pos (car remaining-words)) xpos ypos (word-width (car remaining-words)) font-height) lines)
@@ -773,7 +781,7 @@
                     (max width max-width))]
              [(false? last-word)
               ; first word is too long, advance line and try again
-              (define new-ypos (+ ypos to-next-y))
+              (define new-ypos (calc-next-line-y ypos layout-unaligned-elements))
               (layout-goto-new-line new-ypos)
               (loop remaining-words
                     lines
@@ -785,7 +793,7 @@
               (define xpos (+ layout-left-width layout-unaligned-width))
               (define new-ypos ypos)
               (when (not (empty? remaining-words))
-                (set! new-ypos (+ ypos to-next-y))
+                (set! new-ypos (calc-next-line-y ypos layout-unaligned-elements))
                 (layout-goto-new-line new-ypos))
               (loop remaining-words
                     (cons (wrapped-line line-start-pos (word-end-pos last-word) xpos ypos width font-height) lines)
