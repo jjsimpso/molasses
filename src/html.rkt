@@ -133,10 +133,28 @@
                  (string->number (substring c-string 2 4) 16)
                  (string->number (substring c-string 4 6) 16))]
     [else
-     (define named-color (send the-color-database find-color c-string))
-     (if named-color
-         named-color
-         (make-color 16 16 16))]))
+     (match c-string
+       [(regexp "(?i:black)")   (make-color #x0 #x0 #x0)]
+       [(regexp "(?i:silver)")  (make-color #xC0 #xC0 #xC0)]
+       [(regexp "(?i:gray)")    (make-color #x80 #x80 #x80)]
+       [(regexp "(?i:white)")   (make-color #xFF #xFF #xFF)]
+       [(regexp "(?i:maroon)")  (make-color #x80 #x0 #x0)]
+       [(regexp "(?i:red)")     (make-color #xFF #x0 #x0)]
+       [(regexp "(?i:purple)")  (make-color #x80 #x0 #x80)]
+       [(regexp "(?i:fuschia)") (make-color #xFF #x0 #xFF)]
+       [(regexp "(?i:green)")   (make-color #x0 #x80 #x0)]
+       [(regexp "(?i:lime)")    (make-color #x0 #xFF #x0)]
+       [(regexp "(?i:olive)")   (make-color #x80 #x80 #x0)]
+       [(regexp "(?i:yellow)")  (make-color #xFF #xFF #x0)]
+       [(regexp "(?i:navy)")    (make-color #x0 #x0 #x80)]
+       [(regexp "(?i:blue)")    (make-color #x0 #x0 #xFF)]
+       [(regexp "(?i:teal)")    (make-color #x0 #x80 #x80)]
+       [(regexp "(?i:aqua)")    (make-color #x0 #xFF #xFF)]
+       [_
+        (define named-color (send the-color-database find-color c-string))
+        (if named-color
+            named-color
+            (make-color 16 16 16))])]))
 
 ;; read the font size string and return a new font size
 (define (parse-font-size size-string cur-size)
