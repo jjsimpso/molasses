@@ -896,6 +896,8 @@ like Kiselyov's SSAX."))
               (h4       . ,h-elem-parents)
               (h5       . ,h-elem-parents)
               (h6       . ,h-elem-parents)
+              ;; in netscape hr seems to close text level tags like font, etc.
+              (hr       . (blockquote body center details div html li pre td th))
               (isindex  . (head))
               (li       . (dir menu ol ul))
               (meta     . (head))
