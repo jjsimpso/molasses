@@ -643,6 +643,9 @@
             (send (current-container) end-cell)
             (set! current-alignment prev-alignment)
             (printf "end table cell~n")]
+           [(script style meta link applet form isindex)
+            ;; skip element
+            void]
            [else
             (define style-copy (make-object style-delta% 'change-nothing))
             (send style-copy copy (current-style-delta))
