@@ -1106,6 +1106,34 @@
       (set-element-text-style! e (or style default-style))
       (initial-place-element e place-x place-y)
       (dlist-append! elements e))
+
+    (define (find-last-element [alignments '(unaligned center)])
+      ;; the end-of-line flag is only relevant for unaligned or centered elements
+      (for/or ([e (in-dlist-reverse elements)]
+               #:when (memq (element-alignment e) alignments))
+        e))
+
+    (define/public (last-element-eol?)
+      (define last-element (find-last-element))
+      (if last-element
+          (element-end-of-line last-element)
+          ;; true if no elements
+          #t))
+
+    ;; last element ends with whitespace
+    (define/public (last-element-ews?)
+      (define last-element (find-last-element))
+      (if last-element
+          (or (and (string? (element-snip last-element)) (string-suffix? (element-snip last-element) " "))
+              (element-end-of-line last-element))
+          #f))
+
+    (define/public (set-last-element-eol)
+      (define last-element (find-last-element))
+      (when (and last-element (not (element-end-of-line last-element)))
+        (set-element-end-of-line! last-element #t)
+        (layout-goto-new-line (next-line-y-pos (element-ypos last-element)))))
+
 ))
 
 (define table-snip%
@@ -1677,6 +1705,19 @@
       (when c
         (send c append-string s style end-of-line alignment)))
 
+    (define/public (last-element-eol?)
+      (define c (current-cell))
+      (when c
+        (send c last-element-eol?)))
+
+    (define/public (last-element-ews?)
+      (define c (current-cell))
+      (when c
+        (send c last-element-ews?)))
+
+    (define/public (set-last-element-eol)
+      void)
+    
     ))
 
 (module+ main

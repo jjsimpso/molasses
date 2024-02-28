@@ -256,10 +256,14 @@
       (append-string "" #f #f current-alignment (list (cons 'anchor name)))))
   
   (define (last-element-eol?)
-    (send canvas last-element-eol?))
+    (if (not (is-a? (current-container) null-container%))
+        (send (current-container) last-element-eol?)
+        (send canvas last-element-eol?)))
 
   (define (last-element-ews?)
-    (send canvas last-element-ews?))
+    (if (not (is-a? (current-container) null-container%))
+        (send (current-container) last-element-ews?)
+        (send canvas last-element-ews?)))
   
   (define (followed-by-newline? node)
     ;(eprintf "followed-by-newline? ~a~n" node)
@@ -631,7 +635,7 @@
                   (align-attr node
                               (if (eq? (sxml:element-name node) 'th)
                                   'center
-                                  'left)))
+                                  'unaligned)))
             (send (current-container) start-cell #:colspan colspan #:valign valign #:bgcolor bgcolor #:width width)
             ; style could be changed by cell's contents
             (define style-copy (make-object style-delta% 'change-nothing))

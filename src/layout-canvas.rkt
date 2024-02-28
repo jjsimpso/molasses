@@ -1434,13 +1434,14 @@
          (update-scrollbars vx vy)
          (append-element e)]))
 
-    ;; the end-of-line flag is only relevant for unaligned or centered elements
+    (define (find-last-element [alignments '(unaligned center)])
+      ;; the end-of-line flag is only relevant for unaligned or centered elements
+      (for/or ([e (in-dlist-reverse elements)]
+               #:when (memq (element-alignment e) alignments))
+        e))
+
     (define/public (last-element-eol?)
-      (define last-element
-        (for/or ([e (in-dlist-reverse elements)]
-                 #:when (or (eq? (element-alignment e) 'unaligned)
-                            (eq? (element-alignment e) 'center)))
-          e))
+      (define last-element (find-last-element))
       (if last-element
           (element-end-of-line last-element)
           ;; true if no elements
@@ -1448,15 +1449,17 @@
 
     ;; last element ends with whitespace
     (define/public (last-element-ews?)
-      (define last-element
-        (for/or ([e (in-dlist-reverse elements)]
-                 #:when (or (eq? (element-alignment e) 'unaligned)
-                            (eq? (element-alignment e) 'center)))
-          e))
+      (define last-element (find-last-element))
       (if last-element
           (or (and (string? (element-snip last-element)) (string-suffix? (element-snip last-element) " "))
               (element-end-of-line last-element))
           #f))
+
+    (define/public (set-last-element-eol)
+      (define last-element (find-last-element))
+      (when (and last-element (not (element-end-of-line last-element)))
+        (set-element-end-of-line! last-element #t)
+        (layout-goto-new-line (next-line-y-pos (element-ypos last-element)))))
     
     (define/public (get-style-list) styles)
 
