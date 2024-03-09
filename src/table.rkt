@@ -20,6 +20,9 @@
           [horiz-margin 5]
           [vert-margin 5])
 
+    (init-field [snip-xmargin 0]
+                [snip-ymargin 2])
+    
     (define dc drawing-context)
     (define default-style defstyle)
     (define vert-align valign)
@@ -48,9 +51,6 @@
 
     (define valign-offset 0)
     
-    (define snip-xmargin 5)
-    (define snip-ymargin 2)
-
     ;; current position to place next element
     (define place-x 0)
     (define place-y 0)

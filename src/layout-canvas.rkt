@@ -14,7 +14,9 @@
           [vert-margin 5])
     (init-field [wheel-step 10]
                 [smooth-scrolling #f]
-                [smooth-scroll-steps 10])
+                [smooth-scroll-steps 10]
+                [snip-xmargin 0]
+                [snip-ymargin 2])
     (inherit get-dc
              get-size
              get-client-size
@@ -38,8 +40,6 @@
     ;; 
     (define xmargin horiz-margin)
     (define ymargin vert-margin)
-    (define snip-xmargin 5)
-    (define snip-ymargin 2)
     
     ;; method name from editor-canvas%
     (define/public (horizontal-inset)
@@ -461,7 +461,7 @@
           (- original snip-ymargin)])))
     
     (define (layout-goto-new-line new-y)
-      (printf "layout-goto-new-line: ~a~n" new-y)
+      ;(printf "layout-goto-new-line: ~a~n" new-y)
       (set! place-x 0) ; place-x value isn't currently used in layout mode
       (set! place-y new-y)
       (set! layout-baseline-pos new-y)
@@ -943,12 +943,12 @@
       (define snip (element-snip e))
       (when (is-a? snip snip%)
         (for ([prop (in-list (element-properties e))])
-          (printf "handle element property ~a~n" prop)
+          ;(printf "handle element property ~a~n" prop)
           (case (car prop)
             [(resizable)
              (define-values (dw dh) (get-drawable-size))
              (define space-available (- dw layout-left-width (unaligned-or-center-width) layout-right-width))
-             (printf "handle resizable: dw=~a, space-available=~a, xmargin=~a~n" dw space-available xmargin)
+             ;(printf "handle resizable: dw=~a, space-available=~a, xmargin=~a~n" dw space-available xmargin)
              (define w (* space-available (/ (cdr prop) 100.0)))
              (define h (get-element-height e))
              (send snip resize w h)]))))
@@ -1032,7 +1032,7 @@
                (calc-word-extents e))
              (set!-values (x1 y1 x2 y2) (layout-string e dw y))
              (set-element-cached-text-extent! e (text-extent (- x2 x1) (- y2 y1) 0 0)) 
-             (printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una/center:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width (unaligned-or-center-width) layout-right-width)
+             ;(printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una/center:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width (unaligned-or-center-width) layout-right-width)
              ;; set position for adding next element
              (when (element-end-of-line e)
                  (layout-goto-new-line (next-line-y-pos y1)))]
@@ -1053,8 +1053,10 @@
           (let ([snip-w (box 0)]
                 [snip-h (box 0)]
                 [snip-descent (box 0)]
-                [snip-space (box 0)])
-            (get-extent e dc x y snip-w snip-h snip-descent snip-space #f #f)
+                [snip-space (box 0)]
+                [snip-lspace (box 0)]
+                [snip-rspace (box 0)])
+            (get-extent e dc x y snip-w snip-h snip-descent snip-space snip-lspace snip-rspace)
             (case mode
               [(layout)
                (define snip-height (if (is-a? (element-snip e) string-snip%)
@@ -1222,7 +1224,7 @@
            (if (eq? key-code 'wheel-up)
                (max 0 (- scroll-pos wheel-step))
                (min max-scroll (+ scroll-pos wheel-step))))
-         (printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
+         ;(printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
          (scroll-to new-scroll-pos #f)]
         [(up down)
          (define max-scroll (get-scroll-range 'vertical))
@@ -1232,17 +1234,17 @@
            (if (eq? key-code 'up)
                (max 0 (- scroll-pos line-height))
                (min max-scroll (+ scroll-pos line-height))))
-         (printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
+         ;(printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
          (scroll-to new-scroll-pos)]
         [(next)
          (define-values (dw dh) (get-drawable-size))
          (define-values (x y) (get-view-start))
-         (printf "page down to ~a~n" (+ y dh))
+         ;(printf "page down to ~a~n" (+ y dh))
          (scroll-to (+ y dh) smooth-scrolling)]
         [(prior)
          (define-values (dw dh) (get-drawable-size))
          (define-values (x y) (get-view-start))
-         (printf "page up to ~a~n" (- y dh))
+         ;(printf "page up to ~a~n" (- y dh))
          (scroll-to (- y dh) smooth-scrolling)]
         [(home)
          (scroll-to 0 smooth-scrolling)]
@@ -1329,7 +1331,7 @@
                 0
                 y)))
 
-      (printf "scroll-to ~a~n" y)
+      ;(printf "scroll-to ~a~n" y)
       
       (when (not (= new-scroll-pos old-scroll-pos))
         (when smooth
@@ -1340,7 +1342,7 @@
             (for ([pos (in-inclusive-range (+ old-scroll-pos step)
                                            new-scroll-pos
                                            step)])
-              (printf "scroll-to ~a step-size=~a step=~a~n" pos step-size step)
+              ;(printf "scroll-to ~a step-size=~a step=~a~n" pos step-size step)
               (set! scroll-y pos)
               (set-scroll-pos 'vertical pos)
               (if (not visible-elements)
@@ -1351,7 +1353,7 @@
         ;; handle both the non-smooth case and the final step of a smooth scroll if it didn't divide
         ;; evenly into integer steps
         (unless (= scroll-y new-scroll-pos)
-          (printf "scroll-to ~a~n" new-scroll-pos)
+          ;(printf "scroll-to ~a~n" new-scroll-pos)
           (set! scroll-y new-scroll-pos)
           (set-scroll-pos 'vertical new-scroll-pos)
           (if (not visible-elements)
@@ -1426,7 +1428,7 @@
            (update-scrollbars vx vy)
            (append-element e))]
         [else
-         (printf "append-string: |~a|, eol:~a~n" s end-of-line)
+         ;(printf "append-string: |~a|, eol:~a~n" s end-of-line)
          (define e (element s end-of-line alignment properties))
          (set-element-text-style! e (or style default-style))
          (place-element e place-x place-y)
@@ -1493,6 +1495,7 @@
   (define canvas
     (new layout-canvas% (parent frame)
          (smooth-scrolling #t)
+         (snip-xmargin 5)
          (horiz-margin 5)
          (vert-margin 5)))
 

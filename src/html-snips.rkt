@@ -10,6 +10,7 @@
 
 (provide horz-line-snip%
          img-hack-snip%
+         html-image-snip%
          html-link-snip%
          html-link-img-snip%)
 
@@ -191,6 +192,29 @@
     (define/override (copy)
       (new horz-line-snip% [horz-offset horz-offset]))))
 
+(define html-image-snip%
+  (class image-snip%
+    (super-new)
+
+    (init-field
+     [hspace 2]
+     [vspace 0])
+
+    (define/override (get-extent dc x y
+                                 [w #f]
+                                 [h #f]
+                                 [descent #f]
+                                 [space #f]
+                                 [lspace #f]
+                                 [rspace #f])
+
+      (super get-extent dc x y w h descent space lspace rspace)
+      (when w (set-box! w (+ (unbox w) (* 2 hspace))))
+      (when h (set-box! h (+ (unbox h) (* 2 vspace)))))
+
+    (define/override (draw dc x y left top right bottom dx dy draw-caret)
+      (super draw dc (+ x hspace) (+ y vspace) left top right bottom dx dy draw-caret))))
+
 (define link-interface (interface () on-event on-goodbye-event get-flags set-flags))
 
 (define (html-link-mixin %)
@@ -303,4 +327,4 @@
       (send browser-canvas update-status "Ready"))))
 
 (define html-link-snip% (html-link-mixin string-snip%))
-(define html-link-img-snip% (html-link-mixin image-snip%))
+(define html-link-img-snip% (html-link-mixin html-image-snip%))

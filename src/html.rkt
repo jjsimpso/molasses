@@ -25,6 +25,8 @@
 ;(require "entity-names.rkt")
 ;(require "option-snip.rkt")
 
+;; (define sxml (parse-html (open-input-file "/data/jonathan/reversing/fraviaweb2/tek1.htm")))
+
 (provide render-html-to-text)
 
 (define font-size-vec #(7/12 5/6 1.0 1.125 1.5 2.0 3.0))  ; 7 10 12 13.5 18 24 36
@@ -44,6 +46,12 @@
     (send d set-size-mult 0.75)
     d))
 (define delta:symbol (make-object style-delta% 'change-family 'symbol))
+
+;; for future use with dynamic-instantiate
+(define (non-default-attrs attr-list)
+  (for/list ([e (in-list attr-list)]
+             #:when (cadr e))
+    e))
 
 ;; create a new bitmap
 ;; use img src attribute and request structure to compose a gopher request to the image
@@ -447,10 +455,14 @@
       (define request (send canvas get-current-request))
       (when request
         (define align (align-attr node current-alignment))
+        (define hspace-value (attr->number node 'hspace))
+        (define vspace-value (attr->number node 'vspace))
+        (printf "handle-img: hs=~a, vs=~a, src=~a~n" hspace-value vspace-value src-value)
         (define bm (load-new-bitmap src-value request))
         (define snip (if url
-                         (new html-link-img-snip% (url url) (base-req base-req) (browser-canvas canvas))
-                         (make-object image-snip%)))
+                         (new html-link-img-snip% (url url) (base-req base-req) (browser-canvas canvas)
+                              (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))
+                         (new html-image-snip% (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))))
         (send snip set-bitmap bm)
         (append-snip snip #f align (if name-value `((anchor . ,name-value)) '())))))
   
