@@ -879,7 +879,7 @@ like Kiselyov's SSAX."))
             ;; Am doing this kludge mainly for mid-1990s HTML that uses the `p`
             ;; element wrong.  Trying to get all appropriate parents other than
             ;; `p` that I can, to reduce breaking other code.
-            '(a article aside blink blockquote body center footer form header html li main nav section slot td template))
+            '(a article aside blink blockquote body center footer form header html li main nav pre section slot td th template))
            (parent-constraints
             ;; TODO: Maybe make this an option.
             `((area     . (map span))
