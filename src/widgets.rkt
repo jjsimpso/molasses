@@ -619,6 +619,9 @@
 
       ;; background color can be changed by html rendering
       (send canvas reset-background-color)
+
+      ;; unset any text selected by mouse
+      (send canvas clear-mouse-selection)
       
       ;; this will shutdown the previous custodian on every page load.
       ;; seems wasteful not to re-use the custodian if we aren't actually interrupting
@@ -943,6 +946,8 @@
              get-mode
              set-mode
              set-default-style
+             set-highlight-style
+             clear-mouse-selection
              begin-edit-sequence
              end-edit-sequence
              in-edit-sequence?
@@ -1087,18 +1092,16 @@
       ;; reset canvas mode if it was changed when loading html
       (when (eq? (get-mode) 'layout)
         (printf "check-gopher-defaults~n")
-        (define standard-style
-          (send (get-style-list) find-named-style "Standard"))
-        (set-default-style standard-style)
+        (set-default-style "Standard")
+        (set-highlight-style "Highlight")
         (reset-background-color)
         (set-mode 'plaintext)))
 
     (define/public (check-gemini-defaults)
       ;; reset canvas mode if it was changed when loading html
       (when (eq? (get-mode) 'layout)
-        (define standard-style
-          (send (get-style-list) find-named-style "Standard"))
-        (set-default-style standard-style)
+        (set-default-style "Standard")
+        (set-highlight-style "Highlight")
         (reset-background-color)
         (set-mode 'wrapped)))
     
@@ -1179,7 +1182,9 @@
 
       ;; background color can be changed by html rendering
       (reset-background-color)
-      
+
+      (clear-mouse-selection)
+
       ;; this will shutdown the previous custodian on every page load.
       ;; seems wasteful not to re-use the custodian if we aren't actually interrupting
       ;; the previous thread's work.

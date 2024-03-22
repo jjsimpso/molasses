@@ -29,6 +29,8 @@
          in-dlist
          in-dlist-reverse
          dlist-cursor
+         dlist-peek-tail-next
+         dlist-peek-head-prev
          dlist-advance-head!
          dlist-retreat-head!
          dlist-advance-tail!
@@ -266,6 +268,21 @@
 (define (dlist-cursor dl)
   (dlist (dlist-head dl) (dlist-tail dl)))
 
+(define (dlist-peek-tail-next dl)
+  (define tail (dlist-tail dl))
+  (if (false? tail)
+      (let ([head (dlist-head dl)])
+        (and head (dlink-next head) (dlink-value (dlink-next head))))
+      (let ([tail-next (dlink-next tail)])
+        (and tail-next (dlink-value tail-next)))))
+
+(define (dlist-peek-head-prev dl)
+  (define head (dlist-head dl))
+  (if head
+      (let ([head-prev (dlink-prev head)])
+        (and head-prev (dlink-value head-prev)))
+      #f))
+
 ;; advances the head pointer to the next link if it exists
 ;; returns the new head or #f if head didn't change
 (define (dlist-advance-head! dl)
@@ -366,9 +383,12 @@
   (check-equal? (dlist-tail-value cursor) 5)
   (check-equal? (dlist-retreat-head! cursor) #f)
   (check-equal? (dlist-advance-tail! cursor) #f)
- 
+  (check-equal? (dlist-peek-tail-next cursor) #f)
+  (check-equal? (dlist-peek-head-prev cursor) #f)
+  
   (dlist-retreat-tail! cursor)
   (check-equal? (dlist-tail-value cursor) 4)
+  (check-equal? (dlist-peek-tail-next cursor) 5)
   (check-equal? (dlist-length cursor) 4)
   (check-equal? (for/list ([v (in-dlist cursor)]) v) '(1 2 3 4))
   (check-equal? 
@@ -383,6 +403,7 @@
   (check-equal? (dlist->list cursor) '(1))
   (check-equal? (for/list ([v (in-dlist cursor)]) v) '(1))
   (check-equal? (dlist-tail-value cursor) 1)
+  (check-equal? (dlist-peek-tail-next cursor) 2)
   (dlist-advance-tail! cursor)
   (dlist-advance-tail! cursor)
   (dlist-advance-tail! cursor)
@@ -395,10 +416,13 @@
   (dlist-advance-head! cursor)
   (check-equal? (dlist-head-value cursor) 4)
   (check-equal? (dlist-tail-value cursor) 5)
+  (check-equal? (dlist-peek-head-prev cursor) 3)
   (dlist-advance-head! cursor)
   (check-equal? (dlist-tail cursor) #f)
   (check-equal? (dlist-head-value cursor) 5)
   (check-equal? (dlist-tail-value cursor) 5)
+  (dlist-advance-head! cursor)
+  (check-equal? (dlist-head-value cursor) 5)
   (dlist-retreat-head! cursor)
   (check-equal? (dlist-head-value cursor) 4)
   (check-equal? (dlist-tail-value cursor) 5)

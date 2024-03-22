@@ -4,7 +4,8 @@
          "tab.rkt"
          "request.rkt"
          "download.rkt"
-         "bookmark.rkt")
+         "bookmark.rkt"
+         "widgets.rkt")
 
 (provide setup-gui)
 
@@ -66,7 +67,7 @@
                    [(is-a? p menu%) (loop p)]
                    [else (let ([f (send p get-frame)])
                            (and f (send f get-edit-target-object)))])))])
-      (and (is-a? o editor<%>)
+      (and (or (is-a? o editor<%>) (is-a? o browser-canvas%))
            o)))
 
   (define menu-bar (new menu-bar% (parent frame)))
