@@ -228,7 +228,8 @@
         
         (send highlight-style switch-to dc #f)
         (for ([e (in-dlist (selection-elements highlight-selection))]
-              #:when (element-visible? e top bottom))
+              #:when (and (string? (element-snip e))
+                          (element-visible? e top bottom)))
           (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                        (+ (- (element-ypos e) top) ymargin)))
           ;(printf "  highlight snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
@@ -1114,7 +1115,7 @@
              (define snip-descent (box 0))
              (define snip-space (box 0))
              (get-extent e dc x y snip-w snip-h snip-descent snip-space #f #f)
-             ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
+             ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y (unbox snip-w) (unbox snip-h) (unbox snip-descent) (unbox snip-space))
              (set! x2 (inexact->exact (+ x (unbox snip-w))))
              (set! y2 (add1 (inexact->exact (+ y (unbox snip-h)))))
              ;; set position for adding next element
@@ -1483,21 +1484,24 @@
             #t])]))
 
     (define (new-selection-from/to cursor x0 y0 x1 y1)
-      ;; advance head to first element potentially in selection
-      (for ([e (in-dlist cursor)]
-            #:break (element-visible? e y0 y1))
-        (dlist-advance-head! cursor))
+      (printf "new selection from/to~n")
+      (define head 
+        (for ([e (in-dlist cursor)]
+              #:break (or (> (element-ypos e) y0)
+                          (and (> (+ (element-ypos e) (get-element-height e)) y0)
+                               (> (+ (element-xpos e) (get-element-width e)) x0))))
+          (dlist-advance-head! cursor)))
+      
       (cond
         [(dlist-empty? cursor)
+         (printf "  nothing found1~n")
          #f]
-        [(false? (dlist-tail-value cursor))
-         ;; only one element left, check if it is in selection
-         (if (< (element-xpos (dlist-head-value cursor)) x1)
-             (selection cursor 0 #f #f)
-             #f)]
+        [(false? head)
+         (printf "  nothing found2~n")
+         #f]
         [else
-         ;; verify head is in selection
-         (if (< (element-xpos (dlist-head-value cursor)) x1)
+         (printf "  first element ~a~n" (describe-element (dlist-head-value cursor)))
+         (if (< (element-ypos (dlist-head-value cursor)) y1)
              (let ([sel (selection cursor 0 #f #f)])
                (set-dlist-tail! cursor #f)
                ;; advance tail while it is visible
@@ -1575,7 +1579,7 @@
           (for/fold ([s ""])
                     ([e (in-dlist (selection-elements sel))]
                      #:when (string? (element-snip e)))
-            (string-append s (element-snip e)))))
+            (string-append s (element-snip e) (if (element-end-of-line e) "\n" "")))))
     
     (define/public (get-mode)
       mode)
