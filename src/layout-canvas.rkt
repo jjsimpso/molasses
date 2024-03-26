@@ -143,10 +143,12 @@
        [head-end-pos #:mutable]
        [tail-end-pos #:mutable])
       #:prefab)
+
+    (struct selection-start (x y top bottom))
     
     (define mouse-selection #f)
-    (define mouse-selection-start #f) ; false or a pair holding x,y coordinates in virtual canvas coordinates
-    (define mouse-selection-end #f)
+    (define mouse-selection-start #f) 
+    (define mouse-selection-end #f) ; false or a pair holding x,y coordinates in virtual canvas coordinates
     
     (define (first-visible-element)
       (and visible-elements (dlist-head-value visible-elements)))
@@ -1380,40 +1382,29 @@
               (clear-highlight mouse-selection dc)
               (set! mouse-selection #f)
               (set! mouse-selection-start (new-selection-start e x y))
-              (set! mouse-selection-end (new-selection-start e x y))]
+              (set! mouse-selection-end (cons (selection-start-x mouse-selection-start) (selection-start-y mouse-selection-start)))]
              [(and (not mouse-selection-start) (send event button-down? 'left))
               (printf "  set text selection~n")
               (clear-highlight mouse-selection dc)
-              (set! mouse-selection #f) ;(new-selection (dlist-cursor visible-elements) e))
+              (set! mouse-selection #f)
               (set! mouse-selection-start (new-selection-start e x y))
-              (set! mouse-selection-end (new-selection-start e x y))
-              #;(when (and e (string? (element-snip e)))
-                (draw-highlight mouse-selection dc))]
+              (set! mouse-selection-end (cons (selection-start-x mouse-selection-start) (selection-start-y mouse-selection-start)))]
              [(and left-down? (send event moving?))
-              (clear-highlight mouse-selection dc)
+              (when mouse-selection
+                (clear-highlight mouse-selection dc))
               (cond
-                [(not mouse-selection)
-                 (if (drag-selection-ahead? mouse-selection-start x y)
-                     (set! mouse-selection (new-selection-from/to (dlist-cursor visible-elements) (car mouse-selection-start) (cdr mouse-selection-start) x y))
-                     (set! mouse-selection (new-selection-from/to (dlist-cursor visible-elements) x y (car mouse-selection-start) (cdr mouse-selection-start))))]
                 [(drag-selection-ahead? mouse-selection-start x y)
                  (printf "dragging ahead~n")
-                 (if (drag-selection-ahead? mouse-selection-end x y)
-                     (expand-selection-ahead mouse-selection x y)
-                     (shrink-selection-ahead mouse-selection x y))
-                 #;(if (or (element-in-selection? mouse-selection e)
-                         (pos-in-selection? mouse-selection x y))
-                     (shrink-selection-ahead mouse-selection x y)
-                     (expand-selection-ahead mouse-selection x y))]
+                 (set! mouse-selection (new-selection-from/to (dlist-cursor visible-elements)
+                                                              (selection-start-x mouse-selection-start)
+                                                              (selection-start-y mouse-selection-start)
+                                                              x y))]
                 [(drag-selection-behind? mouse-selection-start x y)
                  (printf "dragging behind~n")
-                 (if (drag-selection-behind? mouse-selection-end x y)
-                     (expand-selection-behind mouse-selection x y)
-                     (shrink-selection-behind mouse-selection x y))
-                 #;(if (or (element-in-selection? mouse-selection e)
-                         (pos-in-selection? mouse-selection x y))
-                     (shrink-selection-behind mouse-selection x y)
-                     (expand-selection-behind mouse-selection x y))])
+                 (set! mouse-selection (new-selection-from/to (dlist-cursor visible-elements)
+                                                              x y
+                                                              (selection-start-x mouse-selection-start)
+                                                              (selection-start-y mouse-selection-start)))])
               (set! mouse-selection-end (cons x y))
               (draw-highlight mouse-selection dc)]
              [else
@@ -1441,23 +1432,31 @@
            (loop (dlist-head-value cursor))])))
 
     (define (new-selection-start e x y)
-      (if e
-          (cons x (element-ypos e))
-          (cons x y)))
-
+      (cond
+        [e
+         (selection-start x y (element-ypos e) (+ (element-ypos e) (get-element-height e)))]
+        [else
+         (define same-line-element
+           (for/first ([e (in-dlist visible-elements)]
+                       #:when (>= (+ (element-ypos e) (get-element-height e)) y))
+             e))
+         (if same-line-element
+             (selection-start x y (element-ypos same-line-element) (+ (element-ypos same-line-element) (get-element-height same-line-element)))
+             (selection-start x y (add1 y) y))]))
+    
     (define/public (clear-mouse-selection)
       (set! mouse-selection #f)
       (set! mouse-selection-start #f))
     
     (define (drag-selection-ahead? sel-start x y)
-      (or (> y (cdr sel-start))
-          (and (> x (car sel-start))
-               (>= y (cdr sel-start)))))
+      (or (> y (selection-start-bottom sel-start))
+          (and (>= y (selection-start-top sel-start))
+               (>= x (selection-start-x sel-start)))))
 
     (define (drag-selection-behind? sel-start x y)
-      (or (< y (cdr sel-start))
-          (and (< x (car sel-start))
-               (<= y (cdr sel-start)))))
+      (or (< y (selection-start-top sel-start))
+          (and (>= y (selection-start-top sel-start))
+               (< x (selection-start-x sel-start)))))
 
     (define (element-in-selection? sel e)
       (and sel e
@@ -1484,7 +1483,7 @@
             #t])]))
 
     (define (new-selection-from/to cursor x0 y0 x1 y1)
-      (printf "new selection from/to~n")
+      (printf "new selection from ~a,~a to ~a,~a~n" x0 y0 x1 y1)
       (define head 
         (for ([e (in-dlist cursor)]
               #:break (or (> (element-ypos e) y0)
@@ -1501,10 +1500,10 @@
          #f]
         [else
          (printf "  first element ~a~n" (describe-element (dlist-head-value cursor)))
-         (if (< (element-ypos (dlist-head-value cursor)) y1)
+         (if (<= (element-ypos (dlist-head-value cursor)) y1)
              (let ([sel (selection cursor 0 #f #f)])
                (set-dlist-tail! cursor #f)
-               ;; advance tail while it is visible
+               ;; advance tail while it is in selection
                (expand-selection-ahead sel x1 y1)
                sel)
              #f)]))
@@ -1529,16 +1528,20 @@
         (define sel-elements (selection-elements sel))
         (printf " shrink ahead from ~a~n" (describe-element (dlist-tail-value sel-elements)))
         (let loop ([last-element (dlist-tail-value sel-elements)])
-          (unless (or (false? last-element)
-                      (eq? last-element (dlist-head-value sel-elements)))
+          (unless (false? last-element)
             (printf "  checking ~a~n" (describe-element last-element))
             (define ex (element-xpos last-element))
             (define ey (element-ypos last-element))
             (when (or (< y ey)
                       (and (>= y ey) (< x ex)))
-              (dlist-retreat-tail! sel-elements)
-              (printf "  retreat tail to ~a~n" (describe-element (dlist-tail-value sel-elements))) 
-              (loop (dlist-tail-value sel-elements)))))))
+              (if (eq? last-element (dlist-head-value sel-elements))
+                  (begin
+                    (printf "  set mouse selection to false~n")
+                    (set! mouse-selection #f))
+                  (begin
+                    (dlist-retreat-tail! sel-elements)
+                    (printf "  retreat tail to ~a~n" (describe-element (dlist-tail-value sel-elements))) 
+                    (loop (dlist-tail-value sel-elements)))))))))
 
     (define (expand-selection-behind sel x y)
       (when sel
@@ -1562,16 +1565,20 @@
         (define sel-elements (selection-elements sel))
         (printf "  shrink behind from ~a~n" (describe-element (dlist-head-value sel-elements)))
         (let loop ([head-element (dlist-head-value sel-elements)])
-          (unless (or (false? head-element)
-                      (= (dlist-length sel-elements) 1)#;(false? (dlist-tail-value sel-elements)))
+          (unless (false? head-element)
             (printf "  checking ~a~n" (describe-element head-element))
             (define ex (element-xpos head-element))
             (define ey (element-ypos head-element))
             (when (or (> y (+ ey (get-element-height head-element)))
                       (and (>= y ey) (> x (+ ex (get-element-width head-element)))))
-              (dlist-advance-head! sel-elements)
-              (printf "  advance head to ~a~n" (describe-element (dlist-head-value sel-elements)))
-              (loop (dlist-head-value sel-elements)))))))
+              (if (eq? head-element (dlist-tail-value sel-elements))
+                  (begin
+                    (printf "  set mouse selection to false~n")
+                    (set! mouse-selection #f))
+                  (begin
+                    (dlist-advance-head! sel-elements)
+                    (printf "  advance head to ~a~n" (describe-element (dlist-head-value sel-elements)))
+                    (loop (dlist-head-value sel-elements)))))))))
     
     (define (selection->string sel)
       (if (not sel)
