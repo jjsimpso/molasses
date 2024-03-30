@@ -226,11 +226,11 @@
     (define (draw-selection e sel sel-elements x y left top cw ch dc)
       (cond
         [(eq? e (dlist-head-value sel-elements))
-         (printf "  draw head from ~a to ~a~n" (selection-head-start-pos sel) (selection-head-end-pos sel))
+         ;(printf "  draw head from ~a to ~a~n" (selection-head-start-pos sel) (selection-head-end-pos sel))
          (define-values (w u1 u2 u3) (send dc get-text-extent (substring (element-snip e) 0 (selection-head-start-pos sel))))
          (send dc draw-text (substring (element-snip e) (selection-head-start-pos sel) (selection-head-end-pos sel)) (+ x w) y)]
         [(eq? e (dlist-tail-value sel-elements))
-         (printf "  draw tail from 0 to ~a~n" (selection-tail-end-pos sel))
+         ;(printf "  draw tail from 0 to ~a~n" (selection-tail-end-pos sel))
          (send dc draw-text (substring (element-snip e) 0 (selection-tail-end-pos sel)) x y)]
         [else
          (if (and (wrap-text?) (string? (element-snip e)))
@@ -255,7 +255,7 @@
                           (element-visible? e top bottom)))
           (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                        (+ (- (element-ypos e) top) ymargin)))
-          (printf "highlight snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
+          ;(printf "highlight snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
           (draw-selection e highlight-selection sel-elements x y left top cw ch dc))))
 
     (define (clear-highlight highlight-selection dc)
@@ -276,7 +276,7 @@
               (send current-style switch-to dc #f))
           (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                        (+ (- (element-ypos e) top) ymargin)))
-          (printf "clear snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
+          ;(printf "clear snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
           (draw-selection e highlight-selection sel-elements x y left top cw ch dc))))
 
     (define (element-visible? e top bottom)
@@ -1674,20 +1674,24 @@
       (define tail-element (dlist-tail-value (selection-elements sel)))
       (if (not sel)
           ""
-          (for/fold ([s ""])
+          (for/fold ([s '()]
+                     #:result (apply string-append (reverse s)))
                     ([e (in-dlist (selection-elements sel))]
                      #:when (string? (element-snip e)))
             (cond
               [(eq? e head-element)
-               (string-append s (substring (element-snip e) (selection-head-start-pos sel) (selection-head-end-pos sel))
-                              (if (and (element-end-of-line e)
-                                       (not (eq? head-element tail-element)))
-                                  "\n"
-                                  ""))]
+               (cons (string-append (substring (element-snip e) (selection-head-start-pos sel) (selection-head-end-pos sel))
+                                    (if (and (element-end-of-line e)
+                                             (not (eq? head-element tail-element)))
+                                        "\n"
+                                        ""))
+                     s)]
               [(eq? e tail-element)
-               (string-append s (substring (element-snip e) 0 (selection-tail-end-pos sel)))]
+               (cons (string-append (substring (element-snip e) 0 (selection-tail-end-pos sel)))
+                     s)]
               [else
-               (string-append s (element-snip e) (if (element-end-of-line e) "\n" ""))]))))
+               (cons (string-append (element-snip e) (if (element-end-of-line e) "\n" ""))
+                     s)]))))
     
     (define/public (get-mode)
       mode)
@@ -1883,12 +1887,24 @@
         [else #f]))
 
     (define/public (do-edit-operation op [recursive? #t] [ts 0])
+      (define (string-length-or-false e)
+        (if (and e (string? (element-snip e)))
+            (string-length (element-snip e))
+            #f))
       (printf "do-edit-operation? ~a~n" op)
       (case op
         [(copy)
          (send the-clipboard set-clipboard-string (selection->string mouse-selection) ts)]
         [(paste) void]
-        [(select-all) void]
+        [(select-all)
+         (set! mouse-selection 
+               (selection (dlist-cursor elements)
+                          0
+                          (string-length-or-false (dlist-head-value visible-elements))
+                          (string-length-or-false (dlist-tail-value visible-elements))))
+         (set! mouse-selection-start #f)
+         (set! mouse-selection-end #f)
+         (draw-highlight mouse-selection dc)]
         [else void]))
 
     
@@ -2133,7 +2149,7 @@
         (send canvas append-string "\n\n")
         (send canvas append-string "text\nwith lots\nof\nnewlines")
         (add-gopher-menu canvas)
-        #;(let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
+        (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
           (send canvas append-string (port->string (gopher-response-data-port response))))))
   
   (printf "append finished~n"))
