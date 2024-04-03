@@ -1517,6 +1517,12 @@
       (define (find-exact-end-pos str first-pos font xstart x)
         (define end-pos (find-exact-pos str first-pos font xstart x))
         (min (add1 end-pos) (string-length str)))
+      (define (find-head-start-pos head font x0 y0)
+        (if (< y0 (element-ypos head))
+            ;; the start of the selection is on the line above, but to the right of all elements
+            0
+            (let ([start-word-pos (find-word (element-words head) (element-xpos head) x0)])
+              (find-exact-pos (element-snip head) start-word-pos font (element-xpos head) x0))))
       
       (define cursor (selection-elements sel))
       (define head (dlist-head-value cursor))
@@ -1531,10 +1537,8 @@
         [(and head (element-words head) (eq? head tail))
          ;; selection has one element only
          (define font (send (get-style head) get-font))
-         (define start-word-pos (find-word (element-words head) (element-xpos head) x0))
          (define end-word-pos (find-word (element-words head) (element-xpos head) x1))
-         (printf "  calc-selection-positions: head only start=~a, end=~a~n" start-word-pos end-word-pos)
-         (set-selection-head-start-pos! sel (find-exact-pos (element-snip head) start-word-pos font (element-xpos head) x0))
+         (set-selection-head-start-pos! sel (find-head-start-pos head font x0 y0))
          (set-selection-head-end-pos! sel (find-exact-end-pos (element-snip head) end-word-pos font (element-xpos head) x1))
          (printf "  calc-selection-positions: head only ~a~n" (substring (element-snip head) (selection-head-start-pos sel) (selection-head-end-pos sel)))
          (set-selection-tail-end-pos! sel #f)]
@@ -1542,26 +1546,25 @@
          ;; head element is partial but tail is not a string
          (define font (send (get-style head) get-font))
          (define start-word-pos (find-word (element-words head) (element-xpos head) x0))
-         (set-selection-head-start-pos! sel (find-exact-pos (element-snip head) start-word-pos font (element-xpos head) x0))
+         (set-selection-head-start-pos! sel (find-head-start-pos head font x0 y0))
          (set-selection-head-end-pos! sel (string-length (element-snip head)))
          (set-selection-tail-end-pos! sel #f)]
         [(and head (false? (element-words head)) tail (element-words tail))
          ;; head element is not a string, so only tail is partial
          (printf "  calc-selection-positions: tail only~n")
          (define font (send (get-style tail) get-font))
+         (define end-word-pos (find-word (element-words tail) (element-xpos tail) x1))
          (set-selection-head-start-pos! sel #f)
          (set-selection-head-end-pos! sel #f)
-         (define end-word-pos (find-word (element-words tail) (element-xpos tail) x1))
          (set-selection-tail-end-pos! sel (find-exact-end-pos (element-snip tail) end-word-pos font (element-xpos tail) x1))]
         [(and head (element-words head) tail (element-words tail))
          ;; both
          (printf "  calc-selection-positions: head+tail~n")
          (define head-font (send (get-style head) get-font))
-         (define start-word-pos (find-word (element-words head) (element-xpos head) x0))
-         (set-selection-head-start-pos! sel (find-exact-pos (element-snip head) start-word-pos head-font (element-xpos head) x0))
-         (set-selection-head-end-pos! sel (string-length (element-snip head)))
          (define tail-font (send (get-style tail) get-font))
          (define end-word-pos (find-word (element-words tail) (element-xpos tail) x1))
+         (set-selection-head-start-pos! sel (find-head-start-pos head head-font x0 y0))
+         (set-selection-head-end-pos! sel (string-length (element-snip head)))
          (set-selection-tail-end-pos! sel (find-exact-end-pos (element-snip tail) end-word-pos tail-font (element-xpos tail) x1))]
         [else
          (set-selection-head-start-pos! sel #f)
