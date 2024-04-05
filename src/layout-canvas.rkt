@@ -150,6 +150,17 @@
     (define mouse-selection-start #f) 
     (define mouse-selection-end #f) ; false or a pair holding x,y coordinates in virtual canvas coordinates
 
+    (define (selection-equal? s1 s2)
+      (or (and (false? s1) (false? s2))
+          (and s1 s2
+               (eq? (dlist-head-value (selection-elements s1))
+                    (dlist-head-value (selection-elements s2)))
+               (eq? (dlist-tail-value (selection-elements s1))
+                    (dlist-tail-value (selection-elements s2)))
+               (equal? (selection-head-start-pos s1) (selection-head-start-pos s2))
+               (equal? (selection-head-end-pos s1) (selection-head-end-pos s2))
+               (equal? (selection-tail-end-pos s1) (selection-tail-end-pos s2)))))
+    
     (define (highlightable-element? e)
       (string? (element-snip e)))
     
@@ -278,7 +289,14 @@
                                        (+ (- (element-ypos e) top) ymargin)))
           ;(printf "clear snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
           (draw-selection e highlight-selection sel-elements x y left top cw ch dc))))
-
+    
+    (define (update-highlight highlight-selection old-selection dc)
+      (unless (selection-equal? old-selection highlight-selection)
+        (suspend-flush)
+        (clear-highlight old-selection dc)
+        (draw-highlight highlight-selection dc)
+        (resume-flush)))
+    
     (define (element-visible? e top bottom)
       (cond
         [(>= (element-ypos e) bottom) #f]
@@ -1364,7 +1382,7 @@
                                       (- (+ ey top) ymargin)))
          (define e (select-element x y))
 
-         ;(printf "on-event: ~ax~a ~ax~a~n" (send event get-x) (send event get-y) x y)
+         (printf "on-event: ~ax~a ~ax~a~n" (send event get-x) (send event get-y) x y)
 
          (check-element-enter-leave e x y event)
          
@@ -1386,23 +1404,23 @@
          (define left-down? (send event get-left-down))
          (when (and (or (eq? mode 'plaintext) (eq? mode 'wrapped))
                     left-down?)
+           (define-values (dw dh) (get-drawable-size))
            (printf "handle selection ~a/~a ~a ~a~n" left-down? (send event button-down?) (not (false? mouse-selection)) (describe-element e))
            (cond
              [(and (not mouse-selection-start) (send event button-down? 'left) mouse-selection)
-              (printf "  unset text selection~n")
+              ;(printf "  unset text selection~n")
               (clear-highlight mouse-selection dc)
               (set! mouse-selection #f)
               (set! mouse-selection-start (new-selection-start e x y))
               (set! mouse-selection-end (cons (selection-start-x mouse-selection-start) (selection-start-y mouse-selection-start)))]
              [(and (not mouse-selection-start) (send event button-down? 'left))
-              (printf "  set text selection~n")
+              ;(printf "  set text selection~n")
               (clear-highlight mouse-selection dc)
               (set! mouse-selection #f)
               (set! mouse-selection-start (new-selection-start e x y))
               (set! mouse-selection-end (cons (selection-start-x mouse-selection-start) (selection-start-y mouse-selection-start)))]
              [(and left-down? (send event moving?))
-              (when mouse-selection
-                (clear-highlight mouse-selection dc))
+              (define old-selection mouse-selection)
               (cond
                 [(drag-selection-ahead? mouse-selection-start x y)
                  (printf "dragging ahead~n")
@@ -1417,7 +1435,17 @@
                                                               (selection-start-x mouse-selection-start)
                                                               (selection-start-y mouse-selection-start)))])
               (set! mouse-selection-end (cons x y))
-              (draw-highlight mouse-selection dc)]
+
+              (update-highlight mouse-selection old-selection dc)
+              
+              ;; check for scrolling
+              (cond
+                [(> ey dh)
+                 ;; scroll down if mouse is below bottom edge
+                 (scroll-to (min (get-scroll-range 'vertical) (+ (get-scroll-pos 'vertical) wheel-step)))]
+                [(< ey 0)
+                 ;; scroll up if mouse is above top edge
+                 (scroll-to (max 0 (- (get-scroll-pos 'vertical) wheel-step)))])]
              [else
               void]))]
         [(left-up)
@@ -1518,6 +1546,7 @@
         (define end-pos (find-exact-pos str first-pos font xstart x))
         (min (add1 end-pos) (string-length str)))
       (define (find-head-start-pos head font x0 y0)
+        (printf "find-head-start-pos: y0=~a, eypos=~a~n" y0 (element-ypos head))
         (if (< y0 (element-ypos head))
             ;; the start of the selection is on the line above, but to the right of all elements
             0
@@ -1545,7 +1574,6 @@
         [(and head (element-words head) tail (false? (element-words tail)))
          ;; head element is partial but tail is not a string
          (define font (send (get-style head) get-font))
-         (define start-word-pos (find-word (element-words head) (element-xpos head) x0))
          (set-selection-head-start-pos! sel (find-head-start-pos head font x0 y0))
          (set-selection-head-end-pos! sel (string-length (element-snip head)))
          (set-selection-tail-end-pos! sel #f)]
@@ -1572,7 +1600,8 @@
          (set-selection-tail-end-pos! sel #f)]))
     
     (define (new-selection-from/to cursor x0 y0 x1 y1)
-      (let ([x0 (max 1 x0)])
+      (let ([x0 (max 1 x0)]
+            [x1 (max 1 x1)])
         ;; clamp x0 to positive values
         (printf "new selection from ~a,~a to ~a,~a~n" x0 y0 x1 y1)
         (define head 
@@ -1584,13 +1613,13 @@
         
         (cond
           [(dlist-empty? cursor)
-           (printf "  nothing found1~n")
+           ;(printf "  nothing found1~n")
            #f]
           [(false? head)
-           (printf "  nothing found2~n")
+           ;(printf "  nothing found2~n")
            #f]
           [else
-           (printf "  first element ~a~n" (describe-element (dlist-head-value cursor)))
+           ;(printf "  first element ~a~n" (describe-element (dlist-head-value cursor)))
            (if (<= (element-ypos (dlist-head-value cursor)) y1)
                (let ([sel (selection cursor 0 #f #f)])
                  (set-dlist-tail! cursor #f)
