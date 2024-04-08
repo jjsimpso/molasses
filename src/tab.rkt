@@ -163,7 +163,6 @@
   (init-styles (send page-canvas get-style-list))
   ;; init to gopher/gemini styles
   (send page-canvas set-default-style "Standard")
-  (send page-canvas set-highlight-style "Highlight")  
 
   #;(send* page-canvas
     (force-display-focus #t)
@@ -282,12 +281,6 @@ END
     (set-delta-foreground text-fg-color)
     (set-delta-background canvas-bg-color))
   (send standard set-delta standard-delta)
-
-  (send (send style-list new-named-style "Highlight" standard)
-        set-delta (send* (make-object style-delta%)
-                    (copy standard-delta)
-                    (set-delta-foreground highlight-fg-color)
-                    (set-delta-background highlight-bg-color)))
 
   (define (make-color-style name color)
     ;; Each style created with this procedure copies "Standard" style

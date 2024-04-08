@@ -946,7 +946,6 @@
              get-mode
              set-mode
              set-default-style
-             set-highlight-style
              clear-mouse-selection
              begin-edit-sequence
              end-edit-sequence
@@ -1093,7 +1092,6 @@
       (when (eq? (get-mode) 'layout)
         (printf "check-gopher-defaults~n")
         (set-default-style "Standard")
-        (set-highlight-style "Highlight")
         (reset-background-color)
         (set-mode 'plaintext)))
 
@@ -1101,7 +1099,6 @@
       ;; reset canvas mode if it was changed when loading html
       (when (eq? (get-mode) 'layout)
         (set-default-style "Standard")
-        (set-highlight-style "Highlight")
         (reset-background-color)
         (set-mode 'wrapped)))
     

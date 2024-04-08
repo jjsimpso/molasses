@@ -173,7 +173,6 @@
     ;; style to use if no style is specified
     ;; this can be changed with set-default-style before appending a string to set its snip to this style
     (define default-style (send styles find-named-style "Standard"))
-    (define highlight-style default-style)
     
     (define (get-style e)
       (or (element-text-style e)
@@ -251,7 +250,15 @@
                    0 0
                    (- cw xmargin) (- ch ymargin)
                    0 0))]))
-    
+
+    (define (make-highlight-style from-style)
+      (define highlight-bg-color (send from-style get-foreground))
+      (define highlight-fg-color (send from-style get-background))
+      (define highlight-delta (send* (make-object style-delta%)
+                                (set-delta-foreground highlight-fg-color)
+                                (set-delta-background highlight-bg-color)))
+      (send styles find-or-create-style from-style highlight-delta))
+
     (define (draw-highlight highlight-selection dc)
       (when highlight-selection
         (define-values (dw dh) (get-drawable-size))
@@ -260,10 +267,14 @@
         (define-values (left top) (get-view-start))
         (define-values (right bottom) (values (+ left dw) (+ top dh)))
         (define sel-elements (selection-elements highlight-selection))
-        (send highlight-style switch-to dc #f)
+        (define current-style #f)
         (for ([e (in-dlist sel-elements)]
               #:when (and (highlightable-element? e)
                           (element-visible? e top bottom)))
+          (define highlight-style (make-highlight-style (get-style e)))
+          (when (not (eq? highlight-style current-style))
+              (set! current-style highlight-style)
+              (send current-style switch-to dc #f))
           (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                        (+ (- (element-ypos e) top) ymargin)))
           ;(printf "highlight snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
@@ -1915,14 +1926,6 @@
                 (set! default-style style)
                 #f))))
 
-    (define/public (set-highlight-style style-or-name)
-      (if (is-a? style-or-name style<%>)
-          (set! highlight-style style-or-name)
-          (let ([style (send styles find-named-style style-or-name)])
-            (if style
-                (set! highlight-style style)
-                #f))))
-    
     (define/public (can-do-edit-operation? op [recursive? #t])
       (printf "can-do-edit-operation? ~a~n" op)
       (cond
@@ -1990,12 +1993,6 @@
       (set-delta-background canvas-bg-color))
     (send standard set-delta standard-delta)
 
-    (send (send style-list new-named-style "Highlight" standard)
-        set-delta (send* (make-object style-delta%)
-                    (copy standard-delta)
-                    (set-delta-foreground highlight-fg-color)
-                    (set-delta-background highlight-bg-color)))
-    
     (define (make-color-style name color)
       ;; Each style created with this procedure copies "Standard" style
       ;; and creates a new style by name 'name' and with the foreground
@@ -2078,7 +2075,6 @@
 
 
   (init-styles (send canvas get-style-list))
-  (send canvas set-highlight-style "Highlight")
   (send canvas set-canvas-background canvas-bg-color)
 
   (define layout-test #f)
