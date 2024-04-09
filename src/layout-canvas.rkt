@@ -1948,8 +1948,8 @@
          (set! mouse-selection 
                (selection (dlist-cursor elements)
                           0
-                          (string-length-or-false (dlist-head-value visible-elements))
-                          (string-length-or-false (dlist-tail-value visible-elements))))
+                          (string-length-or-false (dlist-head-value elements))
+                          (string-length-or-false (dlist-tail-value elements))))
          (set! mouse-selection-start #f)
          (set! mouse-selection-end #f)
          (draw-highlight mouse-selection dc)]
