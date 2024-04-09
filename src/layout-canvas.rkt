@@ -2,7 +2,8 @@
 
 (require "dlist.rkt"
          "gopher.rkt"
-         "config.rkt")
+         "config.rkt"
+         "memoize.rkt")
 
 (provide layout-canvas%)
 
@@ -259,6 +260,8 @@
                                 (set-delta-background highlight-bg-color)))
       (send styles find-or-create-style from-style highlight-delta))
 
+    (define make-highlight-style-cached (memoize make-highlight-style make-hasheq))
+    
     (define (draw-highlight highlight-selection dc)
       (when highlight-selection
         (define-values (dw dh) (get-drawable-size))
@@ -271,7 +274,7 @@
         (for ([e (in-dlist sel-elements)]
               #:when (and (highlightable-element? e)
                           (element-visible? e top bottom)))
-          (define highlight-style (make-highlight-style (get-style e)))
+          (define highlight-style (make-highlight-style-cached (get-style e)))
           (when (not (eq? highlight-style current-style))
               (set! current-style highlight-style)
               (send current-style switch-to dc #f))
@@ -1393,7 +1396,7 @@
                                       (- (+ ey top) ymargin)))
          (define e (select-element x y))
 
-         (printf "on-event: ~ax~a ~ax~a~n" (send event get-x) (send event get-y) x y)
+         ;(printf "on-event: ~ax~a ~ax~a~n" (send event get-x) (send event get-y) x y)
 
          (check-element-enter-leave e x y event)
          
