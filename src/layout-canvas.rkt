@@ -1437,13 +1437,13 @@
               (define old-selection mouse-selection)
               (cond
                 [(drag-selection-ahead? mouse-selection-start x y)
-                 (printf "dragging ahead~n")
+                 ;(printf "dragging ahead~n")
                  (set! mouse-selection (new-selection-from/to (dlist-cursor visible-elements)
                                                               (selection-start-x mouse-selection-start)
                                                               (selection-start-y mouse-selection-start)
                                                               x y))]
                 [(drag-selection-behind? mouse-selection-start x y)
-                 (printf "dragging behind~n")
+                 ;(printf "dragging behind~n")
                  (set! mouse-selection (new-selection-from/to (dlist-cursor visible-elements)
                                                               x y
                                                               (selection-start-x mouse-selection-start)
@@ -1453,6 +1453,15 @@
               (update-highlight mouse-selection old-selection dc)
               
               ;; check for scrolling
+              (cond
+                [(> ex dw)
+                 (set! scroll-x (min (get-scroll-range 'horizontal) (+ (get-scroll-pos 'horizontal) wheel-step)))
+                 (set-scroll-pos 'horizontal scroll-x)
+                 (refresh-now)]
+                [(< ex 0)
+                 (set! scroll-x (max 0 (- (get-scroll-pos 'horizontal) wheel-step)))
+                 (set-scroll-pos 'horizontal scroll-x)
+                 (refresh-now)])
               (cond
                 [(> ey dh)
                  ;; scroll down if mouse is below bottom edge
