@@ -9,6 +9,7 @@
 (require "request.rkt")
 
 (provide horz-line-snip%
+         ul-bullet-snip%
          img-hack-snip%
          html-image-snip%
          html-link-snip%
@@ -191,6 +192,65 @@
 
     (define/override (copy)
       (new horz-line-snip% [horz-offset horz-offset]))))
+
+(define ul-bullet-snip%
+  (class snip%
+    (super-new)
+
+    (init-field
+     [style 'disc]
+     [size 1.0])
+
+
+    (define width (* size 10))
+    (define height (* size 10))
+    (define xoffset (/ width 5))
+    (define yoffset (/ height 2))
+    (define diameter (- width yoffset))
+    
+    (define/override (get-extent dc x y
+                                   [w #f]
+                                   [h #f]
+                                   [descent #f]
+                                   [space #f]
+                                   [lspace #f]
+                                   [rspace #f])
+      (define (maybe-set-box! b v) (when b (set-box! b v)))
+      
+      (maybe-set-box! w width)
+      (maybe-set-box! h height)
+      (maybe-set-box! descent 0.0)
+      (maybe-set-box! space 0.0)
+      (maybe-set-box! lspace 0.0)
+      (maybe-set-box! rspace 0.0))
+
+    (define/override (draw dc x y left top right bottom dx dy draw-caret)
+      (define old-pen (send dc get-pen))
+      (define old-smoothing (send dc get-smoothing))
+      (define old-brush (send dc get-brush))
+      
+      (send dc set-smoothing 'aligned)
+
+      (case style
+        [(disc)
+         (send dc set-pen "black" 1 'transparent)
+         (send dc set-brush "black" 'solid)
+         (send dc draw-ellipse (+ x xoffset) (+ y yoffset) diameter diameter)]
+        [(circle)
+         (send dc set-pen "black" 1 'solid)
+         (send dc set-brush "black" 'transparent)
+         (send dc draw-ellipse (+ x xoffset) (+ y yoffset) diameter diameter)]
+        [(square)
+         (send dc set-pen "black" 1 'transparent)
+         (send dc set-brush "black" 'solid)
+         (send dc draw-rectangle (+ x xoffset) (+ y yoffset) diameter diameter)])
+      
+      (send dc set-pen old-pen)
+      (send dc set-smoothing old-smoothing)
+      (send dc set-brush old-brush))
+
+    (define/override (copy)
+      (new ul-bullet-snip% [style style] [size size]))))
 
 (define html-image-snip%
   (class image-snip%

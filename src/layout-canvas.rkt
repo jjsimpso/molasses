@@ -1862,6 +1862,10 @@
                                (equal? (cdr prop) name)))
         (printf "find-anchor-position ~a~n" prop)
         (element-ypos e)))
+
+    (define/public (layout-space-on-current-line)
+      (define-values (dw dh) (get-drawable-size))
+      (- dw layout-left-width (unaligned-or-center-width) layout-right-width))
     
     ;; add element e to the end of the elements dlist and update visible elements
     (define (append-element e)

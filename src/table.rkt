@@ -979,7 +979,7 @@
             (set!-values (x1 y1 x2 y2) (layout-string e dw y))
             (set-element-cached-text-extent! e (text-extent (- x2 x1) (- y2 y1) 0 0)) 
             ;(printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
-            (printf "layout placed ~a string at (~a,~a)-(~a,~a), cw=~a, xmargin=~a~n" (element-alignment e) x1 y1 x2 y2 cell-width xmargin)
+            ;(printf "layout placed ~a string at (~a,~a)-(~a,~a), cw=~a, xmargin=~a~n" (element-alignment e) x1 y1 x2 y2 cell-width xmargin)
             ;; set position for adding next element
             (when (element-end-of-line e)
               (layout-goto-new-line (next-line-y-pos y1))))
@@ -1681,7 +1681,7 @@
 
     (define/public (finalize-table layout-width)
       (set! rows (reverse rows))
-      (printf "finalize table ~ax~a~n" num-columns num-rows)
+      (printf "finalize table ~ax~a, lw=~a~n" num-columns num-rows layout-width)
       (calc-column-min/max-widths)
       (set-column-widths (- layout-width (table-border-rule-width)))
       (printf "table border+rule size = ~a~n" (table-border-rule-width))
@@ -1717,7 +1717,11 @@
 
     (define/public (set-last-element-eol)
       void)
-    
+
+    (define/public (estimate-current-cell-width)
+      (if (current-cell)
+          (send (current-cell) get-max-width)
+          0))
     ))
 
 (module+ main
