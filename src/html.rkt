@@ -245,6 +245,7 @@
   (define current-block (make-parameter #f))
   (define current-container (make-parameter (make-object null-container%)))
   (define current-bullet-style (make-parameter #f))
+  (define current-ol-number (make-parameter #f))
   ;; alignment is a special case since it isn't controlled by a style and must be applied to each paragraph
   (define current-alignment 'unaligned)  
   ;; don't use a parameter for link color since it will change so rarely
@@ -276,11 +277,11 @@
       [(is-a? (current-container) null-container%)
        (send canvas layout-space-on-current-line)]
       [(is-a? (current-container) table-snip%)
-       ;(define-values (dw dh) (send canvas get-drawable-size))
+       (define-values (dw dh) (send canvas get-drawable-size))
        (define w (send (current-container) estimate-current-cell-width))
        (printf "estimated cell width is ~a~n" w)
        (if (> w 0)
-           w
+           (min w dw) ; estimate uses max width, so constrain if too large
            (* (send canvas layout-space-on-current-line) 0.75))]))
   
   (define (last-element-eol?)
@@ -634,15 +635,39 @@
                          #t
                          current-alignment
                          '((resizable . 100)))]
+           [(ol)
+            (define list-table (new table-snip%
+                                    (drawing-context (send canvas get-dc))
+                                    (defstyle html-basic-style)
+                                    (border 0)
+                                    (w 1.0)
+                                    (rules 'none)
+                                    (cellspacing 0)
+                                    (cellpadding 0)))
+            (parameterize ([current-container list-table]
+                           [current-bullet-style #f]
+                           [current-ol-number 0])
+              (printf "start ordered list~n")
+              (loop (sxml:content node))
+              (printf "end ordered list~n"))
+            (send list-table finalize-table (get-container-width canvas))
+            (start-new-paragraph)
+            (append-snip list-table
+                         #t
+                         current-alignment
+                         '((resizable . 100)))]
            [(li)
             (printf "start list item~n")
             (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
             (send (current-container) start-row)
-            ;; indent list item
-            (send (current-container) start-cell #:width '(width-pixels . 20))
-            (send (current-container) end-cell)
-            (send (current-container) start-cell #:width '(width-pixels . 13) #:valign 'top)
-            (append-snip (new ul-bullet-snip% (style (current-bullet-style))) #f 'center)
+            ;; first column indents list item and has a bullet or number
+            (send (current-container) start-cell #:width '(width-pixels . 30) #:valign 'top)
+            (cond
+              [(current-bullet-style)
+               (append-snip (new ul-bullet-snip% (style (current-bullet-style))) #f 'right)]
+              [else
+               (current-ol-number (add1 (current-ol-number)))
+               (append-string (format "~a. " (current-ol-number)) #f #f 'right)])
             (send (current-container) end-cell)
             ;; cell for list item contents
             (send (current-container) start-cell)
