@@ -269,7 +269,7 @@
   (define (append-anchor name)
     (when name
       ;; create an empty string to serve as the anchor point
-      (printf "************ ~a~n" (list (cons 'anchor name)))
+      #;(printf "************ ~a~n" (list (cons 'anchor name)))
       (append-string "" #f #f current-alignment (list (cons 'anchor name)))))
 
   (define (get-container-width canvas)
@@ -279,7 +279,7 @@
       [(is-a? (current-container) table-snip%)
        (define-values (dw dh) (send canvas get-drawable-size))
        (define w (send (current-container) estimate-current-cell-width))
-       (printf "estimated cell width is ~a~n" w)
+       #;(printf "estimated cell width is ~a~n" w)
        (if (> w 0)
            (min w dw) ; estimate uses max width, so constrain if too large
            (* (send canvas layout-space-on-current-line) 0.75))]))
@@ -305,13 +305,13 @@
        #f]))
   
   (define (insert-newline)
-    (eprintf "inserting newline~n")
+    #;(eprintf "inserting newline~n")
     (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
     (append-string "\n" style #t current-alignment))
 
   (define (start-new-paragraph)
     (when (not (last-element-eol?))
-      (eprintf "starting new paragraph~n")
+      #;(eprintf "starting new paragraph~n")
       (insert-newline)))
 
   (define (last-node-in-paragraph? s)
@@ -392,7 +392,7 @@
 
   (define (handle-body-attributes node)
     (for/list ([attr (in-list (sxml:attr-list node))])
-      (eprintf "handling body attribute ~a~n" attr)
+      #;(eprintf "handling body attribute ~a~n" attr)
       (case (car attr)
         [(bgcolor)
          (define bg-color (parse-color (cadr attr)))
@@ -414,7 +414,7 @@
          (lambda ()
            (set! current-vlink-color prev-vlink-color))]
         [else
-         (eprintf "  null func for attribute ~a~n" attr)
+         #;(eprintf "  null func for attribute ~a~n" attr)
          (lambda () void)])))
   
   (define (handle-font-attributes node)
@@ -423,14 +423,14 @@
 
     ;; changes current style only, no need for close tag function
     (when color-value
-      (eprintf "setting font color to ~a~n" color-value)
+      #;(eprintf "setting font color to ~a~n" color-value)
       (define text-color (parse-color color-value))
       (send (current-style-delta) set-delta-foreground text-color))
     
     (if size-value
         (let ([prev-size current-font-size]
               [size (parse-font-size size-value current-font-size)])
-          (eprintf "new font size: ~a -> ~a -> ~a~n" prev-size size-value size)
+          #;(eprintf "new font size: ~a -> ~a -> ~a~n" prev-size size-value size)
           (set! current-font-size size)
           (send (current-style-delta) set-size-mult (vector-ref font-size-vec (sub1 size)))
           (list (lambda ()
@@ -478,7 +478,7 @@
         (define align (align-attr node current-alignment))
         (define hspace-value (attr->number node 'hspace))
         (define vspace-value (attr->number node 'vspace))
-        (printf "handle-img: hs=~a, vs=~a, src=~a~n" hspace-value vspace-value src-value)
+        #;(printf "handle-img: hs=~a, vs=~a, src=~a~n" hspace-value vspace-value src-value)
         (define bm (load-new-bitmap src-value request))
         (define snip (if url
                          (new html-link-img-snip% (url url) (base-req base-req) (browser-canvas canvas)
@@ -590,10 +590,10 @@
                 ;; create link
                 (cond
                   [(empty? content)
-                   (printf "unhandled href, no content~n")
+                   #;(printf "unhandled href, no content~n")
                    (append-anchor name-value)]
                   [(non-empty-string? (car content))
-                   (printf "handle text href ~a~n" content)
+                   #;(printf "handle text href ~a~n" content)
                    (define text (car content))
                    (define style-copy (make-object style-delta% 'change-nothing))
                    (send style-copy copy (current-style-delta))
@@ -605,7 +605,7 @@
                    (send link-snip insert text (string-length text))
                    (append-snip link-snip #f current-alignment (if name-value (list (cons 'anchor name-value)) '()))]
                   [((ntype-names?? '(img)) (car content))
-                   (printf "handle img href~n")
+                   #;(printf "handle img href~n")
                    (handle-img (car content) href-value base-req name-value)]
                   [else
                    ;; we don't actually create a link here but we do add the child elements
@@ -626,9 +626,9 @@
                                     (cellpadding 0)))
             (parameterize ([current-container list-table]
                            [current-bullet-style (next-bullet-style (current-bullet-style))])
-              (printf "start unordered list~n")
+              #;(printf "start unordered list~n")
               (loop (sxml:content node))
-              (printf "end unordered list~n"))
+              #;(printf "end unordered list~n"))
             (send list-table finalize-table (get-container-width canvas))
             (start-new-paragraph)
             (append-snip list-table
@@ -647,9 +647,9 @@
             (parameterize ([current-container list-table]
                            [current-bullet-style #f]
                            [current-ol-number 0])
-              (printf "start ordered list~n")
+              #;(printf "start ordered list~n")
               (loop (sxml:content node))
-              (printf "end ordered list~n"))
+              #;(printf "end ordered list~n"))
             (send list-table finalize-table (get-container-width canvas))
             (start-new-paragraph)
             (append-snip list-table
@@ -657,7 +657,7 @@
                          current-alignment
                          '((resizable . 100)))]
            [(li)
-            (printf "start list item~n")
+            #;(printf "start list item~n")
             (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
             (send (current-container) start-row)
             ;; first column indents list item and has a bullet or number
@@ -677,7 +677,7 @@
             (set! current-alignment prev-alignment)
             (send (current-container) end-cell)
             (send (current-container) end-row)
-            (printf "end list item~n")]
+            #;(printf "end list item~n")]
            [(table)
             (define border (or (attr->number node 'border) 0))
             (define cellspacing (or (attr->number node 'cellspacing) 2))
@@ -699,11 +699,9 @@
                                     (rules rules)
                                     (w (or width-pixels width-percent))))
             (parameterize ([current-container table-snip])
-              (printf "start table~n")
+              #;(printf "start table~n")
               (loop (sxml:content node))
-              ;; todo: getting size from the canvas won't work for nested tables
-              (define-values (dw dh) (send canvas get-drawable-size))
-              (printf "end table~n"))
+              #;(printf "end table~n"))
             (send table-snip finalize-table (get-container-width canvas))
             (start-new-paragraph)
             (append-snip table-snip
@@ -713,13 +711,13 @@
                              (list resizable-property)
                              '()))]
            [(tr)
-            (printf "start table row~n")
+            #;(printf "start table row~n")
             (send (current-container) start-row)
             (loop (sxml:content node))
             (send (current-container) end-row)
-            (printf "end table row~n")]
+            #;(printf "end table row~n")]
            [(td th)
-            (printf "start table cell~n")
+            #;(printf "start table cell~n")
             (define colspan (or (attr->number node 'colspan) 1))
             (define valign (valign-attr node 'middle))
             (define bgcolor (if (sxml:attr-safer node 'bgcolor)
@@ -743,7 +741,7 @@
               (loop (sxml:content node)))
             (send (current-container) end-cell)
             (set! current-alignment prev-alignment)
-            (printf "end table cell~n")]
+            #;(printf "end table cell~n")]
            [(script style meta link applet form isindex)
             ;; skip element
             void]
@@ -756,7 +754,7 @@
               ;; will also update the current style
               (define close-tag-funcs (handle-element node))
 
-              (eprintf "handling ~a~n" (car node))
+              ;(eprintf "handling ~a~n" (car node))
 
               ;; recurse into the element
               (loop (cdr node))
@@ -771,7 +769,7 @@
             (when (is-paragraph-element? (car node))
               (when (and (not (empty? (cdr s)))
                          (not (followed-by-newline? (cadr s))))
-                (eprintf "inserting newline after 'paragraph'~n")
+                #;(eprintf "inserting newline after 'paragraph'~n")
                 (insert-newline)))])
          (loop (cdr s))]
         [(string? node)
@@ -788,11 +786,10 @@
             (define text (if (regexp-match #px"^\\s+$" node)
                              ""
                              (string-trim node #:right? #f #:left? (last-element-ews?))))
-            (if (non-empty-string? text)
-              (let ([style (send style-list find-or-create-style (current-style) (current-style-delta))])
-                (append-string text style #f current-alignment)
-                #;(eprintf "~a,~a paragraph: ~a~n" (current-block) current-alignment text))
-              (eprintf "skipped newline char~n"))])
+            (when (non-empty-string? text)
+              (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
+              (append-string text style #f current-alignment)
+              #;(eprintf "~a,~a paragraph: ~a~n" (current-block) current-alignment text))])
          (loop (cdr s))]
         #;[(attr-list? node)
            (printf "atrributes ~a~n" (cdr node))
