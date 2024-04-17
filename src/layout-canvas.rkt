@@ -179,6 +179,28 @@
       (or (element-text-style e)
           (send (element-snip e) get-style)))
 
+    (define background-bitmap #f)
+    (define tiled-bg-bitmap #f)
+    
+    (define/public (set-background-image bm)
+      (cond
+        [bm
+         (define-values (cw ch) (get-client-size))
+         (define w (send bm get-width))
+         (define h (send bm get-height))
+         (define tile-rows (add1 (ceiling (/ ch h))))
+         (define tile-cols (add1 (ceiling (/ cw w))))
+         (define bg-bitmap (make-bitmap (* tile-cols w) (* tile-rows h)))
+         (define bg-bitmap-dc (send bg-bitmap make-dc))
+         (for* ([x (in-range 0 (* tile-cols w) w)]
+                [y (in-range 0 (* tile-rows h) h)])
+           (send bg-bitmap-dc draw-bitmap bm x y))
+         (set! tiled-bg-bitmap bg-bitmap)
+         (set! background-bitmap bm)]
+        [else
+         (set! tiled-bg-bitmap #f)
+         (set! background-bitmap #f)]))
+    
     (define (get-extent e dc x y [w #f] [h #f] [descent #f] [space #f] [lspace #f] [rspace #f])
       (if (string? (element-snip e))
           (if (element-cached-text-extent e)
@@ -228,6 +250,12 @@
       (for ([line (in-list (element-lines e))])
         ;(printf "draw-wrapped-text: (~a,~a) ~a~n" (wrapped-line-x line) (wrapped-line-y line) (substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)))
         (send/apply dc draw-text `(,(substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)) ,(+ (- (wrapped-line-x line) left) xmargin) ,(+ (- (wrapped-line-y line) top) ymargin)))))
+
+    (define (draw-background-image x y w h)
+      (define-values (vx vy) (get-view-start))
+      (define srcx (remainder (+ vx x) (send background-bitmap get-width)))
+      (define srcy (remainder (+ vy y) (send background-bitmap get-height)))
+      (send dc draw-bitmap-section tiled-bg-bitmap x y srcx srcy w h))
     
     (define (draw e dc x y left top right bottom dx dy)
       (if (string? (element-snip e))
@@ -276,8 +304,8 @@
                           (element-visible? e top bottom)))
           (define highlight-style (make-highlight-style-cached (get-style e)))
           (when (not (eq? highlight-style current-style))
-              (set! current-style highlight-style)
-              (send current-style switch-to dc #f))
+            (set! current-style highlight-style)
+            (send current-style switch-to dc #f))
           (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                        (+ (- (element-ypos e) top) ymargin)))
           ;(printf "highlight snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
@@ -296,13 +324,22 @@
         (for ([e (in-dlist sel-elements)]
               #:when (and (highlightable-element? e)
                           (element-visible? e top bottom)))
-          (when (not (eq? (get-style e) current-style))
-              (set! current-style (get-style e))
-              (send current-style switch-to dc #f))
           (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                        (+ (- (element-ypos e) top) ymargin)))
           ;(printf "clear snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
-          (draw-selection e highlight-selection sel-elements x y left top cw ch dc))))
+          (set! current-style (check-style-update (get-style e) current-style))
+          ;; when clearing highlights, just redraw the entire element/string instead of trying to only clear
+          ;; the actual highligted portion. not worth the effort once re-drawing the background became necessary
+          (when tiled-bg-bitmap
+            (define-values (w h u2 u3) (send dc get-text-extent (element-snip e)))
+            (draw-background-image x y w h))
+          (if (and (wrap-text?) (string? (element-snip e)))
+             (draw-wrapped-text e dc left top)
+             (draw e dc
+                   x y
+                   0 0
+                   (- cw xmargin) (- ch ymargin)
+                   0 0)))))
     
     (define (update-highlight highlight-selection old-selection dc)
       (unless (selection-equal? old-selection highlight-selection)
@@ -1213,14 +1250,30 @@
       
     (define (clear-rectangle x y width height)
       ;(printf "clear-rectangle ~a,~a  ~ax~a~n" x y width height)
-      (define old-brush (send dc get-brush))
-      (define old-pen (send dc get-pen))
-      (send dc set-pen (get-canvas-background) 1 'transparent)
-      (send dc set-brush (get-canvas-background) 'solid)
-      (send dc draw-rectangle x y width height)
-      (send dc set-brush old-brush)
-      (send dc set-pen old-pen))
+      (cond
+        [tiled-bg-bitmap
+         ;; draw tiled background image if set
+         (draw-background-image x y width height)]
+        [else
+         (define old-brush (send dc get-brush))
+         (define old-pen (send dc get-pen))
+         (send dc set-pen (get-canvas-background) 1 'transparent)
+         (send dc set-brush (get-canvas-background) 'solid)
+         (send dc draw-rectangle x y width height)
+         (send dc set-brush old-brush)
+         (send dc set-pen old-pen)]))
 
+    ;; update drawing context if style needs to change and return style
+    (define (check-style-update new-style current-style)
+      (cond
+        [(not (eq? new-style current-style))
+         (send new-style switch-to dc #f)
+         (when tiled-bg-bitmap
+           (send dc set-text-mode 'transparent))
+         new-style]
+        [else
+         current-style]))
+    
     (define/override (on-paint)
       (define-values (cw ch) (get-client-size))
       (define-values (vw vh) (get-virtual-size))
@@ -1242,13 +1295,10 @@
           (clear-rectangle 0 0 cw ch)
           ;; only draw visible elements
           (for ([e (in-dlist visible-elements)])
-            ;; set the style if it has changed
-            (when (not (eq? (get-style e) current-style))
-              (set! current-style (get-style e))
-              (send current-style switch-to dc #f))
             (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                          (+ (- (element-ypos e) top) ymargin)))
             ;(printf "  snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
+            (set! current-style (check-style-update (get-style e) current-style))
             (if (and (wrap-text?) (string? (element-snip e)))
                 (draw-wrapped-text e dc left top)
                 (draw e dc
@@ -1310,6 +1360,8 @@
       (set! cached-client-width cw)
       (set! cached-client-height ch)
 
+      (set-background-image background-bitmap)
+      
       ;; need to update the scroll range when the client size changes
       (define-values (vx vy) (get-virtual-size))
       (update-scrollbars vx vy))
@@ -2104,7 +2156,8 @@
   (define test-selector "gamefaqs-archive/ps2/final-fantasy-xii/FAQ_Walkthrough-by--Berserker.txt")
   ;(define test-selector "/media/floppies.txt")
   ;(define test-selector ".")
-
+  (define bg (call-with-input-file "test/big.png" (lambda (in) (read-bitmap in))))
+  
   (if layout-test
       (let ([square (make-object image-snip% "test/square.png")]
             [square-left (make-object image-snip% "test/square-left.png")]
@@ -2202,6 +2255,7 @@
                              (gopher-response-data-port response)
                              'unknown)
                 #t))
+        (send canvas set-background-image bg)
         (send canvas append-string highlander-text)
         (send canvas append-string "\n\n")
         (send canvas append-string "text\nwith lots\nof\nnewlines")
