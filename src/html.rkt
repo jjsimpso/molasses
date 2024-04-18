@@ -76,7 +76,7 @@
         (make-object bitmap% "/invalid/path/a40aiduuhsth3"))])
     (define new-bitmap (make-object bitmap%
                                     (gopher-response-data-port response)
-                                    'unknown))
+                                    'unknown/alpha))
     (close-input-port (gopher-response-data-port response))
     new-bitmap))
 
@@ -398,6 +398,12 @@
          (define bg-color (parse-color (cadr attr)))
          (send canvas set-canvas-background bg-color)
          (send (current-style-delta) set-delta-background bg-color)
+         (lambda () void)]
+        [(background)
+         (define url (cadr attr)) ;(sxml:attr-safer node 'background))
+         (when (string? url)
+           (define bg-bitmap (load-new-bitmap url (send canvas get-current-request)))
+           (send canvas set-background-image bg-bitmap))
          (lambda () void)]
         [(text)
          (define text-color (parse-color (cadr attr)))

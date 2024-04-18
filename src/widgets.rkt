@@ -133,13 +133,13 @@
     [(equal? item-type #\I) ; image
      (define img (make-object image-snip%
                               (gopher-response-data-port resp)
-                              'unknown))
+                              'unknown/alpha))
      (send canvas append-snip img #t)
      (close-input-port (gopher-response-data-port resp))]
     [(equal? item-type #\g) ; gif
      (define img (make-object image-snip%
                               (gopher-response-data-port resp)
-                              'gif))
+                              'gif/alpha))
      (close-input-port (gopher-response-data-port resp))
      (send canvas append-snip img #t)]
     [(or (equal? item-type #\d) ; document (PDF, Word, etc.)
@@ -939,6 +939,7 @@
                 [update-status-cb #f]
                 [update-address-cb #f])
     (inherit set-canvas-background
+             set-background-image
              get-client-size
              get-drawable-size
              get-view-start
@@ -1084,22 +1085,23 @@
     
     (set-canvas-background default-bg-color)
 
-    (define/public (reset-background-color)
-      (set-canvas-background default-bg-color))
+    (define/public (reset-background)
+      (set-canvas-background default-bg-color)
+      (set-background-image #f))
 
     (define/public (check-gopher-defaults)
       ;; reset canvas mode if it was changed when loading html
       (when (eq? (get-mode) 'layout)
         (printf "check-gopher-defaults~n")
         (set-default-style "Standard")
-        (reset-background-color)
+        (reset-background)
         (set-mode 'plaintext)))
 
     (define/public (check-gemini-defaults)
       ;; reset canvas mode if it was changed when loading html
       (when (eq? (get-mode) 'layout)
         (set-default-style "Standard")
-        (reset-background-color)
+        (reset-background)
         (set-mode 'wrapped)))
     
     (define/private (push-history url)
@@ -1178,7 +1180,7 @@
                     (push-history old-url))))))
 
       ;; background color can be changed by html rendering
-      (reset-background-color)
+      (reset-background)
 
       (clear-mouse-selection)
 
