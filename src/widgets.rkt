@@ -133,13 +133,13 @@
     [(equal? item-type #\I) ; image
      (define img (make-object image-snip%
                               (gopher-response-data-port resp)
-                              'unknown/alpha))
+                              'unknown))
      (send canvas append-snip img #t)
      (close-input-port (gopher-response-data-port resp))]
     [(equal? item-type #\g) ; gif
      (define img (make-object image-snip%
                               (gopher-response-data-port resp)
-                              'gif/alpha))
+                              'gif))
      (close-input-port (gopher-response-data-port resp))
      (send canvas append-snip img #t)]
     [(or (equal? item-type #\d) ; document (PDF, Word, etc.)

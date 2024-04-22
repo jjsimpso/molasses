@@ -18,6 +18,8 @@
          "gopher.rkt"
          "request.rkt")
 
+(require (rename-in "magic/image-kind.rkt" (magic-query image-kind-query)))
+
 ;; use browser/htmltext frome drracket as a starting point and basis for the api
 ;; 
 
@@ -53,6 +55,29 @@
              #:when (cadr e))
     e))
 
+(define (normalize-magic-output-string s)
+  (for/fold ([ns '()]
+             #:result (string-trim (list->string (reverse ns))))
+            ([c (in-string s)])
+    (cond
+      [(equal? c #\backspace)
+       (if (empty? ns)
+           '()
+           (cdr ns))]
+      [(equal? c #\rubout)
+       ;; doesn't remove the next character like it should but i've never seen anyone use DEL in magic anyway
+       ns]
+      [else
+       (cons c ns)])))
+
+(define (guess-kind in)
+  (parameterize ([current-input-port in])
+    (define result (image-kind-query))
+    (cond
+      [result
+       (string->symbol (normalize-magic-output-string (magic-result-output-text result)))]
+      ['unknown])))
+
 ;; create a new bitmap
 ;; use img src attribute and request structure to compose a gopher request to the image
 ;; 
@@ -71,13 +96,15 @@
   (with-handlers
     ([exn:fail?
       (lambda (exn)
+        (eprintf "load-new-bitmap exception~n")
         (close-input-port (gopher-response-data-port response))
         ; hack to generate the 'missing image' bitmap. don't know how to reference this bitmap directly.
         (make-object bitmap% "/invalid/path/a40aiduuhsth3"))])
+    (define data (port->bytes (gopher-response-data-port response)))
     (define new-bitmap (make-object bitmap%
-                                    (gopher-response-data-port response)
-                                    'unknown/alpha))
-    (close-input-port (gopher-response-data-port response))
+                                    (open-input-bytes data)
+                                    (call-with-input-bytes data guess-kind)))
+    (printf "guess kind returns ~a~n" (call-with-input-bytes data guess-kind))
     new-bitmap))
 
 #;(define (join-strings c)
