@@ -4,9 +4,21 @@
 # examples: "png" or "gif/alpha"
 
 # PNG
+0            name            png-transparent
+>4           belong          !0x49444154
+>>4          belong          !0x74524E53
+>>>(0.L+12)  use             png-transparent
+>>4          belong          0x74524E53          \b/alpha
+
 0	name		png-alpha
 >9	byte		4		\b/alpha
 >9	byte		6		\b/alpha
+>9	byte		0		
+>>17    use             png-transparent
+>9	byte		2		
+>>17    use             png-transparent
+>9	byte		3		
+>>17    use             png-transparent
 
 0	string		\x89PNG\x0d\x0a\x1a\x0a\x00\x00\x00\x0DIHDR	png
 >16	use		png-alpha
