@@ -245,7 +245,8 @@
         ;; set the style if it has changed
         (when (not (eq? (get-style e) current-style))
           (set! current-style (get-style e))
-          (send current-style switch-to dc #f))
+          (send current-style switch-to dc #f)
+          (send dc set-text-mode 'transparent))
         (define-values (xpos ypos) (values (+ x (element-xpos e) xmargin)
                                            (+ y (element-ypos e) ymargin valign-offset)))
         (if (string? (element-snip e))
