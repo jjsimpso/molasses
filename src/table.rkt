@@ -1701,7 +1701,8 @@
       (when c
         (send c append-snip s end-of-line alignment properties)))
 
-    (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned])
+    ;; properties argument is currently unused, but need to match function signature in layout-canvas%
+    (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned] [properties '()])
       (define c (current-cell))
       (when c
         (send c append-string s style end-of-line alignment)))
