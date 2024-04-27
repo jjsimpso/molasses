@@ -811,7 +811,7 @@
             void]
            [(pre)
             (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
-            (append-string node style (string-suffix? node "\n"))
+            (append-string node style (string-suffix? node "\n") current-alignment)
             #;(eprintf "pre: ~aEND~n" node)]
            [else
             ;; attempt to normalize spacing when one string ends with whitespace and the following
