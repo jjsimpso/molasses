@@ -406,7 +406,17 @@
       [("bottom") 'bottom]
       [("baseline") (error "valign baseline not supported")]
       [else default-alignment]))
-  
+
+  (define (img-align-attr node default-alignment)
+    (case (and (sxml:attr-safer node 'align)
+               (string-downcase (sxml:attr node 'align)))
+      [("left") 'left]
+      [("right") 'right]
+      [("center" "middle") 'middle]
+      [("top") 'top]
+      [("bottom") 'bottom]
+      [else default-alignment]))
+
   (define (rules-attr node default-rules)
     (case (and (sxml:attr-safer node 'rules)
                (string-downcase (sxml:attr node 'rules)))
@@ -508,7 +518,16 @@
       (define src-value (sxml:attr-safer node 'src))
       (define request (send canvas get-current-request))
       (when request
-        (define align (align-attr node current-alignment))
+        (define align (img-align-attr node #f))
+        (printf "img-attr-align returned ~a~n" align)
+        (define halign
+          (case align
+            [(left right) align]
+            [else current-alignment]))
+        (define valign
+          (case align
+            [(top bottom middle) align]
+            [else 'bottom]))
         (define hspace-value (attr->number node 'hspace))
         (define vspace-value (attr->number node 'vspace))
         #;(printf "handle-img: hs=~a, vs=~a, src=~a~n" hspace-value vspace-value src-value)
@@ -518,7 +537,7 @@
                               (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))
                          (new html-image-snip% (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))))
         (send snip set-bitmap bm)
-        (append-snip snip #f align (if name-value `((anchor . ,name-value)) '())))))
+        (append-snip snip #f halign (if name-value `((anchor . ,name-value) (valign . ,valign)) `((valign . ,valign)))))))
   
   ;; handle each element based on the element type
   ;; return a list of functions to call when closing the element

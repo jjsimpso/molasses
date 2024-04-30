@@ -958,14 +958,71 @@
           layout-center-elements
           layout-unaligned-elements))
     
-    (define (layout-snip e total-width y ew eh)
+    (define (layout-snip e total-width y ew eh [valign 'bottom])
+      (define (initial-baseline top height valign)
+        (case valign
+          [(top)
+           (+ top height)]
+          [(middle)
+           (+ top (ceiling (/ height 2)))]
+          [else
+           ; bottom
+           (+ top height)]))
+      
+      (define (adjust-for-valign top bottom valign elist)
+        (case valign
+          [(top)
+           (when (> bottom layout-baseline-pos)
+             ; push the baseline down to meet bottom of snip
+             (define diff (- bottom layout-baseline-pos))
+             ;(printf "adjust-for-valign: top adjust baseline by ~a~n" diff)
+             (adjust-elements-ypos! elist diff)
+             (set! layout-baseline-pos bottom))
+           ;(printf "adjust-for-valign: top ~a-~a~n" top bottom)
+           (values top bottom)]
+          [(middle)
+           (define height (- bottom top))
+           (define new-top (max 0 (- layout-baseline-pos (/ height 2))))
+           (define new-bottom (+ new-top height))
+           (cond
+             [(< new-top top)
+              ; push the baseline down
+              (define diff (- top new-top))
+              (adjust-elements-ypos! elist diff)
+              (set! layout-baseline-pos (+ layout-baseline-pos diff))
+              ;(printf "adjust-for-valign: middle ~a,~a,~a,~a~n" height new-top new-bottom diff)
+              ;(printf "adjust-for-valign: middle 1 ~a-~a->~a-~a~n" top bottom top (+ bottom diff))
+              (values top (+ bottom diff))]
+             [(>= new-top top)
+              ;(printf "adjust-for-valign: middle 2 ~a-~a->~a-~a~n" top bottom new-top new-bottom)
+              (values new-top new-bottom)])]
+          [else
+           ; bottom
+           ;(printf "adjust-for-valign: bottom=~a baseline=~a~n" bottom layout-baseline-pos)
+           (cond
+             [(> bottom layout-baseline-pos)
+              ; push the baseline down to meet bottom of snip
+              (define diff (- bottom layout-baseline-pos))
+              (adjust-elements-ypos! elist diff)
+              (set! layout-baseline-pos bottom)
+              ;(printf "adjust-for-valign: bottom adjust baseline by ~a~n" diff)
+              ;(printf "adjust-for-valign: bottom 1 ~a-~a~n" top bottom)
+              (values top bottom)]
+             [(< bottom layout-baseline-pos)
+              ; adjust y position to touch the baseline
+              (define diff (- layout-baseline-pos bottom))
+              ;(printf "adjust-for-valign: bottom 2 ~a-~a->~a-~a~n" top bottom (+ top diff) (+ bottom diff))
+              (values (+ top diff) (+ bottom diff))]
+             [else
+              (values top bottom)])]))
+      
       (if (< (- total-width (+ layout-left-width layout-right-width (unaligned-or-center-width))) ew)
           ; we don't have room for this element on the current line/y-position
           (let ([new-y (next-line-y-pos y)])
             (if (not (= y new-y))
                 (begin
                   (layout-goto-new-line new-y)
-                  (layout-snip e total-width new-y ew eh))
+                  (layout-snip e total-width new-y ew eh valign))
                 ; we have advanced the current y position as far as we can and it still doesn't fit
                 (begin
                   (case (element-alignment e)
@@ -1022,7 +1079,7 @@
                  (let ([margin (/ (- total-width layout-left-width layout-right-width ew) 2)])
                    (set! layout-center-elements (cons e layout-center-elements))
                    (set! layout-center-width (+ ew snip-xmargin))
-                   (set! layout-baseline-pos (+ y eh))
+                   (set! layout-baseline-pos (initial-baseline y eh valign))
                    (values (+ layout-left-width margin) y (+ layout-left-width margin ew) (+ y eh)))
                  (let* ([margin (/ (- total-width layout-left-width layout-right-width layout-center-width ew) 2)]
                         [pos (+ layout-left-width margin layout-center-width)]
@@ -1032,15 +1089,7 @@
                    (define old-margin ( / (- total-width layout-left-width layout-center-width layout-right-width) 2))
                    (define diff (- margin old-margin))
                    (adjust-elements-xpos! layout-center-elements diff)
-                   (when (> y2 layout-baseline-pos)
-                     (define diff (- y2 layout-baseline-pos))
-                     (adjust-elements-ypos! layout-center-elements diff)
-                     (set! layout-baseline-pos y2))
-                   (when (< y2 layout-baseline-pos)
-                     ; adjust y position to touch the baseline
-                     (define diff (- layout-baseline-pos y2))
-                     (set! y1 (+ y1 diff))
-                     (set! y2 (+ y2 diff)))
+                   (set!-values (y1 y2) (adjust-for-valign y1 y2 valign layout-center-elements))
                    (set! layout-center-elements (cons e layout-center-elements))
                    (set! layout-center-width (+ layout-center-width ew snip-xmargin))
                    (values pos y1 (+ pos ew) y2)))]
@@ -1050,21 +1099,13 @@
                  (begin
                    (set! layout-unaligned-elements (cons e layout-unaligned-elements))
                    (set! layout-unaligned-width (+ ew snip-xmargin))
-                   (set! layout-baseline-pos (+ y eh))
+                   (set! layout-baseline-pos (initial-baseline y eh valign))
                    (values layout-left-width y (+ layout-left-width ew) (+ y eh)))
                  (let ([x1 (+ layout-left-width layout-unaligned-width)]
                        [y1 y]
                        [x2 (+ layout-left-width layout-unaligned-width ew)]
                        [y2 (+ y eh)])
-                   (when (> y2 layout-baseline-pos)
-                     (define diff (- y2 layout-baseline-pos))
-                     (adjust-elements-ypos! layout-unaligned-elements diff)
-                     (set! layout-baseline-pos y2))
-                   (when (< y2 layout-baseline-pos)
-                     ; adjust y position to touch the baseline
-                     (define diff (- layout-baseline-pos y2))
-                     (set! y1 (+ y1 diff))
-                     (set! y2 (+ y2 diff)))
+                   (set!-values (y1 y2) (adjust-for-valign y1 y2 valign layout-unaligned-elements))
                    (set! layout-unaligned-elements (cons e layout-unaligned-elements))
                    (set! layout-unaligned-width (+ layout-unaligned-width ew snip-xmargin))
                    (values x1 y1 x2 y2)))]
@@ -1214,11 +1255,16 @@
             (get-extent e dc x y snip-w snip-h snip-descent snip-space snip-lspace snip-rspace)
             (case mode
               [(layout)
+               (define valign-property (assoc 'valign (element-properties e)))
+               (printf "valign-property = ~a~n" valign-property)
                (define snip-height (if (is-a? (element-snip e) string-snip%)
                                        (- (unbox snip-h) (unbox snip-descent))
                                        (unbox snip-h)))
-               (set!-values (x1 y1 x2 y2) (layout-snip e dw y (unbox snip-w) snip-height))
-               ;(printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
+               (set!-values (x1 y1 x2 y2) (layout-snip e dw y (unbox snip-w) snip-height
+                                                       (if valign-property
+                                                           (cdr valign-property)
+                                                           'bottom)))
+               (printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
                ;(printf "extent: ~ax~a~n" (unbox snip-w) (unbox snip-h))
                ; layout-goto-new-line needs the element's position to be set, so set it early for now
                (set-element-xpos! e x1)
