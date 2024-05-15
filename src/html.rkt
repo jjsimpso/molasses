@@ -101,6 +101,7 @@
         ; hack to generate the 'missing image' bitmap. don't know how to reference this bitmap directly.
         (make-object bitmap% "/invalid/path/a40aiduuhsth3"))])
     (define data (port->bytes (gopher-response-data-port response)))
+    (close-input-port (gopher-response-data-port response))
     (define new-bitmap (make-object bitmap%
                                     (open-input-bytes data)
                                     (call-with-input-bytes data guess-kind)))
