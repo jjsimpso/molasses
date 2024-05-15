@@ -389,7 +389,16 @@
                    (string->number (car (string-split width-value "%"))))
              (cons 'width-pixels
                    (string->number width-value)))))
-  
+
+  (define (height-attr node)
+    (define height-value (sxml:attr-safer node 'height))
+    (and height-value
+         (if (string-contains? height-value "%")
+             (cons 'height-percent
+                   (string->number (car (string-split height-value "%"))))
+             (cons 'height-pixels
+                   (string->number height-value)))))
+
   (define (align-attr node default-alignment)
     (case (and (sxml:attr-safer node 'align)
                (string-downcase (sxml:attr node 'align)))
@@ -528,6 +537,16 @@
           (case align
             [(top bottom middle) align]
             [else 'bottom]))
+        (define width-property (or (width-attr node) #f))
+        (define width-pixels
+          (and width-property
+               (eq? (car width-property) 'width-pixels)
+               (cdr width-property)))
+        (define height-property (or (height-attr node) #f))
+        (define height-pixels
+          (and height-property
+               (eq? (car height-property) 'height-pixels)
+               (cdr height-property)))
         (define hspace-value (attr->number node 'hspace))
         (define vspace-value (attr->number node 'vspace))
         #;(printf "handle-img: hs=~a, vs=~a, src=~a~n" hspace-value vspace-value src-value)
@@ -537,6 +556,10 @@
                               (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))
                          (new html-image-snip% (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))))
         (send snip set-bitmap bm)
+        (when (or (and width-pixels (not (eq? width-pixels (get-field base-width snip))))
+                  (and height-pixels (not (eq? height-pixels (get-field base-height snip)))))
+          (printf "resizing html image snip to width ~a, height ~a~n" width-pixels height-pixels)
+          (send snip resize (or width-pixels (get-field base-width snip)) (or height-pixels (get-field base-height snip))))
         (append-snip snip #f halign (if name-value `((anchor . ,name-value) (valign . ,valign)) `((valign . ,valign)))))))
   
   ;; handle each element based on the element type

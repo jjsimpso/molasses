@@ -254,12 +254,31 @@
 
 (define html-image-snip%
   (class image-snip%
+    (field
+     [base-bitmap #f]
+     [base-width 0]
+     [base-height 0])
+
     (super-new)
 
     (init-field
      [hspace 2]
      [vspace 0])
 
+    (define/override (set-bitmap bm [mask #f])
+      (when bm
+        (set! base-bitmap bm)
+        (set! base-width (send bm get-width))
+        (set! base-height (send bm get-height)))
+      (super set-bitmap bm mask))
+
+    (define/override (resize w h)
+      (define new-bm (make-bitmap w h))
+      (define new-bm-dc (new bitmap-dc% (bitmap new-bm)))
+      (send new-bm-dc set-scale (/ w base-width) (/ h base-height))
+      (send new-bm-dc draw-bitmap base-bitmap 0 0)
+      (set-bitmap new-bm))
+    
     (define/override (get-extent dc x y
                                  [w #f]
                                  [h #f]
