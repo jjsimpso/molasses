@@ -273,9 +273,11 @@
       (super set-bitmap bm mask))
 
     (define/override (resize w h)
-      (define new-bm (make-bitmap w h))
+      (define width (exact-round w))
+      (define height (exact-round h))
+      (define new-bm (make-bitmap width height))
       (define new-bm-dc (new bitmap-dc% (bitmap new-bm)))
-      (send new-bm-dc set-scale (/ w base-width) (/ h base-height))
+      (send new-bm-dc set-scale (/ width base-width) (/ height base-height))
       (send new-bm-dc draw-bitmap base-bitmap 0 0)
       (set-bitmap new-bm))
     
@@ -286,8 +288,7 @@
                                  [space #f]
                                  [lspace #f]
                                  [rspace #f])
-
-      (super get-extent dc x y w h descent space lspace rspace)
+      (super get-extent dc (or x 0) (or y 0) w h descent space lspace rspace)
       (when w (set-box! w (+ (unbox w) (* 2 hspace))))
       (when h (set-box! h (+ (unbox h) (* 2 vspace)))))
 

@@ -539,15 +539,7 @@
             [(top bottom middle) align]
             [else 'bottom]))
         (define width-property (or (width-attr node) #f))
-        (define width-pixels
-          (and width-property
-               (eq? (car width-property) 'width-pixels)
-               (cdr width-property)))
         (define height-property (or (height-attr node) #f))
-        (define height-pixels
-          (and height-property
-               (eq? (car height-property) 'height-pixels)
-               (cdr height-property)))
         (define hspace-value (attr->number node 'hspace))
         (define vspace-value (attr->number node 'vspace))
         #;(printf "handle-img: hs=~a, vs=~a, src=~a~n" hspace-value vspace-value src-value)
@@ -557,11 +549,36 @@
                               (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))
                          (new html-image-snip% (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))))
         (send snip set-bitmap bm)
-        (when (or (and width-pixels (not (eq? width-pixels (get-field base-width snip))))
-                  (and height-pixels (not (eq? height-pixels (get-field base-height snip)))))
-          (printf "resizing html image snip to width ~a, height ~a~n" width-pixels height-pixels)
-          (send snip resize (or width-pixels (get-field base-width snip)) (or height-pixels (get-field base-height snip))))
-        (append-snip snip #f halign (if name-value `((anchor . ,name-value) (valign . ,valign)) `((valign . ,valign)))))))
+        (when (or width-property height-property)
+          (define width-pixels
+            (cond
+              [(false? width-property)
+               (get-field base-width snip)]
+              [(eq? (car width-property) 'width-pixels)
+               (cdr width-property)]
+              ;[(eq? (car width-property) 'width-percent)
+              [else
+               ; don't bother setting relative size yet, handle that with the resizable property
+               (get-field base-width snip)]))
+          (define height-pixels
+            (cond
+              [(false? height-property)
+               (get-field base-height snip)]
+              [(eq? (car height-property) 'height-pixels)
+               (cdr height-property)]
+              [else
+               ; don't bother setting relative size yet, handle that with the resizable property
+               (get-field base-height snip)]))
+          (when (or (not (eq? width-pixels (get-field base-width snip)))
+                    (not (eq? height-pixels (get-field base-height snip))))
+            (printf "resizing html image snip to width ~a, height ~a~n" width-pixels height-pixels)
+            (send snip resize width-pixels height-pixels)))
+        (cond
+          [(and width-property (eq? (car width-property) 'width-percent))
+           (append-snip snip #f halign (if name-value `((anchor . ,name-value) (valign . ,valign) (resizable . ,(cdr width-property))) `((valign . ,valign) (resizable . ,(cdr width-property)))))]
+          ;; the resizable property currently only supports resizing width, so ignore height-percent
+          [else
+           (append-snip snip #f halign (if name-value `((anchor . ,name-value) (valign . ,valign)) `((valign . ,valign))))]))))
   
   ;; handle each element based on the element type
   ;; return a list of functions to call when closing the element

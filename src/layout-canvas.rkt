@@ -1256,7 +1256,7 @@
             (case mode
               [(layout)
                (define valign-property (assoc 'valign (element-properties e)))
-               (printf "valign-property = ~a~n" valign-property)
+               ;(printf "valign-property = ~a~n" valign-property)
                (define snip-height (if (is-a? (element-snip e) string-snip%)
                                        (- (unbox snip-h) (unbox snip-descent))
                                        (unbox snip-h)))
@@ -1264,7 +1264,7 @@
                                                        (if valign-property
                                                            (cdr valign-property)
                                                            'bottom)))
-               (printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
+               ;(printf "layout placed ~a (~a,~a)-(~a,~a) left:~a, una:~a, right:~a~n" (element-alignment e) x1 y1 x2 y2 layout-left-width layout-unaligned-width layout-right-width)
                ;(printf "extent: ~ax~a~n" (unbox snip-w) (unbox snip-h))
                ; layout-goto-new-line needs the element's position to be set, so set it early for now
                (set-element-xpos! e x1)
