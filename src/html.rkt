@@ -49,6 +49,12 @@
     d))
 (define delta:symbol (make-object style-delta% 'change-family 'symbol))
 
+(define (assoc-value v lst)
+  (define apair (assoc v lst))
+  (if apair
+      (cdr apair)
+      #f))
+
 ;; for future use with dynamic-instantiate
 (define (non-default-attrs attr-list)
   (for/list ([e (in-list attr-list)]
@@ -212,6 +218,14 @@
          (if (< val 1)
              1
              7))]))
+
+;; returns a vector of coordinates
+(define (parse-coords coord-string [len #f])
+  (printf "coord-string: ~a~n" coord-string)
+  (define coords (string-split (string-replace coord-string "," " ")))
+  (define vlen (or len (length coords)))
+  (for/vector #:length vlen ([s (in-list coords)])
+    (or (string->number s) 0)))
 
 (define (read-html a-port)
   (html->xexp a-port))
@@ -523,9 +537,10 @@
                   (set! current-alignment prev-alignment))))
         '()))
 
-  (define (handle-img node [url #f] [base-req #f] [name-value #f])
+  (define (handle-img node [url #f] [name-value #f])
     (when img-ok?
       (define src-value (sxml:attr-safer node 'src))
+      (define usemap-value (sxml:attr-safer node 'usemap))
       (define request (send canvas get-current-request))
       (when request
         (define align (img-align-attr node #f))
@@ -544,10 +559,23 @@
         (define vspace-value (attr->number node 'vspace))
         #;(printf "handle-img: hs=~a, vs=~a, src=~a~n" hspace-value vspace-value src-value)
         (define bm (load-new-bitmap src-value request))
-        (define snip (if url
-                         (new html-link-img-snip% (url url) (base-req base-req) (browser-canvas canvas)
-                              (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))
-                         (new html-image-snip% (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))))
+        (define snip
+          (cond
+            [url
+             (define base-req (send canvas get-current-request))
+             (new html-link-img-snip% (url url) (base-req base-req) (browser-canvas canvas)
+                  (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))]
+            [usemap-value
+             (define base-req (send canvas get-current-request))
+             (define map-name (if (equal? (string-ref usemap-value 0) #\#)
+                                  (substring usemap-value 1)
+                                  #f))
+             (printf "handle-img: use image map ~a, maps=~a, base-req=~a~n" map-name maps base-req)
+             (define img-map (assoc-value map-name maps))
+             (new html-map-img-snip% (browser-canvas canvas) (img-map (or img-map (new html-map%))) (base-req base-req)
+                                     (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))]
+            [else
+             (new html-image-snip% (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))]))
         (send snip set-bitmap bm)
         (when (or width-property height-property)
           (define width-pixels
@@ -641,6 +669,9 @@
        '()]))
   
   (send canvas set-default-style html-basic-style)
+
+  ;; assoc list of maps defined on this page
+  (define maps '())
   
   (let loop ([s content])
     (unless (empty? s)
@@ -678,7 +709,6 @@
             (define content (sxml:content node))
             (define href-value (sxml:attr-safer node 'href))
             (define name-value (sxml:attr-safer node 'name))
-            (define base-req (send canvas get-current-request))
             (if href-value
                 ;; create link
                 (cond
@@ -693,13 +723,13 @@
                    (send style-copy set-delta-foreground current-link-color)
                    (send style-copy set-delta 'change-underline #t)
                    (define style (send style-list find-or-create-style (current-style) style-copy))
-                   (define link-snip (new html-link-snip% (url href-value) (base-req base-req) (browser-canvas canvas)))
+                   (define link-snip (new html-link-snip% (url href-value) (base-req (send canvas get-current-request)) (browser-canvas canvas)))
                    (send link-snip set-style style)
                    (send link-snip insert text (string-length text))
                    (append-snip link-snip #f current-alignment (if name-value (list (cons 'anchor name-value)) '()))]
                   [((ntype-names?? '(img)) (car content))
                    #;(printf "handle img href~n")
-                   (handle-img (car content) href-value base-req name-value)]
+                   (handle-img (car content) href-value name-value)]
                   [else
                    ;; we don't actually create a link here but we do add the child elements
                    (append-anchor name-value)
@@ -835,6 +865,25 @@
             (send (current-container) end-cell)
             (set! current-alignment prev-alignment)
             #;(printf "end table cell~n")]
+           [(map)
+            (define new-map (new html-map%))
+            (define name-value (sxml:attr-safer node 'name))
+            
+            (for ([area-node (in-list (sxml:content node))])
+              (printf "area ~a~n" area-node)
+              (define href-value (sxml:attr-safer area-node 'href))
+              (case (sxml:attr-safer area-node 'shape) 
+                [("rect")
+                 (define coords (parse-coords (sxml:attr-safer area-node 'coords) 4))
+                 (send new-map add-rect (vector-ref coords 0) (vector-ref coords 1) (vector-ref coords 2) (vector-ref coords 3) href-value)]
+                [("circle")
+                 (define coords (parse-coords (sxml:attr-safer area-node 'coords) 3))
+                 (send new-map add-rect (vector-ref coords 0) (vector-ref coords 1) (vector-ref coords 2) href-value)]
+                [("poly")
+                 void]
+                [else
+                 void]))
+            (set! maps (cons (cons name-value new-map) maps))]
            [(script style meta link applet form isindex)
             ;; skip element
             void]

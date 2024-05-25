@@ -12,6 +12,8 @@
          ul-bullet-snip%
          img-hack-snip%
          html-image-snip%
+         html-map%
+         html-map-img-snip%
          html-link-snip%
          html-link-img-snip%)
 
@@ -295,6 +297,205 @@
     (define/override (draw dc x y left top right bottom dx dy draw-caret)
       (super draw dc (+ x hspace) (+ y vspace) left top right bottom dx dy draw-caret))))
 
+(define html-map%
+  (class object%
+    (super-new)
+
+    (struct point (x y) #:transparent)
+    
+    (struct area
+      (shape
+       points
+       url
+       [radius #:mutable #:auto])
+      #:transparent #:auto-value #f)
+    
+    (define areas '())
+
+    (define/public (add-rect left top right bottom url)
+      (printf "adding rect with url ~a~n" url)
+      (set! areas (cons (area 'rect (cons (point left top) (point right bottom)) url) areas)))
+    
+    (define/public (add-poly points url)
+      void)
+
+    (define/public (add-circle x y radius url)
+      (define a (area 'circle (list (point x y)) url))
+      (set-area-radius! a radius)
+      (set! areas (cons a areas)))
+
+    (define (point-in-rect? a x y)
+      (define rect-points (area-points a))
+      (and (>= x (point-x (car rect-points)))
+           (<= x (point-x (cdr rect-points)))
+           (>= y (point-y (car rect-points)))
+           (<= y (point-y (cdr rect-points)))))
+
+    (define (point-in-poly? a x y)
+      #f)
+
+    (define (point-in-circle? a x y)
+      (define c (car (area-points a)))
+      (define dist (sqrt (+ (sqr (- x (point-x c)))
+                            (sqr (- y (point-y c))))))
+      (<= dist (area-radius a)))
+    
+    (define (point-in-area? a x y)
+      (case (area-shape a)
+        [(rect)
+         (point-in-rect? a x y)]
+        [(poly)
+         (point-in-poly? a x y)]
+        [(circle)
+         (point-in-circle? a x y)]
+        [else
+         #f]))
+
+    ;; return the area's url if (x,y) is within an area, otherwise #f
+    (define/public (inside? x y)
+      ;(printf "inside ~a,~a~n" x y)
+      (for/or ([a (in-list areas)])
+        ;(printf "  checking area: ~a~n" a)
+        (if (point-in-area? a x y)
+            (area-url a)
+            #f)))
+
+    (define/public (print-areas)
+      (for ([a (in-list areas)])
+        (printf "~a~n" a)))))
+
+
+(define (follow-link browser-canvas base-req url)
+  (define (replace-final-path-element path relative-path)
+    ;(printf "replace-final-path-element: ~a, ~a~n" path relative-path)
+    (string-append (path->string (path-only path)) relative-path))
+
+  (define (guess-type-from-filename path)
+    (define extension (path-get-extension path))
+    (if extension
+        (cond
+          [(or (bytes=? extension #".htm")
+               (bytes=? extension #".html"))
+           #\h]
+          [(or (bytes=? extension #".txt")
+               (bytes=? extension #".conf")
+               (bytes=? extension #".cfg")
+               (bytes=? extension #".sh")
+               (bytes=? extension #".bat")
+               (bytes=? extension #".ini"))
+           #\0]
+          [(bytes=? extension #".gif") "g"]
+          [(or (bytes=? extension #".jpg")
+               (bytes=? extension #".jpeg")
+               (bytes=? extension #".bmp")
+               (bytes=? extension #".xpm")
+               (bytes=? extension #".ppm")
+               (bytes=? extension #".tiff")
+               (bytes=? extension #".png"))
+           #\I]
+          [(or (bytes=? extension #".wav")
+               (bytes=? extension #".ogg")
+               (bytes=? extension #".mp3"))
+           #\s]
+          [else
+           #\9])
+        #\h))
+
+  (define (request-from-partial-url url)
+    (struct-copy request
+                 base-req
+                 [type (guess-type-from-filename url)]
+                 [path/selector
+                  (if (equal? (string-ref url 0) #\/)
+                      url
+                      (replace-final-path-element (request-path/selector base-req) url))]))
+  
+  (eprintf "following html link: ~a, base-req path=~a~n" url (request-path/selector base-req))
+  (cond
+    [(string-contains? url "#")
+     (define base-file (last (string-split (request-path/selector base-req) "/")))
+     (define link-file (string-trim url #px"#.+" #:left? #f))
+     (define anchor (string-trim url #px".*#" #:right? #f))
+     (if (or (equal? (string-ref url 0) #\#)
+             (equal? base-file link-file))
+         ;; jump to anchor location on current page
+         (let ([y (send browser-canvas find-anchor-position anchor)])
+           (and y (send browser-canvas scroll-to y)))
+         (send browser-canvas go
+               (struct-copy request
+                            base-req
+                            [type #\h]
+                            [path/selector
+                             (if (equal? (string-ref link-file 0) #\/)
+                                 link-file
+                                 (replace-final-path-element (request-path/selector base-req) link-file))])
+               anchor))]
+    [(regexp-match #px"^(\\w+://).*" url)
+     (cond
+       [(string-prefix? url "gemini://")
+        (send browser-canvas go (url->request url))]
+       [(string-prefix? url "gopher://")
+        (send browser-canvas go (url->request url))]
+       [(or (string-prefix? url "http://")
+            (string-prefix? url "https://"))
+        (send-url url #t)])]
+    [else
+     ;; handle partial URLs
+     (send browser-canvas go (request-from-partial-url url))]))
+
+(define html-map-img-snip%
+  (class html-image-snip%
+    (init-field browser-canvas
+                img-map
+                base-req)
+
+    (define use-hand-cursor #f)
+    
+    (super-new)
+
+    (define (set-hand-cursor)
+      (set! use-hand-cursor #t)
+      (send browser-canvas set-cursor (make-object cursor% 'hand)))
+
+    (define (unset-hand-cursor)
+      (set! use-hand-cursor #f)
+      (send browser-canvas set-cursor #f)
+      (send browser-canvas update-status "Ready"))
+    
+    (define/override (adjust-cursor dc x y editorx editory event)
+      (when (send event entering?)
+        (eprintf "adjust-cursor: mouse entering~n")))
+      
+    (define/override (on-event dc x y editorx editory event)
+      ;(eprintf "html-map-img-snip% mouse event ~a at ~a,~a~n" (send event get-event-type) (send event get-x) (send event get-y))
+      (define-values (imgx imgy) (values (- (send event get-x) x)
+                                         (- (send event get-y) y)))
+ 
+      (cond
+        [(send event moving?)
+         ;(eprintf "mouse motion event~n")
+         (define area-url (send img-map inside? imgx imgy))
+         (cond
+           [(and area-url (not use-hand-cursor))
+            (set-hand-cursor)
+            (send browser-canvas update-status (string-append "Goto " area-url))]
+           [(and use-hand-cursor (not area-url))
+            (on-goodbye-event dc x y editorx editory event)]
+           [else
+            void])]
+        [(send event button-down? 'left)
+         (define area-url (send img-map inside? imgx imgy))
+         (when area-url
+           (printf "base-req=~a url=~a~n" base-req area-url)
+           (follow-link browser-canvas base-req area-url))]))
+
+    (define/override (on-goodbye-event dc x y editorx editory event)
+      (eprintf "goodbye event~n")
+      (send browser-canvas update-status "Ready")
+      (unset-hand-cursor))
+    
+    ))
+
 (define link-interface (interface () on-event on-goodbye-event get-flags set-flags))
 
 (define (html-link-mixin %)
@@ -309,84 +510,6 @@
 
     (define status-text (string-append "Goto " url))
 
-    (define (replace-final-path-element path relative-path)
-      ;(printf "replace-final-path-element: ~a, ~a~n" path relative-path)
-      (string-append (path->string (path-only path)) relative-path))
-
-    (define (guess-type-from-filename path)
-      (define extension (path-get-extension path))
-      (if extension
-          (cond
-            [(or (bytes=? extension #".htm")
-                 (bytes=? extension #".html"))
-             #\h]
-            [(or (bytes=? extension #".txt")
-                 (bytes=? extension #".conf")
-                 (bytes=? extension #".cfg")
-                 (bytes=? extension #".sh")
-                 (bytes=? extension #".bat")
-                 (bytes=? extension #".ini"))
-             #\0]
-            [(bytes=? extension #".gif") "g"]
-            [(or (bytes=? extension #".jpg")
-                 (bytes=? extension #".jpeg")
-                 (bytes=? extension #".bmp")
-                 (bytes=? extension #".xpm")
-                 (bytes=? extension #".ppm")
-                 (bytes=? extension #".tiff")
-                 (bytes=? extension #".png"))
-             #\I]
-            [(or (bytes=? extension #".wav")
-                 (bytes=? extension #".ogg")
-                 (bytes=? extension #".mp3"))
-             #\s]
-            [else
-             #\9])
-          #\h))
-
-    (define (follow-link)
-      (define (request-from-partial-url url)
-        (struct-copy request
-                     base-req
-                     [type (guess-type-from-filename url)]
-                     [path/selector
-                      (if (equal? (string-ref url 0) #\/)
-                          url
-                          (replace-final-path-element (request-path/selector base-req) url))]))
-      
-      (eprintf "following html link: ~a, base-req path=~a~n" url (request-path/selector base-req))
-      (cond
-        [(string-contains? url "#")
-         (define base-file (last (string-split (request-path/selector base-req) "/")))
-         (define link-file (string-trim url #px"#.+" #:left? #f))
-         (define anchor (string-trim url #px".*#" #:right? #f))
-         (if (or (equal? (string-ref url 0) #\#)
-                 (equal? base-file link-file))
-             ;; jump to anchor location on current page
-             (let ([y (send browser-canvas find-anchor-position anchor)])
-               (and y (send browser-canvas scroll-to y)))
-             (send browser-canvas go
-                   (struct-copy request
-                     base-req
-                     [type #\h]
-                     [path/selector
-                      (if (equal? (string-ref link-file 0) #\/)
-                          link-file
-                          (replace-final-path-element (request-path/selector base-req) link-file))])
-                   anchor))]
-        [(regexp-match #px"^(\\w+://).*" url)
-         (cond
-           [(string-prefix? url "gemini://")
-            (send browser-canvas go (url->request url))]
-           [(string-prefix? url "gopher://")
-            (send browser-canvas go (url->request url))]
-           [(or (string-prefix? url "http://")
-                (string-prefix? url "https://"))
-            (send-url url #t)])]
-        [else
-         ;; handle partial URLs
-         (send browser-canvas go (request-from-partial-url url))]))
-
     (define/override (adjust-cursor dc x y editorx editory event)
       (when (send event entering?)
         (eprintf "adjust-cursor: mouse entering~n")
@@ -399,7 +522,7 @@
          ;(eprintf "mouse motion event~n")
          (send browser-canvas update-status status-text)]
         [(send event button-down? 'left)
-         (follow-link)]))
+         (follow-link browser-canvas base-req url)]))
 
     (define/override (on-goodbye-event dc x y editorx editory event)
       (eprintf "goodbye event~n")
@@ -408,3 +531,8 @@
 
 (define html-link-snip% (html-link-mixin string-snip%))
 (define html-link-img-snip% (html-link-mixin html-image-snip%))
+
+#;(module+ test (require rackunit)
+  (define map (new html-map%))  
+)
+  
