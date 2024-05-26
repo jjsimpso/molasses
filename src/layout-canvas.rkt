@@ -1364,20 +1364,27 @@
 
     (define/override (on-scroll event)
       (define-values (dw dh) (get-drawable-size))
-
+      (define refresh? #f)
       ;(printf "on-scroll: ~a ~a~n" (send event get-direction) (send event get-position))
       
       (if (eq? (send event get-direction) 'vertical)
           (let* ([top (send event get-position)]
                  [bottom (+ top dh)]
                  [change (- top scroll-y)])
+            (when (not (= change 0))
+              (set! refresh? #t))
             (set! scroll-y top)
             (if (not visible-elements)
                 (set-visible-elements!)
                 (update-visible-elements! change top bottom)))
-          (set! scroll-x (send event get-position)))
+          (let* ([left (send event get-position)]
+                 [right (+ left dw)]
+                 [change (- left scroll-x)])
+            (when (not (= change 0))
+              (set! refresh? #t))
+            (set! scroll-x (send event get-position))))
             
-      (refresh))
+      (when refresh? (refresh)))
     
     (define/override (on-size width height)
       (define-values (cw ch) (get-client-size))
