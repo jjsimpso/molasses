@@ -1647,11 +1647,17 @@
         #;(printf "setting row height to ~a~n" height)
         (set-row-height row height)))
 
+    ;; count columns in row
+    (define (count-columns list-of-cells)
+      (for/fold ([num-cols 0])
+                ([c (in-list list-of-cells)])
+        (+ num-cols (send c get-colspan))))
+    
     (define/public (start-row)
       (set! rip '()))
 
     (define/public (end-row)
-      (define num-cols (length rip))
+      (define num-cols (count-columns rip))
       ;; todo handle cells that span multiple columns
       (when (> num-cols num-columns)
         (set! num-columns num-cols))
