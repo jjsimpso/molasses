@@ -487,6 +487,7 @@
          (define area-url (send img-map inside? imgx imgy))
          (when area-url
            (printf "base-req=~a url=~a~n" base-req area-url)
+           (on-goodbye-event dc x y editorx editory event)
            (follow-link browser-canvas base-req area-url))]))
 
     (define/override (on-goodbye-event dc x y editorx editory event)
@@ -522,6 +523,7 @@
          ;(eprintf "mouse motion event~n")
          (send browser-canvas update-status status-text)]
         [(send event button-down? 'left)
+         (on-goodbye-event dc x y editorx editory event)
          (follow-link browser-canvas base-req url)]))
 
     (define/override (on-goodbye-event dc x y editorx editory event)
