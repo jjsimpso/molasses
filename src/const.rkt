@@ -1,7 +1,7 @@
 #lang racket/base
 (provide (all-defined-out))
 
-(define molasses-version "0.7.0")
+(define molasses-version "0.7.1")
 (define molasses-site "https://github.com/jjsimpso/molasses")
 
 (define about-version-string
