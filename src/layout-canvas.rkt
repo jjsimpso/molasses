@@ -365,10 +365,10 @@
     ;; new width and height are in pixels
     (define (update-scrollbars new-width new-height)
       (define-values (dw dh) (get-drawable-size))
-      (set-scroll-range 'horizontal (max 0 (- new-width dw)))
-      (set-scroll-range 'vertical (max 0 (- new-height dh)))
-      (set-scroll-page 'horizontal dw)
-      (set-scroll-page 'vertical dh)
+      (set-scroll-range 'horizontal (inexact->exact (max 0 (- new-width dw))))
+      (set-scroll-range 'vertical (inexact->exact (max 0 (- new-height dh))))
+      (set-scroll-page 'horizontal (max 1 dw))
+      (set-scroll-page 'vertical (max 1 dh))
       (show-scrollbars (> new-width dw) (> new-height dh)))
    
     (define (reset-layout)
