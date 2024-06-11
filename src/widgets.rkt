@@ -531,7 +531,8 @@
     
     ;; return a pair representing the menu selection or #f
     (define/private (find-next-menu-item)
-      (define node (and (cdr menu-selection)
+      (define node (and menu-selection
+                        (cdr menu-selection)
                         (dlink-next (cdr menu-selection))))
       
       (if node
@@ -540,7 +541,8 @@
 
     ;; return a pair representing the menu selection or #f
     (define/private (find-prev-menu-item)
-      (define node (and (cdr menu-selection)
+      (define node (and menu-selection
+                        (cdr menu-selection)
                         (dlink-prev (cdr menu-selection))))
       
       (if node
@@ -825,29 +827,44 @@
 
     (define (lines-visible height line-height)
       (truncate (/ height line-height)))
+
+    (define (change-menu-selection direction item)
+      (when menu-selection
+        (unhighlight menu-selection))
+      (set! menu-selection item)
+      (highlight menu-selection)
+      (if (not (selection-visible? menu-selection))
+          (let-values ([(sx sy sw sh) (lookup-snip-position-size (selection-snip item))]
+                       [(w h) (get-drawable-size)])
+            (cond
+              [(eq? direction 'down)
+               (scroll-to (- sy (/ h 4)))]
+              [(eq? direction 'up)
+               (scroll-to (- sy (* (/ h 4) 3)))]
+              [else
+               (error "change-selection: invalid direction")])
+            ;; nudge the visible area just a bit so that the first line isn't partially cut off
+            (let*-values ([(first-snip) (first-visible-snip)]
+                          [(sx sy sw sh) (lookup-snip-position-size first-snip)])
+              (scroll-to sy)))
+          (refresh)))
     
     (define/override (on-char event)
       (if gopher-menu?
           (case (send event get-key-code)
             [(down)
              (cond
+               [(not menu-selection)
+                (define item (find-first-menu-item))
+                (when item
+                  (eprintf "browser-text on-char down: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
+                  (change-menu-selection 'down item))]
                [(or (not (cdr menu-selection)) (selection-visible? menu-selection))
                 ;; change selection to the next menu snip
                 (define item (find-next-menu-item))
                 (when item
                   (eprintf "browser-text on-char down: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
-                  (unhighlight menu-selection)
-                  (set! menu-selection item)
-                  (highlight menu-selection)
-                  (if (not (selection-visible? menu-selection))
-                      (let-values ([(sx sy sw sh) (lookup-snip-position-size (selection-snip item))]
-                                   [(w h) (get-drawable-size)])
-                        (scroll-to (- sy (/ h 4)))
-                        ;; nudge the visible area just a bit so that the first line isn't partially cut off
-                        (let*-values ([(first-snip) (first-visible-snip)]
-                                      [(sx sy sw sh) (lookup-snip-position-size first-snip)])
-                          (scroll-to sy)))
-                      (refresh)))]
+                  (change-menu-selection 'down item))]
                [else
                 ;; just scroll to make the selected menu snip visible
                 (define-values (sx sy sw sh) (lookup-snip-position-size (selection-snip menu-selection)))
@@ -857,19 +874,7 @@
              (define item (find-prev-menu-item))
              (when item
                (eprintf "browser-text on-char up: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
-               (unhighlight menu-selection)
-               (set! menu-selection item)
-               (highlight menu-selection)
-               (if (not (selection-visible? menu-selection))
-                   ;; scroll up to show the previous page
-                   (let-values ([(sx sy sw sh) (lookup-snip-position-size (selection-snip item))]
-                                [(w h) (get-drawable-size)])
-                     (scroll-to (- sy (* (/ h 4) 3)))
-                     ;; nudge the visible area just a bit so that the first line isn't partially cut off
-                     (let*-values ([(first-snip) (first-visible-snip)]
-                                   [(sx sy sw sh) (lookup-snip-position-size first-snip)])
-                          (scroll-to sy)))
-                   (refresh)))]
+               (change-menu-selection 'up item))]
             [(left)
              (go-back)]
             [(right #\return)
