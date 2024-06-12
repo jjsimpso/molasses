@@ -16,3 +16,7 @@
   (printf "handling events~n")
   (yield 'wait)
   (void))
+
+
+; don't run this file for testing:
+(module test racket/base)

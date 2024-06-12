@@ -41,3 +41,7 @@
 ;(send editor insert "\n")
 (send editor insert (new horz-line-snip%))
 (send editor insert "text\nwith lots\nof\nnewlines")
+
+
+; don't run this file for testing:
+(module test racket/base)

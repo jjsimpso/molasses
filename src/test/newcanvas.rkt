@@ -1248,3 +1248,7 @@
         (send canvas append-string (port->string (gopher-response-data-port response))))))
 
 (printf "append finished~n")
+
+
+; don't run this file for testing:
+(module test racket/base)
