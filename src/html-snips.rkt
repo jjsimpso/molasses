@@ -313,11 +313,16 @@
     (define areas '())
 
     (define/public (add-rect left top right bottom url)
-      (printf "adding rect with url ~a~n" url)
+      ;(printf "adding rect with url ~a~n" url)
       (set! areas (cons (area 'rect (cons (point left top) (point right bottom)) url) areas)))
-    
-    (define/public (add-poly points url)
-      void)
+
+    ;; coords is a vector of coordinates alternating x and y
+    (define/public (add-poly coords url)
+      (define points
+        (for/vector ([i (in-range 0 (vector-length coords) 2)])
+          (point (vector-ref coords i) (vector-ref coords (add1 i)))))
+      ;(printf "add-poly ~a~n" points)
+      (set! areas (cons (area 'poly points url) areas)))
 
     (define/public (add-circle x y radius url)
       (define a (area 'circle (list (point x y)) url))
@@ -332,8 +337,26 @@
            (<= y (point-y (cdr rect-points)))))
 
     (define (point-in-poly? a x y)
-      #f)
-
+      (define (cross-product u v)
+        (- (* (point-x u) (point-y v))
+           (* (point-y u) (point-x v))))
+      (define poly-points (area-points a))
+      (define num-points (vector-length poly-points))
+      ;(printf "point-in-poly? num-points=~a~n" num-points)
+      ;; stop when a point is outside of the polygon and return #f, otherwise #t
+      (for/and ([o (in-vector poly-points)]
+                [i (in-naturals 1)])
+        (define u
+          (if (< i num-points)
+              (point (- (point-x (vector-ref poly-points i)) (point-x o))
+                     (- (point-y (vector-ref poly-points i)) (point-y o)))
+              (point (- (point-x (vector-ref poly-points 0)) (point-x o))
+                     (- (point-y (vector-ref poly-points 0)) (point-y o)))))
+        (define v (point (- x (point-x o)) (- y (point-y o))))
+        ;(printf "  ~a x ~v = ~a~n" u v (cross-product u v))
+        ;; test is for points in counter clockwise order (?)
+        (>= (cross-product u v) 0)))
+  
     (define (point-in-circle? a x y)
       (define c (car (area-points a)))
       (define dist (sqrt (+ (sqr (- x (point-x c)))

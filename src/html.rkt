@@ -883,7 +883,8 @@
                  (define coords (parse-coords (sxml:attr-safer area-node 'coords) 3))
                  (send new-map add-rect (vector-ref coords 0) (vector-ref coords 1) (vector-ref coords 2) href-value)]
                 [("poly")
-                 void]
+                 (define coords (parse-coords (sxml:attr-safer area-node 'coords)))
+                 (send new-map add-poly coords href-value)]
                 [else
                  void]))
             (set! maps (cons (cons name-value new-map) maps))]
