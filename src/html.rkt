@@ -16,7 +16,8 @@
          "html-snips.rkt"
          "table.rkt"
          "gopher.rkt"
-         "request.rkt")
+         "request.rkt"
+         "memoize.rkt")
 
 (require (rename-in "magic/image-kind.rkt" (magic-query image-kind-query)))
 
@@ -113,6 +114,8 @@
                                     (call-with-input-bytes data guess-kind)))
     (printf "guess kind returns ~a~n" (call-with-input-bytes data guess-kind))
     new-bitmap))
+
+(define load-new-bitmap-cached (memoize-2args load-new-bitmap))
 
 #;(define (join-strings c)
   (let loop ([accum-s (string-normalize-spaces (car c))]
@@ -463,7 +466,7 @@
         [(background)
          (define url (cadr attr)) ;(sxml:attr-safer node 'background))
          (when (string? url)
-           (define bg-bitmap (load-new-bitmap url (send canvas get-current-request)))
+           (define bg-bitmap (load-new-bitmap-cached url (send canvas get-current-request)))
            (send canvas set-background-image bg-bitmap))
          (lambda () void)]
         [(text)
@@ -558,7 +561,7 @@
         (define hspace-value (attr->number node 'hspace))
         (define vspace-value (attr->number node 'vspace))
         #;(printf "handle-img: hs=~a, vs=~a, src=~a~n" hspace-value vspace-value src-value)
-        (define bm (load-new-bitmap src-value request))
+        (define bm (load-new-bitmap-cached src-value request))
         (define snip
           (cond
             [url
