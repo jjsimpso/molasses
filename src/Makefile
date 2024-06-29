@@ -48,6 +48,9 @@ clean:
 
 cleanall:
 	rm -rf compiled/
+	rm -rf magic/compiled/
+	rm -rf test/compiled/
+	rm -rf third-party/html-parsing/compiled/
 	rm -f $(EXE)
 	rm -rf $(NATIVE_DIST_DIR)
 	rm -rf $(WIN_BUILD_DIR)
