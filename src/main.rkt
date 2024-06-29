@@ -13,7 +13,7 @@
 (parameterize ([current-output-port (remap-port (current-output-port))]
                [current-error-port  (remap-port (current-error-port))])
   (setup-gui)
-  (printf "handling events~n")
+  #;(printf "handling events~n")
   (yield 'wait)
   (void))
 

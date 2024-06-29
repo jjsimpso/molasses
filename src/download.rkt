@@ -62,7 +62,7 @@
       (new timer%
            [notify-callback
             (lambda ()
-              (eprintf "update-timer timeout~n")
+              #;(eprintf "update-timer timeout~n")
               (when active-menu
                 (let ([items (send active-menu get-items)])
                   (for ([item (in-list items)])
@@ -76,7 +76,7 @@
     (define/override (on-subwindow-event receiver evt)
       (cond
         [(send evt button-down?)
-         (eprintf "dl = ~a~n" download-list)
+         #;(eprintf "dl = ~a~n" download-list)
          (let ([menu (new popup-menu%
                           [title "Download List"]
                           [popdown-callback
@@ -135,10 +135,10 @@
   (define dl (send item get-download))
   (case (download-state dl)
     [(active) ; cancel the download. kill the thread, delete the file, and remove from the list
-     (eprintf "killing thread~a~n" (download-thread-id dl))
+     #;(eprintf "killing thread~a~n" (download-thread-id dl))
      (kill-thread (download-thread-id dl))
      (delete-file (download-path dl))
      (remove-download (download-thread-id dl))]
     [(cancelled completed) ; remove download from the list
-     (eprintf "removing ~a~n" (download-path dl))
+     #;(eprintf "removing ~a~n" (download-path dl))
      (remove-download (download-thread-id dl))]))

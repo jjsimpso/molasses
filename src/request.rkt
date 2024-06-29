@@ -33,7 +33,7 @@
             [host (third url-components)]
             [port (fourth url-components)]
             [path/selector (or (fifth url-components) "")])
-        (eprintf "url->request: ~a,~a,~a,~a~n" protocol host port path/selector)
+        #;(eprintf "url->request: ~a,~a,~a,~a~n" protocol host port path/selector)
         (if (eq? protocol 'gemini)
             (make-gemini-request protocol
                                  host

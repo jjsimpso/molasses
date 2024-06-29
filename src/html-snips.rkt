@@ -155,7 +155,7 @@
       (maybe-set-box! rspace 0.0))
 
     (define/override (resize w h)
-      (printf "resizing horiz-line-snip% to ~ax~a~n" w h)
+      #;(printf "resizing horiz-line-snip% to ~ax~a~n" w h)
       (set! width w)
       (set! height h))
     
@@ -433,7 +433,7 @@
                       url
                       (replace-final-path-element (request-path/selector base-req) url))]))
   
-  (eprintf "following html link: ~a, base-req path=~a~n" url (request-path/selector base-req))
+  #;(eprintf "following html link: ~a, base-req path=~a~n" url (request-path/selector base-req))
   (cond
     [(string-contains? url "#")
      (define base-file (last (string-split (request-path/selector base-req) "/")))
@@ -485,7 +485,7 @@
       (send browser-canvas set-cursor #f)
       (send browser-canvas update-status "Ready"))
     
-    (define/override (adjust-cursor dc x y editorx editory event)
+    #;(define/override (adjust-cursor dc x y editorx editory event)
       (when (send event entering?)
         (eprintf "adjust-cursor: mouse entering~n")))
       
@@ -509,12 +509,12 @@
         [(send event button-down? 'left)
          (define area-url (send img-map inside? imgx imgy))
          (when area-url
-           (printf "base-req=~a url=~a~n" base-req area-url)
+           #;(printf "base-req=~a url=~a~n" base-req area-url)
            (on-goodbye-event dc x y editorx editory event)
            (follow-link browser-canvas base-req area-url))]))
 
     (define/override (on-goodbye-event dc x y editorx editory event)
-      (eprintf "goodbye event~n")
+      #;(eprintf "goodbye event~n")
       (send browser-canvas update-status "Ready")
       (unset-hand-cursor))
     
@@ -536,7 +536,7 @@
 
     (define/override (adjust-cursor dc x y editorx editory event)
       (when (send event entering?)
-        (eprintf "adjust-cursor: mouse entering~n")
+        #;(eprintf "adjust-cursor: mouse entering~n")
         (send browser-canvas set-cursor (make-object cursor% 'hand))))
       
     (define/override (on-event dc x y editorx editory event)
@@ -550,7 +550,7 @@
          (follow-link browser-canvas base-req url)]))
 
     (define/override (on-goodbye-event dc x y editorx editory event)
-      (eprintf "goodbye event~n")
+      #;(eprintf "goodbye event~n")
       (send browser-canvas set-cursor #f)
       (send browser-canvas update-status "Ready"))))
 

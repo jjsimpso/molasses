@@ -131,7 +131,7 @@
         (lambda (item)
           (define canvas (active-page-canvas tab-panel))
           (when canvas
-            (eprintf "word wrap demand callback~n")
+            #;(eprintf "word wrap demand callback~n")
             ; disable word wrapping selection if in layout mode
             (if (eq? (send canvas get-mode) 'layout)
                 (send item enable #f)
@@ -142,7 +142,7 @@
         (lambda (item event)
           (define canvas (active-page-canvas tab-panel))
           (when canvas
-            (eprintf "word wrap callback~n")
+            #;(eprintf "word wrap callback~n")
             (define checked? (send item is-checked?))
             (send canvas set-mode (if checked? 'wrapped 'plaintext))))))
 
@@ -186,7 +186,7 @@
 
   ;; callback function for bookmark menu items
   (define (goto-bookmark url)
-    (eprintf "opening bookmark to ~a~n" url)
+    #;(eprintf "opening bookmark to ~a~n" url)
     (define page-canvas (active-page-canvas tab-panel))
     (send page-canvas go (url->request url))
     (send page-canvas focus))
@@ -228,15 +228,15 @@
       (super-new)
 
       (define/augment (on-reorder former-indices)
-        (eprintf "on-reorder: enter~n")
+        #;(eprintf "on-reorder: enter~n")
         (update-tab-order this former-indices))
       
       (define/override (on-close-request index)
-        (eprintf "on-close-request: enter~n")
+        #;(eprintf "on-close-request: enter~n")
         (delete-tab this index))
 
       (define/override (on-new-request)
-        (eprintf "on-new-request: enter~n")
+        #;(eprintf "on-new-request: enter~n")
         (new-tab this))))
 
   (define tab-panel 

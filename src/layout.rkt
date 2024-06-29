@@ -255,7 +255,7 @@
         (bottom-edge-of-elements ctx (layout-context-right-elements ctx))]
        [else
         ; return original
-        (printf "next-line-y-pos: all layout lists are empty~n")
+        ;(printf "next-line-y-pos: all layout lists are empty~n")
         (- original (layout-context-snip-ymargin ctx))])))
 
 (define (layout-goto-new-line ctx new-y)
@@ -355,7 +355,7 @@
           (values x y (+ x max-width) (+ ypos font-height))]
          [(and (false? last-word) (empty? (unaligned-or-center-elements ctx)) (empty? (layout-context-left-elements ctx)) (empty? (layout-context-right-elements ctx)))
           ; first word is too long to fit on a line, just place it at the beginning of line
-          (printf " unable to wrap word ~a, place it anyway~n" (word-str (car remaining-words)))
+          #;(printf " unable to wrap word ~a, place it anyway~n" (word-str (car remaining-words)))
           (define xpos 0)
           (define new-ypos ypos)
           (when (not (empty? (cdr remaining-words)))

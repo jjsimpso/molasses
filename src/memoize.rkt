@@ -22,7 +22,7 @@
     (define cache-val (hash-ref ht (cons arg1 arg2) #f))
     (cond
       [cache-val
-       (printf "retrieving cached value for ~a,~a~n" arg1 arg2)
+       #;(printf "retrieving cached value for ~a,~a~n" arg1 arg2)
        cache-val]
       [else
        (define val (fun arg1 arg2))

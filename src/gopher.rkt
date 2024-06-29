@@ -106,7 +106,7 @@
                  out)
     (flush-output out))
 
-  (eprintf "gopher selector: ~a~n" selector)
+  #;(eprintf "gopher selector: ~a~n" selector)
 
   (with-handlers ([exn:fail:network?
                    (lambda (exn)

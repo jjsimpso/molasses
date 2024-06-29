@@ -19,7 +19,7 @@
           (goto-bookmark url))]))
 
 (define (add-bookmark url label menu goto-bookmark)
-  (eprintf "adding bookmark ~a,~a~n" label url)
+  #;(eprintf "adding bookmark ~a,~a~n" label url)
   (set! bookmark-list (append bookmark-list (list (cons label url))))
   ;(display bookmark-list)
   (add-bookmark-to-menu url label menu goto-bookmark)

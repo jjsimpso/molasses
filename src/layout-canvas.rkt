@@ -372,7 +372,7 @@
       (show-scrollbars (> new-width dw) (> new-height dh)))
    
     (define (reset-layout)
-      (printf "resetting layout~n")
+      #;(printf "resetting layout~n")
       (set! canvas-width 10)
       (set! canvas-height 10)
       (set! layout-ctx (new-layout-context dc default-style snip-xmargin snip-ymargin))
@@ -780,7 +780,7 @@
          (when (and (or (eq? mode 'plaintext) (eq? mode 'wrapped))
                     left-down?)
            (define-values (dw dh) (get-drawable-size))
-           (printf "handle selection ~a/~a ~a ~a~n" left-down? (send event button-down?) (not (false? mouse-selection)) (describe-element e))
+           #;(printf "handle selection ~a/~a ~a ~a~n" left-down? (send event button-down?) (not (false? mouse-selection)) (describe-element e))
            (cond
              [(and (not mouse-selection-start) (send event button-down? 'left) mouse-selection)
               ;(printf "  unset text selection~n")
@@ -932,7 +932,7 @@
         (define end-pos (find-exact-pos str first-pos font xstart x))
         (min (add1 end-pos) (string-length str)))
       (define (find-head-start-pos head font x0 y0)
-        (printf "find-head-start-pos: y0=~a, eypos=~a~n" y0 (element-ypos head))
+        #;(printf "find-head-start-pos: y0=~a, eypos=~a~n" y0 (element-ypos head))
         (if (< y0 (element-ypos head))
             ;; the start of the selection is on the line above, but to the right of all elements
             0
@@ -961,7 +961,7 @@
             (define end-word-pos (find-word (element-words head) (element-xpos head) x1))
             (set-selection-head-start-pos! sel (find-head-start-pos head font x0 y0))
             (set-selection-head-end-pos! sel (find-exact-end-pos (element-snip head) end-word-pos font (element-xpos head) x1))
-            (printf "  calc-selection-positions: head only ~a~n" (substring (element-snip head) (selection-head-start-pos sel) (selection-head-end-pos sel)))])
+            #;(printf "  calc-selection-positions: head only ~a~n" (substring (element-snip head) (selection-head-start-pos sel) (selection-head-end-pos sel)))])
          (set-selection-tail-end-pos! sel #f)]
         [(and head (element-words head) tail (false? (element-words tail)))
          ;; head element is partial but tail is not a string
@@ -971,7 +971,7 @@
          (set-selection-tail-end-pos! sel #f)]
         [(and head (false? (element-words head)) tail (element-words tail))
          ;; head element is not a string, so only tail is partial
-         (printf "  calc-selection-positions: tail only~n")
+         #;(printf "  calc-selection-positions: tail only~n")
          (define font (send (get-style tail) get-font))
          (define end-word-pos (find-word (element-words tail) (element-xpos tail) x1))
          (set-selection-head-start-pos! sel #f)
@@ -979,7 +979,7 @@
          (set-selection-tail-end-pos! sel (find-exact-end-pos (element-snip tail) end-word-pos font (element-xpos tail) x1))]
         [(and head (element-words head) tail (element-words tail))
          ;; both
-         (printf "  calc-selection-positions: head+tail~n")
+         #;(printf "  calc-selection-positions: head+tail~n")
          (define head-font (send (get-style head) get-font))
          (define tail-font (send (get-style tail) get-font))
          (set-selection-head-start-pos! sel (find-head-start-pos head head-font x0 y0))
@@ -1000,7 +1000,7 @@
       (let ([x0 (max 1 x0)]
             [x1 (max 1 x1)])
         ;; clamp x0 to positive values
-        (printf "new selection from ~a,~a to ~a,~a~n" x0 y0 x1 y1)
+        #;(printf "new selection from ~a,~a to ~a,~a~n" x0 y0 x1 y1)
         (define head 
           (for ([e (in-dlist cursor)]
                 #:break (or (> (element-ypos e) y0)
@@ -1044,30 +1044,30 @@
     (define (shrink-selection-ahead sel x y)
       (when sel
         (define sel-elements (selection-elements sel))
-        (printf " shrink ahead from ~a~n" (describe-element (dlist-tail-value sel-elements)))
+        #;(printf " shrink ahead from ~a~n" (describe-element (dlist-tail-value sel-elements)))
         (let loop ([last-element (dlist-tail-value sel-elements)])
           (unless (false? last-element)
-            (printf "  checking ~a~n" (describe-element last-element))
+            #;(printf "  checking ~a~n" (describe-element last-element))
             (define ex (element-xpos last-element))
             (define ey (element-ypos last-element))
             (when (or (< y ey)
                       (and (>= y ey) (< x ex)))
               (if (eq? last-element (dlist-head-value sel-elements))
                   (begin
-                    (printf "  set mouse selection to false~n")
+                    #;(printf "  set mouse selection to false~n")
                     (set! mouse-selection #f))
                   (begin
                     (dlist-retreat-tail! sel-elements)
-                    (printf "  retreat tail to ~a~n" (describe-element (dlist-tail-value sel-elements))) 
+                    #;(printf "  retreat tail to ~a~n" (describe-element (dlist-tail-value sel-elements))) 
                     (loop (dlist-tail-value sel-elements)))))))))
 
     (define (expand-selection-behind sel x y)
       (when sel
         (define sel-elements (selection-elements sel))
-        (printf "  expand behind from ~a~n" (describe-element (dlist-head-value sel-elements)))
+        #;(printf "  expand behind from ~a~n" (describe-element (dlist-head-value sel-elements)))
         (let loop ([prev-element (dlist-peek-head-prev sel-elements)])
           (unless (false? prev-element)
-            (printf "  checking ~a~n" (describe-element prev-element))
+            #;(printf "  checking ~a~n" (describe-element prev-element))
             (define ex (element-xpos prev-element))
             (define ey (element-ypos prev-element))
             (when (or (< y ey)
@@ -1075,27 +1075,27 @@
                            (<= y (+ ey (get-element-height layout-ctx prev-element)))
                            (< x (+ ex (get-element-width layout-ctx prev-element)))))
               (dlist-retreat-head! sel-elements)
-              (printf "  retreat head to ~a~n" (describe-element (dlist-head-value sel-elements)))
+              #;(printf "  retreat head to ~a~n" (describe-element (dlist-head-value sel-elements)))
               (loop (dlist-peek-head-prev sel-elements)))))))
 
     (define (shrink-selection-behind sel x y)
       (when sel
         (define sel-elements (selection-elements sel))
-        (printf "  shrink behind from ~a~n" (describe-element (dlist-head-value sel-elements)))
+        #;(printf "  shrink behind from ~a~n" (describe-element (dlist-head-value sel-elements)))
         (let loop ([head-element (dlist-head-value sel-elements)])
           (unless (false? head-element)
-            (printf "  checking ~a~n" (describe-element head-element))
+            #;(printf "  checking ~a~n" (describe-element head-element))
             (define ex (element-xpos head-element))
             (define ey (element-ypos head-element))
             (when (or (> y (+ ey (get-element-height layout-ctx head-element)))
                       (and (>= y ey) (> x (+ ex (get-element-width layout-ctx head-element)))))
               (if (eq? head-element (dlist-tail-value sel-elements))
                   (begin
-                    (printf "  set mouse selection to false~n")
+                    #;(printf "  set mouse selection to false~n")
                     (set! mouse-selection #f))
                   (begin
                     (dlist-advance-head! sel-elements)
-                    (printf "  advance head to ~a~n" (describe-element (dlist-head-value sel-elements)))
+                    #;(printf "  advance head to ~a~n" (describe-element (dlist-head-value sel-elements)))
                     (loop (dlist-head-value sel-elements)))))))))
     
     (define (selection->string sel)
@@ -1216,12 +1216,12 @@
           #f))
 
     (define/public (find-anchor-position name)
-      (printf "find-anchor-position: name=~a~n" name)
+      #;(printf "find-anchor-position: name=~a~n" name)
       (for*/first ([e (in-dlist elements)]
                    [prop (in-list (element-properties e))]
                    #:when (and (eq? (car prop) 'anchor)
                                (equal? (cdr prop) name)))
-        (printf "find-anchor-position ~a~n" prop)
+        #;(printf "find-anchor-position ~a~n" prop)
         (element-ypos e)))
 
     (define/public (layout-space-on-current-line)
@@ -1308,7 +1308,7 @@
                 #f))))
 
     (define/public (can-do-edit-operation? op [recursive? #t])
-      (printf "can-do-edit-operation? ~a~n" op)
+      #;(printf "can-do-edit-operation? ~a~n" op)
       (cond
         [(eq? op 'copy) #t]
         [(eq? op 'paste) #f]
@@ -1320,7 +1320,7 @@
         (if (and e (string? (element-snip e)))
             (string-length (element-snip e))
             #f))
-      (printf "do-edit-operation? ~a~n" op)
+      #;(printf "do-edit-operation? ~a~n" op)
       (case op
         [(copy)
          (send the-clipboard set-clipboard-string (selection->string mouse-selection) ts)]

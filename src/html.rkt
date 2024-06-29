@@ -112,7 +112,7 @@
     (define new-bitmap (make-object bitmap%
                                     (open-input-bytes data)
                                     (call-with-input-bytes data guess-kind)))
-    (printf "guess kind returns ~a~n" (call-with-input-bytes data guess-kind))
+    #;(printf "guess kind returns ~a~n" (call-with-input-bytes data guess-kind))
     new-bitmap))
 
 (define load-new-bitmap-cached (memoize-2args load-new-bitmap))
@@ -224,7 +224,7 @@
 
 ;; returns a vector of coordinates
 (define (parse-coords coord-string [len #f])
-  (printf "coord-string: ~a~n" coord-string)
+  ;(printf "coord-string: ~a~n" coord-string)
   (define coords (string-split (string-replace coord-string "," " ")))
   (define vlen (or len (length coords)))
   (for/vector #:length vlen ([s (in-list coords)])
@@ -547,7 +547,7 @@
       (define request (send canvas get-current-request))
       (when request
         (define align (img-align-attr node #f))
-        (printf "img-attr-align returned ~a~n" align)
+        ;(printf "img-attr-align returned ~a~n" align)
         (define halign
           (case align
             [(left right) align]
@@ -573,7 +573,7 @@
              (define map-name (if (equal? (string-ref usemap-value 0) #\#)
                                   (substring usemap-value 1)
                                   #f))
-             (printf "handle-img: use image map ~a, maps=~a, base-req=~a~n" map-name maps base-req)
+             ;(printf "handle-img: use image map ~a, maps=~a, base-req=~a~n" map-name maps base-req)
              (define img-map (assoc-value map-name maps))
              (new html-map-img-snip% (browser-canvas canvas) (img-map (or img-map (new html-map%))) (base-req base-req)
                                      (hspace (or hspace-value 2)) (vspace (or vspace-value 0)))]
@@ -602,7 +602,7 @@
                (get-field base-height snip)]))
           (when (or (not (eq? width-pixels (get-field base-width snip)))
                     (not (eq? height-pixels (get-field base-height snip))))
-            (printf "resizing html image snip to width ~a, height ~a~n" width-pixels height-pixels)
+            ;(printf "resizing html image snip to width ~a, height ~a~n" width-pixels height-pixels)
             (send snip resize width-pixels height-pixels)))
         (cond
           [(and width-property (eq? (car width-property) 'width-percent))
@@ -873,7 +873,7 @@
             (define name-value (sxml:attr-safer node 'name))
             
             (for ([area-node (in-list (sxml:content node))])
-              (printf "area ~a~n" area-node)
+              ;(printf "area ~a~n" area-node)
               (define href-value (sxml:attr-safer area-node 'href))
               (case (sxml:attr-safer area-node 'shape) 
                 [("rect")

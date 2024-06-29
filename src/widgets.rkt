@@ -78,7 +78,7 @@
       (send canvas append-string "\n")))
 
 (define (goto-gopher req canvas [initial-selection-pos #f])
-  (eprintf "goto-gopher: ~a, ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req) initial-selection-pos)
+  #;(eprintf "goto-gopher: ~a, ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req) initial-selection-pos)
 
   (define resp (gopher-fetch (request-host req)
                              (request-path/selector req)
@@ -160,7 +160,7 @@
      (close-input-port (gopher-response-data-port resp))])
   (send canvas end-edit-sequence)
   (send canvas refresh)
-  (eprintf "goto-gopher UI update took ~a ms~n" (- (current-inexact-monotonic-milliseconds) update-start-time)))
+  #;(eprintf "goto-gopher UI update took ~a ms~n" (- (current-inexact-monotonic-milliseconds) update-start-time)))
 
 ;; download gopher selector to a temp file and open it with an external application
 ;; set plumber to clean up file when molasses exits
@@ -177,7 +177,7 @@
     ;; download to temp file
     (with-output-to-file tmp-file #:exists 'truncate
       (lambda ()
-        (eprintf "open-with-app: saving tmp file: ~a" tmp-file)
+        #;(eprintf "open-with-app: saving tmp file: ~a" tmp-file)
         (copy-port (gopher-response-data-port resp) (current-output-port))))
     (close-input-port (gopher-response-data-port resp))
     ;; delete the temp file when molasses exits
@@ -196,10 +196,10 @@
         (when exec-path (system* exec-path tmp-file))])))
 
 (define (save-gopher-to-file req)
-  (eprintf "save-gopher-to-file: ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req))
+  #;(eprintf "save-gopher-to-file: ~a, ~a, ~a~n" (request-host req) (request-path/selector req) (request-type req))
   ;; get path from user
   (define path (put-file "Save file as..." #f #f (file-name-from-path (string->path (request-path/selector req)))))
-  (eprintf "saving binary file to ~a~n" path)
+  #;(eprintf "saving binary file to ~a~n" path)
 
   (when path
     (define resp (gopher-fetch (request-host req)
@@ -214,10 +214,10 @@
     (close-input-port (gopher-response-data-port resp))))
 
 (define (save-gemini-to-file data-port remote-path)
-  (eprintf "save-gemini-to-file~n")
+  #;(eprintf "save-gemini-to-file~n")
   ;; get path from user
   (define path (put-file "Save file as..." #f #f (file-name-from-path (string->path remote-path))))
-  (eprintf "saving binary file to ~a~n" path)
+  #;(eprintf "saving binary file to ~a~n" path)
 
   (when path
     (track-download (current-thread) data-port path)
@@ -325,7 +325,7 @@
     (string-append (path->string (path-only path)) relative-path))
   
   (for ([line (in-lines data-port)])
-    (eprintf "gemini line=~a~n" line)
+    #;(eprintf "gemini line=~a~n" line)
     (match line
       [(regexp gemini-link-re)
        (define-values (link-url link-name) (parse-link line))
@@ -371,7 +371,7 @@
 ;; the initial request can be forwaded to a new request for queries
 ;; 
 (define (goto-gemini req canvas)
-  (eprintf "goto-gemini: ~a, ~a~n" (request-host req) (request-path/selector req))
+  #;(eprintf "goto-gemini: ~a, ~a~n" (request-host req) (request-path/selector req))
 
   (define (show-gemini-error msg)
     ;; this flag is used to signal the main thread that canvas updates have begun
@@ -387,7 +387,7 @@
                              (request-path/selector req)
                              (request-port req)))
 
-  (eprintf "goto-gemini: status=~a, meta=~a, from-url=~a~n" (gemini-response-status resp) (gemini-response-meta resp)
+  #;(eprintf "goto-gemini: status=~a, meta=~a, from-url=~a~n" (gemini-response-status resp) (gemini-response-meta resp)
            (gemini-response-from-url resp))
 
   (send canvas check-gemini-defaults)
@@ -622,7 +622,7 @@
     (define/public (check-gopher-defaults)
       ;; reset canvas mode if it was changed when loading html
       (when (eq? (get-mode) 'layout)
-        (printf "check-gopher-defaults~n")
+        #;(printf "check-gopher-defaults~n")
         (set-default-style "Standard")
         (reset-background)
         (set-mode 'plaintext)))
@@ -674,7 +674,7 @@
           (set! menu-selection (find-menu-item initial-selection-pos)) 
           (set! menu-selection (find-first-menu-item)))
       (when (and menu-selection (cdr menu-selection))
-        (eprintf "highlight first menu item~n")
+        #;(eprintf "highlight first menu item~n")
         (define snip (selection-snip menu-selection))
         (define new-style (send (get-style-list) find-named-style "Link Highlight"))
         (send snip set-style new-style)
@@ -688,7 +688,7 @@
 
     (define/public (cancel-request)
       (when (custodian? thread-custodian)
-        (eprintf "cancelling request: ~a~n" (custodian-managed-list thread-custodian (current-custodian)))
+        #;(eprintf "cancelling request: ~a~n" (custodian-managed-list thread-custodian (current-custodian)))
         (custodian-shutdown-all thread-custodian)
         ;; without this the editor gets stuck in no refresh mode
         (when (in-edit-sequence?)
@@ -795,7 +795,7 @@
          (load-page query-request)]
         [(gopher-url-request? req)
          ; URL, probably http, open in external browser
-         (eprintf "opening ~a in browser~n" (gopher-url-request->url req))
+         #;(eprintf "opening ~a in browser~n" (gopher-url-request->url req))
          (send-url (gopher-url-request->url req) #t)]
         [(equal? (request-type req) #\h) ; html file
          (load-page req initial-selection-pos)]
@@ -857,13 +857,13 @@
                [(not menu-selection)
                 (define item (find-first-menu-item))
                 (when item
-                  (eprintf "browser-text on-char down: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
+                  #;(eprintf "browser-text on-char down: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
                   (change-menu-selection 'down item))]
                [(or (not (cdr menu-selection)) (selection-visible? menu-selection))
                 ;; change selection to the next menu snip
                 (define item (find-next-menu-item))
                 (when item
-                  (eprintf "browser-text on-char down: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
+                  #;(eprintf "browser-text on-char down: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
                   (change-menu-selection 'down item))]
                [else
                 ;; just scroll to make the selected menu snip visible
@@ -873,7 +873,7 @@
             [(up)
              (define item (find-prev-menu-item))
              (when item
-               (eprintf "browser-text on-char up: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
+               #;(eprintf "browser-text on-char up: new selection = ~a:~a~n" (car item) (send (selection-snip item) get-item-label))
                (change-menu-selection 'up item))]
             [(left)
              (go-back)]
@@ -955,7 +955,7 @@
       (send browser-canvas go (dir-entity->request dir-entity)))
     
     (define/override (on-event dc x y editorx editory e)
-      (eprintf "menu-item-snip% on-event~n")
+      #;(eprintf "menu-item-snip% on-event~n")
       (when (send e button-down? 'left)
         (follow-link)))))
 
@@ -975,7 +975,7 @@
       (string-append (path->string (path-only path)) relative-path))
 
     (define (follow-link)
-      (eprintf "following gemini link: ~a~n" url)
+      #;(eprintf "following gemini link: ~a~n" url)
       (if (regexp-match #px"^(\\w+://).*" url)
           (cond
             [(string-prefix? url "gemini://")
@@ -996,7 +996,7 @@
                                     (replace-final-path-element (request-path/selector base-req) url))])))))
 
     (define/override (on-event dc x y editorx editory event)
-      (eprintf "gemini-link-snip% mouse event ~a~n" (send event get-event-type))
+      #;(eprintf "gemini-link-snip% mouse event ~a~n" (send event get-event-type))
       (cond
         [(send event moving?)
          ;(eprintf "mouse motion event~n")
@@ -1021,7 +1021,7 @@
     
     (define/override (on-focus on?)
       ;; only place to do something when focus leaves the text field
-      (eprintf "on-focus ~a -> ~a~n" last-focus? on?)
+      #;(eprintf "on-focus ~a -> ~a~n" last-focus? on?)
       (unless on?
         (if lost-focus-via-right-click?
             (set! lost-focus-via-right-click? #f)
@@ -1035,10 +1035,10 @@
         [(eq? event-type 'left-down)
          (if last-focus?
              (begin
-               (eprintf "already has focus~n")
+               #;(eprintf "already has focus~n")
                (super on-subwindow-event recv event))
              (begin
-               (eprintf "selecting all~n")
+               #;(eprintf "selecting all~n")
                (super on-subwindow-event recv event)
                (set! last-focus? #t)
                (send (get-editor) select-all)

@@ -56,7 +56,7 @@
     tab))
 
 (define (init-new-tab tp index)
-  (printf "Init tab selection ~a~n" index)
+  #;(printf "Init tab selection ~a~n" index)
   (send tp change-children
         (lambda (c*) '()))
 
@@ -451,7 +451,7 @@ END
         ;(eprintf "Restoring ~a tabs~n" num-tabs)
         (for ([tab (in-list tabs-pref)]
               [index (in-naturals)])
-          (eprintf "Restoring tab ~a: ~a~n" index (deserialize tab))
+          #;(eprintf "Restoring tab ~a: ~a~n" index (deserialize tab))
           (send tp append "New")
           (send tp set-selection index)
           (init-new-tab tp index)
