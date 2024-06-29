@@ -1155,7 +1155,7 @@
             max-scroll
             (if (< y 0)
                 0
-                y)))
+                (inexact->exact y))))
 
       ;(printf "scroll-to ~a~n" y)
       
