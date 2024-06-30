@@ -365,8 +365,8 @@
     ;; new width and height are in pixels
     (define (update-scrollbars new-width new-height)
       (define-values (dw dh) (get-drawable-size))
-      (set-scroll-range 'horizontal (inexact->exact (max 0 (- new-width dw))))
-      (set-scroll-range 'vertical (inexact->exact (max 0 (- new-height dh))))
+      (set-scroll-range 'horizontal (exact-truncate (max 0 (- new-width dw))))
+      (set-scroll-range 'vertical (exact-truncate (max 0 (- new-height dh))))
       (set-scroll-page 'horizontal (max 1 dw))
       (set-scroll-page 'vertical (max 1 dh))
       (show-scrollbars (> new-width dw) (> new-height dh)))
@@ -487,8 +487,8 @@
              (define snip-space (box 0))
              (get-extent layout-ctx e x y snip-w snip-h snip-descent snip-space #f #f)
              ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y (unbox snip-w) (unbox snip-h) (unbox snip-descent) (unbox snip-space))
-             (set! x2 (inexact->exact (+ x (unbox snip-w))))
-             (set! y2 (add1 (inexact->exact (+ y (unbox snip-h)))))
+             (set! x2 (exact-truncate (+ x (unbox snip-w))))
+             (set! y2 (add1 (exact-truncate (+ y (unbox snip-h)))))
              ;; set position for adding next element
              (cond
                [(element-end-of-line e)
@@ -528,8 +528,8 @@
                  (layout-advance-to-new-line layout-ctx y1))]
               [else
                ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
-               (set! x2 (inexact->exact (+ x (unbox snip-w))))
-               (set! y2 (add1 (inexact->exact (+ y (unbox snip-h)))))
+               (set! x2 (exact-truncate (+ x (unbox snip-w))))
+               (set! y2 (add1 (exact-truncate (+ y (unbox snip-h)))))
                ;; set position for adding next element
                (cond
                  [(element-end-of-line e)
@@ -1155,7 +1155,7 @@
             max-scroll
             (if (< y 0)
                 0
-                (inexact->exact y))))
+                (exact-truncate y))))
 
       ;(printf "scroll-to ~a~n" y)
       
