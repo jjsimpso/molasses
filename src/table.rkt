@@ -965,7 +965,7 @@
       ;; now we should know the content height of each cell and can set the cells
       ;; in each row to a suitable height
       (for ([row (in-list rows)])
-        (define height (calc-row-height row))
+        (define height (exact-round (calc-row-height row)))
         #;(printf "setting row height to ~a~n" height)
         (set-row-height row height)))
 
