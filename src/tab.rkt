@@ -19,7 +19,8 @@
          open-help-tab
          find-tp-address-field
          save-tabs
-         load-tabs)
+         load-tabs
+         get-all-tab-canvases)
 
 ;; holds the ui component and data for a tab
 (struct tab-info
@@ -157,7 +158,7 @@
          (default-bg-color canvas-bg-color)
          (update-status-cb update-status)
          (update-address-cb update-address)
-         (smooth-scrolling #t)
+         (smooth-scrolling canvas-smooth-scrolling)
          (wheel-step 10)))
 
   (init-styles (send page-canvas get-style-list))
@@ -459,3 +460,11 @@ END
           (send canvas load-restore-data (deserialize tab))
           (send canvas focus)))
       #f))
+
+;; returns a list of browser-canvas% objects
+(define (get-all-tab-canvases)
+  (for/list ([tab (in-list tab-list)])
+    (define children (send (tab-info-contents tab) get-children))
+    (for/first ([child (in-list children)]
+                #:when (is-a? child browser-canvas%))
+      child)))

@@ -1,6 +1,7 @@
 #lang racket/gui
 
 (require "const.rkt"
+         "config.rkt"
          "tab.rkt"
          "request.rkt"
          "download.rkt"
@@ -83,6 +84,10 @@
       (new menu%
            [label "Font"]
            [parent menu-bar]))
+  (define options-menu
+    (new menu%
+         (label "&Options")
+         (parent menu-bar)))
   (define bookmark-menu
     (new menu%
          (label "&Bookmarks")
@@ -125,8 +130,24 @@
             (send o do-edit-operation 'select-all)))))
 
   (new checkable-menu-item%
+       (label "Smooth Scrolling")
+       (parent options-menu)
+       (demand-callback
+        (lambda (item)
+          (if canvas-smooth-scrolling
+              (send item check #t)
+              (send item check #f))))
+       (callback 
+        (lambda (item event)
+          (define checked? (send item is-checked?))
+          (set-canvas-smooth-scrolling! checked?)
+          (define canvas-list (get-all-tab-canvases))
+          (for ([canvas (in-list canvas-list)])
+            (set-field! smooth-scrolling canvas checked?)))))
+  
+  (new checkable-menu-item%
        (label "Word Wrap")
-       (parent edit-menu)
+       (parent options-menu)
        (demand-callback
         (lambda (item)
           (define canvas (active-page-canvas tab-panel))

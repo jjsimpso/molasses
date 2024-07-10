@@ -8,6 +8,8 @@
 
 (define home-page-url "gopher://gopher.endangeredsoft.org/1/gopher/home")
 
+(define canvas-smooth-scrolling #t)
+
 (define canvas-bg-color (make-color 33 33 33))
 (define text-fg-color (send the-color-database find-color "white smoke"))
 (define text-bg-color canvas-bg-color)
@@ -18,3 +20,6 @@
 (define html-text-bg-color (make-color #xFF #xFF #xFF))
 (define html-link-color (send the-color-database find-color "blue"))
 (define html-vlink-color (send the-color-database find-color "yellow"))
+
+(define (set-canvas-smooth-scrolling! val)
+  (set! canvas-smooth-scrolling val))
