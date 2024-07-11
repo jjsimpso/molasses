@@ -56,7 +56,7 @@
 
     (define (set-valign-offset)
       (define ypadding (* 2 ymargin))
-      (define height (- cell-height ypadding))
+      (define height (exact-truncate (- cell-height ypadding)))
       (set! valign-offset
         (case vert-align
           [(top) 0]
