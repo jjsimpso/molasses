@@ -482,7 +482,8 @@
              refresh
              lookup-snip-position-size
              first-visible-snip
-             scroll-to)
+             scroll-to
+             redraw-snips)
 
     (field [editor-busy? #f]
            [current-url #f]
@@ -829,6 +830,10 @@
       (truncate (/ height line-height)))
 
     (define (change-menu-selection direction item)
+      (define changed-elements
+        (if menu-selection
+            (list (dlink-value (cdr menu-selection)) (dlink-value (cdr item)))
+            (list (dlink-value (cdr item)))))
       (when menu-selection
         (unhighlight menu-selection))
       (set! menu-selection item)
@@ -847,7 +852,7 @@
             (let*-values ([(first-snip) (first-visible-snip)]
                           [(sx sy sw sh) (lookup-snip-position-size first-snip)])
               (scroll-to sy)))
-          (refresh)))
+          (redraw-snips changed-elements)))
     
     (define/override (on-char event)
       (if gopher-menu?

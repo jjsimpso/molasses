@@ -575,7 +575,38 @@
          new-style]
         [else
          current-style]))
-    
+
+    ;; optimization provided to users of layout-canvas% so that they can avoid a complete refresh/on-paint
+    ;; users only have access to the snips they added, not the actual elements, so the argument is a list
+    ;; of snips to redraw
+    (define/public (redraw-snips snip-list)
+      (define-values (cw ch) (get-client-size))
+      (define-values (vw vh) (get-virtual-size))
+      ;; position of viewport in virtual canvas
+      (define-values (left top) (get-view-start))
+
+      (define current-style #f)
+      
+      (send dc suspend-flush)
+
+      (dynamic-wind
+        void
+        (lambda ()
+          (for ([snip (in-list snip-list)])
+            (define e (lookup-visible-element-from-snip snip))
+            (when e
+              (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
+                                           (+ (- (element-ypos e) top) ymargin)))
+              ;(printf "  snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
+              (set! current-style (check-style-update (get-style e) current-style))
+              (draw e dc
+                    x y
+                    0 0
+                    (- cw xmargin) (- ch ymargin)
+                    0 0))))
+        (lambda ()
+          (send dc resume-flush))))
+      
     (define/override (on-paint)
       (define-values (cw ch) (get-client-size))
       (define-values (vw vh) (get-virtual-size))
@@ -1187,14 +1218,20 @@
               (update-visible-elements! (- new-scroll-pos old-scroll-pos) scroll-y (+ scroll-y dh)))
           (refresh))))
 
+    (define (lookup-element-from-snip s)
+      (for/first ([e (in-dlist elements)]
+                  #:when (eq? (element-snip e) s))
+        e))
+
+    (define (lookup-visible-element-from-snip s)
+      (for/first ([e (in-dlist visible-elements)]
+                  #:when (eq? (element-snip e) s))
+        e))
+    
     ;; layout-canvas% users don't have direct access to the elements, so they may need to
     ;; find an element's position using the snip(or string) that they added to the canvas
     (define/public (lookup-snip-position-size s)
-      (define elem
-        (for/first ([e (in-dlist elements)]
-                    #:when (eq? (element-snip e) s))
-          e))
-
+      (define elem (lookup-element-from-snip s))
       (cond
         [(and elem (or (false? (element-lines elem))
                        (empty? (element-lines elem))))
