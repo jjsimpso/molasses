@@ -1,6 +1,7 @@
 #lang racket/gui
 
 (require net/sendurl)
+(require "config.rkt")
 (require "request.rkt")
 (require "gopher.rkt")
 (require "gemini.rkt")
@@ -843,15 +844,15 @@
                        [(w h) (get-drawable-size)])
             (cond
               [(eq? direction 'down)
-               (scroll-to (- sy (/ h 4)))]
+               (scroll-to (- sy (/ h 4)) canvas-smooth-scrolling)]
               [(eq? direction 'up)
-               (scroll-to (- sy (* (/ h 4) 3)))]
+               (scroll-to (- sy (* (/ h 4) 3)) canvas-smooth-scrolling)]
               [else
                (error "change-selection: invalid direction")])
             ;; nudge the visible area just a bit so that the first line isn't partially cut off
             (let*-values ([(first-snip) (first-visible-snip)]
                           [(sx sy sw sh) (lookup-snip-position-size first-snip)])
-              (scroll-to sy)))
+              (scroll-to sy canvas-smooth-scrolling)))
           (redraw-snips changed-elements)))
     
     (define/override (on-char event)
@@ -874,7 +875,7 @@
                 ;; just scroll to make the selected menu snip visible
                 (define-values (sx sy sw sh) (lookup-snip-position-size (selection-snip menu-selection)))
                 (define-values (w h) (get-drawable-size))
-                (scroll-to (- sy (/ h 4)))])]
+                (scroll-to (- sy (/ h 4)) canvas-smooth-scrolling)])]
             [(up)
              (define item (find-prev-menu-item))
              (when item
@@ -888,7 +889,7 @@
             [(next)
              (define-values (x y) (get-view-start))
              (define-values (w h) (get-drawable-size))
-             (scroll-to (+ y h))
+             (scroll-to (+ y h) canvas-smooth-scrolling)
              ;; nudge the visible area just a bit so that the first line isn't partially cut off
              (let*-values ([(first-snip) (first-visible-snip)]
                            [(sx sy sw sh) (lookup-snip-position-size first-snip)])
@@ -902,7 +903,7 @@
             [(prior)
              (define-values (x y) (get-view-start))
              (define-values (w h) (get-drawable-size))
-             (scroll-to (- y h))
+             (scroll-to (- y h) canvas-smooth-scrolling)
              ;; nudge the visible area just a bit so that the first line isn't partially cut off
              (let*-values ([(first-snip) (first-visible-snip)]
                            [(sx sy sw sh) (lookup-snip-position-size first-snip)])
