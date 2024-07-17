@@ -56,14 +56,14 @@
 
     (define (set-valign-offset)
       (define ypadding (* 2 ymargin))
-      (define height (exact-truncate (- cell-height ypadding)))
+      (define height (- cell-height ypadding))
       (set! valign-offset
         (case vert-align
           [(top) 0]
           [(bottom)
            (- height content-height)]
           [else ;middle
-           (quotient (- height content-height) 2)]))
+           (quotient (exact-truncate (- height content-height)) 2)]))
       #;(printf "setting valign-offset to ~a(~a/~a)~n" valign-offset height content-height))
 
     (define/public (get-dc)
