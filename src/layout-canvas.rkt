@@ -608,46 +608,52 @@
           (send dc resume-flush))))
       
     (define/override (on-paint)
-      (define-values (cw ch) (get-client-size))
-      (define-values (vw vh) (get-virtual-size))
-      ;; position of viewport in virtual canvas
-      (define-values (left top) (get-view-start))
+      (printf "on-paint: enter~n") 
 
-      ;(printf "on-paint ~ax~a of ~ax~a at ~ax~a~n" cw ch vw vh left top)
-      
-      (when (not visible-elements)
-        (set-visible-elements!))
-      
-      (define current-style #f)
+      ;; skip drawing if we are in an edit sequence
+      ;; end-edit-sequence does a refresh, so that will pick up the drawing when done
+      ;; grab edit-lock semaphore to prevent edit sequence during drawing
+      (when (semaphore-try-wait? edit-lock)
+        (dynamic-wind
+          (lambda ()
+            (send dc suspend-flush))
+          (lambda ()
+            (define-values (cw ch) (get-client-size))
+            (define-values (vw vh) (get-virtual-size))
+            ;; position of viewport in virtual canvas
+            (define-values (left top) (get-view-start))
 
-      (send dc suspend-flush)
-
-      (dynamic-wind
-        void
-        (lambda ()
-          (clear-rectangle 0 0 cw ch)
-          ;; only draw visible elements
-          (for ([e (in-dlist visible-elements)])
-            (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
-                                         (+ (- (element-ypos e) top) ymargin)))
-            ;(printf "  snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
-            (set! current-style (check-style-update (get-style e) current-style))
-            (if (and (wrap-text?) (string? (element-snip e)))
-                (draw-wrapped-text e dc left top)
-                (draw e dc
-                      x y
-                      0 0
-                      (- cw xmargin) (- ch ymargin)
-                      0 0)))
-          ;; draw mouse selection
-          (draw-highlight mouse-selection dc)
-          ;; clear top, bottom and right margins in case they were drawn to
-          ;; top is needed for cases where an element is partially above the viewable area
-          (clear-rectangle 0 0 cw ymargin)
-          (clear-rectangle 0 (- ch ymargin) cw ymargin)
-          (clear-rectangle (- cw xmargin) 0 xmargin ch))
-        (lambda ()
-          (send dc resume-flush))))
+            (printf "on-paint ~ax~a of ~ax~a at ~ax~a~n" cw ch vw vh left top)
+          
+            (when (not visible-elements)
+              (set-visible-elements!))
+            
+            (define current-style #f)
+            
+            (clear-rectangle 0 0 cw ch)
+            ;; only draw visible elements
+            (for ([e (in-dlist visible-elements)])
+              (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
+                                           (+ (- (element-ypos e) top) ymargin)))
+              ;(printf "  snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
+              (set! current-style (check-style-update (get-style e) current-style))
+              (if (and (wrap-text?) (string? (element-snip e)))
+                  (draw-wrapped-text e dc left top)
+                  (draw e dc
+                        x y
+                        0 0
+                        (- cw xmargin) (- ch ymargin)
+                        0 0)))
+            ;; draw mouse selection
+            (draw-highlight mouse-selection dc)
+            ;; clear top, bottom and right margins in case they were drawn to
+            ;; top is needed for cases where an element is partially above the viewable area
+            (clear-rectangle 0 0 cw ymargin)
+            (clear-rectangle 0 (- ch ymargin) cw ymargin)
+            (clear-rectangle (- cw xmargin) 0 xmargin ch))
+          (lambda ()
+            (send dc resume-flush)
+            (semaphore-post edit-lock)))))
 
     (define/override (on-scroll event)
       (define-values (dw dh) (get-drawable-size))
@@ -1373,18 +1379,34 @@
          (draw-highlight mouse-selection dc)]
         [else void]))
 
-    
+    ;; begin/end edit-sequence is used to prevent redundant on-paint calls as well as prevent
+    ;; updates to canvas data while drawing is active
+    ;; WARNING: unlike in editor%'s, edit sequences will deadlock if nested
     (define in-edit-sequence #f)
+    (define edit-lock (make-semaphore 1))
     
     (define/public (begin-edit-sequence)
+      (semaphore-wait edit-lock)
       (set! in-edit-sequence #t))
 
     (define/public (in-edit-sequence?)
       in-edit-sequence)
     
     (define/public (end-edit-sequence)
-      (set! in-edit-sequence #f))))
-
+      (if (not (semaphore-try-wait? edit-lock))
+          (if in-edit-sequence
+              ;; semaphore is held by previous call to begin-edit-sequence, release it
+              (begin
+                (set! in-edit-sequence #f)
+                (semaphore-post edit-lock)
+                (refresh))
+              ;; semaphore must currently be held by on-paint, this case shouldn't happen unless
+              ;; end-edit-sequence was called without a matching begin-edit-sequence
+              (void))
+          ;; we grabbed semaphore, release it and trigger error
+          (begin
+            (semaphore-post edit-lock)
+            (error "end-edit-sequence called without matching begin-edit-sequence~n"))))))
 
 (module+ main  
   (define frame 

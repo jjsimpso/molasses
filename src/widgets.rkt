@@ -160,7 +160,6 @@
      (send canvas init-gopher-menu #f)
      (close-input-port (gopher-response-data-port resp))])
   (send canvas end-edit-sequence)
-  (send canvas refresh)
   #;(eprintf "goto-gopher UI update took ~a ms~n" (- (current-inexact-monotonic-milliseconds) update-start-time)))
 
 ;; download gopher selector to a temp file and open it with an external application
@@ -381,7 +380,6 @@
     (send canvas begin-edit-sequence)
     (send canvas append-string msg)
     (send canvas end-edit-sequence)
-    (send canvas refresh)
     (close-input-port (gemini-response-data-port resp)))
   
   (define resp (gemini-fetch (request-host req)
@@ -434,7 +432,6 @@
           (send canvas append-string (format "Initiating download of ~a~n" (request-path/selector req)))
           (send canvas end-edit-sequence)
           (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]))
-     (send canvas refresh)
      (close-input-port (gemini-response-data-port resp))
      req]
     [(30 31)
@@ -444,7 +441,6 @@
      (send canvas begin-edit-sequence)
      (send canvas append-string (format "Initiating download of ~a~n" (request-path/selector req)))
      (send canvas end-edit-sequence)
-     (send canvas refresh)
      (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]
     
     [(40) (show-gemini-error "Temporary failure")]
