@@ -111,16 +111,7 @@
      (close-input-port (gopher-response-data-port resp))
      (send canvas init-gopher-menu initial-selection-pos)]
     [(equal? item-type #\0) ; text
-     ;; insert one line at a time to handle end of line conversion
-     #;(for ([line (in-lines (gopher-response-data-port resp))])
-       (send canvas insert line)
-       (send canvas insert "\n"))
-     ;; this isn't ideal but is still a lot faster than inserting one line at a time
-     ;; (text% treats #\return as a newline so DOS formatted files have extra newlines)
-     (send canvas append-string (string-replace
-                                 (port->string (gopher-response-data-port resp))
-                                 "\r\n"
-                                 "\n"))
+     (send canvas append-string (port->string (gopher-response-data-port resp)))
      (close-input-port (gopher-response-data-port resp))]
     [(equal? item-type #\h)
      (render-html-to-text (gopher-response-data-port resp)

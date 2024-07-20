@@ -1517,7 +1517,7 @@
   (init-styles (send canvas get-style-list))
   (send canvas set-canvas-background canvas-bg-color)
 
-  (define layout-test 'center)
+  (define layout-test #f)
   (if layout-test
       (send canvas set-mode 'layout)
       (send canvas set-mode 'plaintext))
@@ -1631,6 +1631,9 @@
         (send canvas append-string highlander-text)
         (send canvas append-string "\n\n")
         (send canvas append-string "text\nwith lots\nof\nnewlines")
+        (send canvas append-string "text ending with just carriage return\n")
+        (send canvas append-string "text ending with carriage return + new line\r\n")
+        (send canvas append-string "text ending with just new line\n")
         (add-gopher-menu canvas)
         (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
           (send canvas append-string (port->string (gopher-response-data-port response))))))
