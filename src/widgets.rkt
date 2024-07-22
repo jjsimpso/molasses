@@ -756,12 +756,13 @@
         [(equal? (request-type req) #\7) ; gopher index search
          ;; prompt user for query string
          (define query-string (get-text-from-user "Query" "search string"))
-         (define query-request (request (request-protocol req)
-                                        (request-host req)
-                                        (request-port req)
-                                        (string-append (request-path/selector req) "\t" query-string)
-                                        #\1))
-         (load-page query-request)]
+         (when query-string
+           (define query-request (request (request-protocol req)
+                                          (request-host req)
+                                          (request-port req)
+                                          (string-append (request-path/selector req) "\t" query-string)
+                                          #\1))
+           (load-page query-request))]
         [(gopher-url-request? req)
          ; URL, probably http, open in external browser
          #;(eprintf "opening ~a in browser~n" (gopher-url-request->url req))
