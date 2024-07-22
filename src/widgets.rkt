@@ -91,9 +91,6 @@
                         (request-type req)
                         #\1))
 
-  ;; this flag is used to signal the main thread that text% updates have begun
-  (set-field! editor-busy? canvas #t)
-  
   ;; reset gopher-menu? boolean to default when loading a new page
   (set-field! gopher-menu? canvas #f)
 
@@ -365,9 +362,6 @@
   #;(eprintf "goto-gemini: ~a, ~a~n" (request-host req) (request-path/selector req))
 
   (define (show-gemini-error msg)
-    ;; this flag is used to signal the main thread that canvas updates have begun
-    (set-field! editor-busy? canvas #t)
-    
     (send canvas begin-edit-sequence)
     (send canvas append-string msg)
     (send canvas end-edit-sequence)
@@ -392,9 +386,6 @@
            (goto-gemini query-request canvas))
          (void))]
     [(20 21)
-     ;; this flag is used to signal the main thread that text% updates have begun
-     (set-field! editor-busy? canvas #t)
-     
      (let ([data-port (gemini-response-data-port resp)]
            [mimetype (gemini-response-meta resp)]
            [from-url (gemini-response-from-url resp)])
@@ -426,8 +417,6 @@
      (close-input-port (gemini-response-data-port resp))
      req]
     [(30 31)
-     ;; this flag is used to signal the main thread that text% updates have begun
-     (set-field! editor-busy? canvas #t)
      ;; initiate a file download
      (send canvas begin-edit-sequence)
      (send canvas append-string (format "Initiating download of ~a~n" (request-path/selector req)))
@@ -473,12 +462,11 @@
              scroll-to
              redraw-snips)
 
-    (field [editor-busy? #f]
-           [current-url #f]
+    (field [current-url #f]
            [gopher-menu? #f]
            [menu-selection (cons 0  #f)]) ; menu item index and dlink for menu item
     
-    (define thread-custodian #f)
+    (define thread-custodian (make-custodian))
     (define request-thread-id #f)
     (define history '())
     (define status-text "Ready")
@@ -676,13 +664,15 @@
             (scroll-to 0))))
 
     (define/public (cancel-request)
+      (printf "cancel request called~n")
       (when (custodian? thread-custodian)
-        #;(eprintf "cancelling request: ~a~n" (custodian-managed-list thread-custodian (current-custodian)))
+        (update-status "Cancelling...")
+        (printf "cancelling request: ~a~n" (custodian-managed-list thread-custodian (current-custodian)))
         (custodian-shutdown-all thread-custodian)
-        ;; without this the editor gets stuck in no refresh mode
+        ;; without this the canvas could get stuck in no refresh mode
         (when (in-edit-sequence?)
           (end-edit-sequence))
-        (set! thread-custodian #f)
+        (set! thread-custodian (make-custodian))
         ;; update status message
         (update-status "Ready")))
     
@@ -703,21 +693,11 @@
 
       (clear-mouse-selection)
 
-      ;; this will shutdown the previous custodian on every page load.
-      ;; seems wasteful not to re-use the custodian if we aren't actually interrupting
-      ;; the previous thread's work.
-      (if (and editor-busy? (thread? request-thread-id))
-          ;; killing a thread that is updating an editor<%> is not support so if
-          ;; the network request has completed and text% updates have been initiated
-          ;; we must wait for the thread to finish.
-          (begin
-            (update-status "Cancelling...")
-            (thread-wait request-thread-id)
-            (cancel-request))
-          (cancel-request))
-
-      (set! editor-busy? #f)
-      (set! thread-custodian (make-custodian))
+      ;; shutdown the previous request thread if it hasn't finished 
+      ;; I think we only need to shutdown the custodian if the thread never completed
+      (when (and (thread? request-thread-id)
+                 (thread-running? request-thread-id))
+        (cancel-request))
 
       (define update-history (make-history-updater current-url (and menu-selection (car menu-selection))))
 
