@@ -84,8 +84,8 @@
 
     (define/public (get-drawable-size)
       (define-values (cw ch) (get-client-size))
-      (values (- cw (* 2 xmargin))
-              (- ch (* 2 ymargin))))
+      (values (max 0 (- cw (* 2 xmargin)))
+              (max 0 (- ch (* 2 ymargin)))))
 
     ;; replaces version from canvas% since we're using manual scrollbars
     (define/override (get-virtual-size)
@@ -284,22 +284,28 @@
         (for ([e (in-dlist cursor)]
               #:break (element-visible? e top bottom))
           (dlist-advance-head! cursor))
-        ;; set cursor's tail to element after first visible and advance tail until we reach the
-        ;; last visible elment
-        (set-dlist-tail! cursor (dlist-head-next cursor))
-        (let loop ([e (dlist-tail-value cursor)])
-          (cond
-            [(not e) void]
-            [(element-visible? e top bottom)
-             (when (dlist-advance-tail! cursor) ; returns false when tail can't advance any further
-               (loop (dlist-tail-value cursor)))]
-            [else
-             (if (eq? (dlist-tail-prev cursor)
-                      (dlist-head cursor))
-                 (set-dlist-tail! cursor #f)
-                 (set-dlist-tail! cursor (dlist-tail-prev cursor)))]))
-        (set! visible-elements cursor)
-        #;(printf "set-visible-elements ~a to ~a~n" (dlist-head-value visible-elements) (dlist-tail-value visible-elements))))
+        
+        (cond
+          [(not (element-visible? (dlist-head-value cursor) top bottom))
+           ;; no elements visible
+           (set! visible-elements #f)]
+          [else
+           ;; set cursor's tail to element after first visible and advance tail until we reach the
+           ;; last visible elment
+           (set-dlist-tail! cursor (dlist-head-next cursor))
+           (let loop ([e (dlist-tail-value cursor)])
+             (cond
+               [(not e) void]
+               [(element-visible? e top bottom)
+                (when (dlist-advance-tail! cursor) ; returns false when tail can't advance any further
+                  (loop (dlist-tail-value cursor)))]
+               [else
+                (if (eq? (dlist-tail-prev cursor)
+                         (dlist-head cursor))
+                    (set-dlist-tail! cursor #f)
+                    (set-dlist-tail! cursor (dlist-tail-prev cursor)))]))
+           (set! visible-elements cursor)
+           #;(printf "set-visible-elements ~a to ~a~n" (dlist-head-value visible-elements) (dlist-tail-value visible-elements))])))
 
     (define (adjust-visible-elements-forward! cursor top bottom)
       ;; advance the tail to last visible element
