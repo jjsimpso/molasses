@@ -41,7 +41,11 @@
              (else
               #f))))
 
+       (define (save-settings)
+         (put-preferences (list 'smooth-scrolling) (list canvas-smooth-scrolling) #f pref-file))
+       
        (define/augment (on-close)
+         (save-settings)
          (save-tabs tab-panel))
 
        (define/override (on-subwindow-char receiver event)
@@ -291,6 +295,8 @@
          (label "Downloads")
          (stretchable-width #f)))
 
+  (set-canvas-smooth-scrolling! (get-preference 'smooth-scrolling (lambda () #t) 'timestamp pref-file))
+  
   ;; load any saved tabs, else initialize two tabs, one open to the
   ;; molasses home page and one containing the introductory help
   ;; text
