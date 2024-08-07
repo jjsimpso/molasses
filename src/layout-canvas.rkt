@@ -1170,7 +1170,8 @@
 
     ;;
     (define/public (set-mode m)
-      (unless (eq? mode m)
+      (unless (or (eq? mode m)
+                  (not (member m '(plaintext wrapped layout))))
         (set! mode m)
         (unless (dlist-empty? elements)
           (reset-layout)

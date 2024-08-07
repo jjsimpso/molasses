@@ -779,14 +779,33 @@
         (load-page req (browser-url-selection-pos prev-url) #:back? #t)))
     
     (define/public (load-restore-data list-of-data)
-      (when (and (list? list-of-data)
-                 (= (length list-of-data) 2))
-        (set! history (cadr list-of-data))
-        (when (browser-url? (car list-of-data))
-          (go (browser-url-req (car list-of-data))))))
+      (cond
+        [(and (list? list-of-data)
+              (= (length list-of-data) 2))
+         ;; old-style config file, will be replaced with new version
+         (printf "loading old-style tabs save data~n")
+         (set! history (cadr list-of-data))
+         (when (browser-url? (car list-of-data))
+           (go (browser-url-req (car list-of-data))))]
+        [else
+         (define history-saved (assq 'history list-of-data))
+         (define url-saved (assq 'current-url list-of-data))
+         (define mode-saved (assq 'mode list-of-data))
+         
+         (when history-saved
+           (printf "loading tab history: ~a~n" (cadr history-saved))
+           (set! history (cadr history-saved)))
+         
+         (when mode-saved
+           (printf "loading tab mode: ~a~n" (cadr mode-saved))
+           (set-mode (cadr mode-saved)))
+         
+         (when (and url-saved (browser-url? (cadr url-saved)))
+           (printf "loading tab url: ~a~n" (cadr url-saved))
+           (go (browser-url-req (cadr url-saved))))]))
     
     (define/public (get-restore-data)
-      (list current-url history))
+      `((current-url ,current-url) (history ,history) (mode ,(get-mode))))
 
     (define/public (get-history)
       (for/list ([item (in-list history)])
