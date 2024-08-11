@@ -793,15 +793,15 @@
          (define mode-saved (assq 'mode list-of-data))
          
          (when history-saved
-           (printf "loading tab history: ~a~n" (cadr history-saved))
+           #;(printf "loading tab history: ~a~n" (cadr history-saved))
            (set! history (cadr history-saved)))
          
          (when mode-saved
-           (printf "loading tab mode: ~a~n" (cadr mode-saved))
+           #;(printf "loading tab mode: ~a~n" (cadr mode-saved))
            (set-mode (cadr mode-saved)))
          
          (when (and url-saved (browser-url? (cadr url-saved)))
-           (printf "loading tab url: ~a~n" (cadr url-saved))
+           #;(printf "loading tab url: ~a~n" (cadr url-saved))
            (go (browser-url-req (cadr url-saved))))]))
     
     (define/public (get-restore-data)

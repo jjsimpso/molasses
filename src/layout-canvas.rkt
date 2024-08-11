@@ -614,7 +614,7 @@
           (send dc resume-flush))))
       
     (define/override (on-paint)
-      (printf "on-paint: enter~n") 
+      ;(printf "on-paint: enter~n") 
 
       ;; skip drawing if we are in an edit sequence
       ;; end-edit-sequence does a refresh, so that will pick up the drawing when done
@@ -629,7 +629,7 @@
             ;; position of viewport in virtual canvas
             (define-values (left top) (get-view-start))
 
-            (printf "on-paint ~ax~a of ~ax~a at ~ax~a~n" cw ch vw vh left top)
+            ;(printf "on-paint ~ax~a of ~ax~a at ~ax~a~n" cw ch vw vh left top)
           
             (when (not visible-elements)
               (set-visible-elements!))
