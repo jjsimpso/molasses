@@ -447,6 +447,7 @@
              set-background-image
              get-client-size
              get-drawable-size
+             get-virtual-size
              get-view-start
              get-style-list
              get-mode
@@ -483,7 +484,7 @@
           (error "selection-snip: invalid selection")))
 
     (define/private (selection-visible? selection)
-      (define snip (selection-snip selection))
+      (define snip (and selection (selection-snip selection)))
       (if snip
           (let-values ([(sx sy sw sh) (lookup-snip-position-size snip)]
                        [(w h) (get-drawable-size)]
@@ -497,14 +498,16 @@
           #f))
 
     (define (highlight selection)
-      (define snip (selection-snip menu-selection))
-      (define new-style (send (get-style-list) find-named-style "Link Highlight"))
-      (send snip set-style new-style))
+      (when selection
+        (define snip (selection-snip selection))
+        (define new-style (send (get-style-list) find-named-style "Link Highlight"))
+        (send snip set-style new-style)))
 
     (define (unhighlight selection)
-      (define snip (selection-snip menu-selection))
-      (define new-style (send (get-style-list) find-named-style "Link"))
-          (send snip set-style new-style))
+      (when selection
+        (define snip (selection-snip selection))
+        (define new-style (send (get-style-list) find-named-style "Link"))
+        (send snip set-style new-style)))
     
     ;; return a pair representing the menu selection or #f
     (define/private (find-next-menu-item)
@@ -545,41 +548,47 @@
 
     ;; return a pair representing the menu selection or #f
     (define/private (find-next-visible-menu-item)
-      (define-values (w h) (get-drawable-size))
-      (define-values (ox oy) (get-view-start))
-      
-      (let loop ([index (car menu-selection)]
-                 [node (and (cdr menu-selection)
-                            (dlink-next (cdr menu-selection)))])
-        (if node
-            (let-values ([(x y w h) (lookup-snip-position-size (dlink-value node))])
-              (cond
-                [(< y oy)
-                 (loop (add1 index) (dlink-next node))]
-                [(> y (+ oy h))
-                 #f]
-                [else
-                 (cons index node)]))
-            #f)))
+      (cond
+        [menu-selection
+         (define-values (w h) (get-drawable-size))
+         (define-values (ox oy) (get-view-start))
+         
+         (let loop ([index (car menu-selection)]
+                    [node (and (cdr menu-selection)
+                               (dlink-next (cdr menu-selection)))])
+           (if node
+               (let-values ([(x y w h) (lookup-snip-position-size (dlink-value node))])
+                 (cond
+                   [(< y oy)
+                    (loop (add1 index) (dlink-next node))]
+                   [(> y (+ oy h))
+                    #f]
+                   [else
+                    (cons index node)]))
+               #f))]
+        [else #f]))
 
     ;; return a pair representing the menu selection or #f
     (define/private (find-prev-visible-menu-item)
-      (define-values (w h) (get-drawable-size))
-      (define-values (ox oy) (get-view-start))
-      
-      (let loop ([index (car menu-selection)]
-                 [node (and (cdr menu-selection)
-                            (dlink-prev (cdr menu-selection)))])
-        (if node
-            (let-values ([(x y w h) (lookup-snip-position-size (dlink-value node))])
-              (cond
-                [(< y oy)
-                 #f]
-                [(> y (+ oy h))
-                 (loop (sub1 index) (dlink-prev node))]
-                [else
-                 (cons index node)]))
-            #f)))
+      (cond
+        [menu-selection
+         (define-values (w h) (get-drawable-size))
+         (define-values (ox oy) (get-view-start))
+         
+         (let loop ([index (car menu-selection)]
+                    [node (and (cdr menu-selection)
+                               (dlink-prev (cdr menu-selection)))])
+           (if node
+               (let-values ([(x y w h) (lookup-snip-position-size (dlink-value node))])
+                 (cond
+                   [(< y oy)
+                    #f]
+                   [(> y (+ oy h))
+                    (loop (sub1 index) (dlink-prev node))]
+                   [else
+                    (cons index node)]))
+               #f))]
+        [else #f]))
 
     (define/override (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       (when (is-a? s menu-item-snip%)
@@ -783,7 +792,7 @@
         [(and (list? list-of-data)
               (= (length list-of-data) 2))
          ;; old-style config file, will be replaced with new version
-         (printf "loading old-style tabs save data~n")
+         #;(printf "loading old-style tabs save data~n")
          (set! history (cadr list-of-data))
          (when (browser-url? (car list-of-data))
            (go (browser-url-req (car list-of-data))))]
@@ -900,7 +909,25 @@
                (when item
                  (unhighlight menu-selection)
                  (set! menu-selection item)
-                 (highlight menu-selection)))]            
+                 (highlight menu-selection)))]
+            [(home)
+             (scroll-to 0 canvas-smooth-scrolling)
+             (unless (selection-visible? menu-selection)
+               (define item (find-first-menu-item))
+               (when item
+                 (unhighlight menu-selection)
+                 (set! menu-selection item)
+                 (highlight menu-selection)))]
+            [(end)
+             (define-values (vx vy) (get-virtual-size))
+             (define-values (dw dh) (get-drawable-size))
+             (scroll-to (- vy dh) canvas-smooth-scrolling)
+             (unless (selection-visible? menu-selection)
+               (define item (find-next-visible-menu-item))
+               (when item
+                 (unhighlight menu-selection)
+                 (set! menu-selection item)
+                 (highlight menu-selection)))]
             [else
              (define key-code (send event get-key-code))
              (super on-char event)])
