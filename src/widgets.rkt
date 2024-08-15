@@ -550,7 +550,7 @@
     (define/private (find-next-visible-menu-item)
       (cond
         [menu-selection
-         (define-values (w h) (get-drawable-size))
+         (define-values (dw dh) (get-drawable-size))
          (define-values (ox oy) (get-view-start))
          
          (let loop ([index (car menu-selection)]
@@ -561,7 +561,7 @@
                  (cond
                    [(< y oy)
                     (loop (add1 index) (dlink-next node))]
-                   [(> y (+ oy h))
+                   [(> y (+ oy dh))
                     #f]
                    [else
                     (cons index node)]))
@@ -572,7 +572,7 @@
     (define/private (find-prev-visible-menu-item)
       (cond
         [menu-selection
-         (define-values (w h) (get-drawable-size))
+         (define-values (dw dh) (get-drawable-size))
          (define-values (ox oy) (get-view-start))
          
          (let loop ([index (car menu-selection)]
@@ -583,7 +583,7 @@
                  (cond
                    [(< y oy)
                     #f]
-                   [(> y (+ oy h))
+                   [(>= y (+ oy dh))
                     (loop (sub1 index) (dlink-prev node))]
                    [else
                     (cons index node)]))
@@ -837,18 +837,26 @@
       (highlight menu-selection)
       (if (not (selection-visible? menu-selection))
           (let-values ([(sx sy sw sh) (lookup-snip-position-size (selection-snip item))]
-                       [(w h) (get-drawable-size)])
+                       [(w h) (get-drawable-size)]
+                       [(vx vy) (get-virtual-size)])
             (cond
               [(eq? direction 'down)
-               (scroll-to (- sy (/ h 4)) canvas-smooth-scrolling)]
+               (define max-y (- vy h))
+               (define new-y (min max-y (- sy (/ h 4))))
+               (scroll-to new-y canvas-smooth-scrolling)
+               ;; nudge the visible area just a bit so that the first line isn't partially cut off
+               (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
+               (when (and (< fsy new-y) (< new-y max-y))
+                 (scroll-to fsy canvas-smooth-scrolling))]
               [(eq? direction 'up)
-               (scroll-to (- sy (* (/ h 4) 3)) canvas-smooth-scrolling)]
+               (define new-y (max 0 (- sy (* (/ h 4) 3))))
+               (scroll-to new-y canvas-smooth-scrolling)
+               ;; nudge the visible area just a bit so that the first line isn't partially cut off
+               (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
+               (when (and (< fsy new-y) (> new-y 0))
+                 (scroll-to fsy canvas-smooth-scrolling))]
               [else
-               (error "change-selection: invalid direction")])
-            ;; nudge the visible area just a bit so that the first line isn't partially cut off
-            (let*-values ([(first-snip) (first-visible-snip)]
-                          [(sx sy sw sh) (lookup-snip-position-size first-snip)])
-              (scroll-to sy canvas-smooth-scrolling)))
+               (error "change-selection: invalid direction")]))
           (redraw-snips changed-elements)))
     
     (define/override (on-char event)
@@ -885,11 +893,14 @@
             [(next)
              (define-values (x y) (get-view-start))
              (define-values (w h) (get-drawable-size))
-             (scroll-to (+ y h) canvas-smooth-scrolling)
+             (define-values (vx vy) (get-virtual-size))
+             (define max-y (- vy h))
+             (define new-y (min max-y (+ y h)))
+             (scroll-to new-y canvas-smooth-scrolling)
              ;; nudge the visible area just a bit so that the first line isn't partially cut off
-             (let*-values ([(first-snip) (first-visible-snip)]
-                           [(sx sy sw sh) (lookup-snip-position-size first-snip)])
-               (scroll-to sy))
+             (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
+             (when (and (< fsy new-y) (< new-y max-y))
+               (scroll-to fsy canvas-smooth-scrolling))
              (unless (selection-visible? menu-selection)
                (define item (find-next-visible-menu-item))
                (when item
@@ -899,11 +910,12 @@
             [(prior)
              (define-values (x y) (get-view-start))
              (define-values (w h) (get-drawable-size))
-             (scroll-to (- y h) canvas-smooth-scrolling)
+             (define new-y (max 0 (- y h)))
+             (scroll-to new-y canvas-smooth-scrolling)
              ;; nudge the visible area just a bit so that the first line isn't partially cut off
-             (let*-values ([(first-snip) (first-visible-snip)]
-                           [(sx sy sw sh) (lookup-snip-position-size first-snip)])
-               (scroll-to sy))
+             (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
+             (when (and (< fsy new-y) (> new-y 0))
+               (scroll-to fsy canvas-smooth-scrolling))
              (unless (selection-visible? menu-selection)
                (define item (find-prev-visible-menu-item))
                (when item
