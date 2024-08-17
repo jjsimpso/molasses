@@ -508,6 +508,13 @@
         (define snip (selection-snip selection))
         (define new-style (send (get-style-list) find-named-style "Link"))
         (send snip set-style new-style)))
+
+    (define (update-menu-highlight new-selection)
+      (define changed-snips (snips-to-redraw menu-selection new-selection))
+      (unhighlight menu-selection)
+      (set! menu-selection new-selection)
+      (highlight menu-selection)
+      (redraw-snips changed-snips))
     
     ;; return a pair representing the menu selection or #f
     (define/private (find-next-menu-item)
@@ -826,11 +833,13 @@
     (define (lines-visible height line-height)
       (truncate (/ height line-height)))
 
+    (define (snips-to-redraw old-selection new-selection)
+      (if old-selection
+            (list (dlink-value (cdr old-selection)) (dlink-value (cdr new-selection)))
+            (list (dlink-value (cdr new-selection)))))
+    
     (define (change-menu-selection direction item)
-      (define changed-elements
-        (if menu-selection
-            (list (dlink-value (cdr menu-selection)) (dlink-value (cdr item)))
-            (list (dlink-value (cdr item)))))
+      (define changed-snips (snips-to-redraw menu-selection item))
       (when menu-selection
         (unhighlight menu-selection))
       (set! menu-selection item)
@@ -857,7 +866,7 @@
                  (scroll-to fsy canvas-smooth-scrolling))]
               [else
                (error "change-selection: invalid direction")]))
-          (redraw-snips changed-elements)))
+          (redraw-snips changed-snips)))
     
     (define/override (on-char event)
       (if gopher-menu?
@@ -904,9 +913,7 @@
              (unless (selection-visible? menu-selection)
                (define item (find-next-visible-menu-item))
                (when item
-                 (unhighlight menu-selection)
-                 (set! menu-selection item)
-                 (highlight menu-selection)))]
+                 (update-menu-highlight item)))]
             [(prior)
              (define-values (x y) (get-view-start))
              (define-values (w h) (get-drawable-size))
@@ -919,17 +926,13 @@
              (unless (selection-visible? menu-selection)
                (define item (find-prev-visible-menu-item))
                (when item
-                 (unhighlight menu-selection)
-                 (set! menu-selection item)
-                 (highlight menu-selection)))]
+                 (update-menu-highlight item)))]
             [(home)
              (scroll-to 0 canvas-smooth-scrolling)
              (unless (selection-visible? menu-selection)
                (define item (find-first-menu-item))
                (when item
-                 (unhighlight menu-selection)
-                 (set! menu-selection item)
-                 (highlight menu-selection)))]
+                 (update-menu-highlight item)))]
             [(end)
              (define-values (vx vy) (get-virtual-size))
              (define-values (dw dh) (get-drawable-size))
@@ -937,9 +940,7 @@
              (unless (selection-visible? menu-selection)
                (define item (find-next-visible-menu-item))
                (when item
-                 (unhighlight menu-selection)
-                 (set! menu-selection item)
-                 (highlight menu-selection)))]
+                 (update-menu-highlight item)))]
             [else
              (define key-code (send event get-key-code))
              (super on-char event)])
