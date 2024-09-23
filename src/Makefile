@@ -1,5 +1,5 @@
 EXE = molasses
-VERSION = 0.7.1
+VERSION = 0.7.2
 NATIVE_DIST_DIR = $(EXE)-$(VERSION)
 WIN_BUILD_DIR = cross/x86_64-win32
 MAC_BUILD_DIR = cross/x86_64-macosx
@@ -21,6 +21,7 @@ windows:
 #	raco cross --target x86_64-win32 --vm cs -j 4 pkg install sxml
 #	raco cross --target x86_64-win32 --vm cs -j 4 pkg install mcfly
 #	raco cross --target x86_64-win32 --vm cs -j 4 pkg install overeasy
+#	raco cross --target x86_64-win32 --vm cs -j 4 pkg install html-lib
 	mkdir -p $(WIN_BUILD_DIR)
 	rm -rf compiled/
 	raco cross --target x86_64-win32 --vm cs -j 4 make main.rkt 
@@ -34,6 +35,7 @@ macos:
 #	raco cross --target x86_64-macosx --vm cs -j 4 pkg install sxml
 #	raco cross --target x86_64-macosx --vm cs -j 4 pkg install mcfly
 #	raco cross --target x86_64-macosx --vm cs -j 4 pkg install overeasy
+#	raco cross --target x86_64-macosx --vm cs -j 4 pkg install html-lib
 	mkdir -p $(MAC_BUILD_DIR)
 	rm -rf compiled/
 	raco cross --target x86_64-macosx --vm cs -j 4 make main.rkt
@@ -47,6 +49,7 @@ win32:
 #	raco cross --target i386-win32 --vm bc -j 4 pkg install sxml
 #	raco cross --target i386-win32 --vm bc -j 4 pkg install mcfly
 #	raco cross --target i386-win32 --vm bc -j 4 pkg install overeasy
+#	raco cross --target i386-win32 --vm bc -j 4 pkg install html-lib
 	mkdir -p $(WIN32_BUILD_DIR)
 	rm -rf compiled/
 	raco cross --target i386-win32 --vm bc -j 4 make main.rkt 
