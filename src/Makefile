@@ -1,5 +1,5 @@
 EXE = molasses
-VERSION = 0.7.2
+VERSION = 0.7.3
 NATIVE_DIST_DIR = $(EXE)-$(VERSION)
 WIN_BUILD_DIR = cross/x86_64-win32
 MAC_BUILD_DIR = cross/x86_64-macosx
