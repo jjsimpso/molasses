@@ -1201,64 +1201,35 @@
                 0
                 (exact-truncate y))))
 
-      (printf "scroll-to ~a~n" y)
+      ;(printf "scroll-to ~a~n" y)
       
       (when (not (= new-scroll-pos old-scroll-pos))
-        (define step-size (/ (- new-scroll-pos old-scroll-pos) smooth-scroll-steps))
-        (define step  (if (< step-size 0)
-                          (min -1 (round step-size))
-                          (max 1 (round step-size))))
-        (define next-pos (+ old-scroll-pos step))
-        (define complete? (or (and (< step 0) (<= next-pos new-scroll-pos))
-                              (and (> step 0) (>= next-pos new-scroll-pos))))
-        (cond
-          [(and smooth (not complete?))
-           ;; smooth scroll over multiple steps
-           (set! scroll-y next-pos)
-           (set-scroll-pos 'vertical next-pos)
-           (if (not visible-elements)
-               (set-visible-elements!)
-               (update-visible-elements! step scroll-y (+ scroll-y dh)))
-           (refresh-now)
-           ;; set timer event to smooth scroll
-           (define scroll-timer
-             (new (class timer% (super-new)
-                    (init [notify-callback void])
-                    (define notify-cb notify-callback)
-                    (define/override (notify)
-                      (notify-cb this)))
-                  (notify-callback
-                   (lambda (self)
-                     (define next-pos (+ scroll-y step))
-                     (define complete? (or (and (< step 0) (<= next-pos new-scroll-pos))
-                                           (and (> step 0) (>= next-pos new-scroll-pos))))
-                     (cond
-                       [(not complete?)
-                        (printf "scroll cb to ~a~n" next-pos)
-                        (set! scroll-y next-pos)
-                        (set-scroll-pos 'vertical next-pos)
-                        (if (not visible-elements)
-                            (set-visible-elements!)
-                            (update-visible-elements! step scroll-y (+ scroll-y dh)))
-                        (refresh-now)]
-                       [else
-                        (send self stop)
-                        (printf "scroll cb to ~a~n" new-scroll-pos)
-                        (set! scroll-y new-scroll-pos)
-                        (set-scroll-pos 'vertical new-scroll-pos)
-                        (if (not visible-elements)
-                            (set-visible-elements!)
-                            (update-visible-elements! step scroll-y (+ scroll-y dh)))
-                        (refresh)])))))
-           (send scroll-timer start 16 #f)]
-          [else
-           ;; scroll can be completed in a single step
-           (set! scroll-y new-scroll-pos)
-           (set-scroll-pos 'vertical new-scroll-pos)
-           (if (not visible-elements)
-               (set-visible-elements!)
-               (update-visible-elements! (- new-scroll-pos old-scroll-pos) scroll-y (+ scroll-y dh)))
-           (refresh)])))
+        (when smooth
+          (let* ([step-size (/ (- new-scroll-pos old-scroll-pos) smooth-scroll-steps)]
+                 [step (if (< step-size 0)
+                           (min -1 (round step-size))
+                           (max 1 (round step-size)))])
+            (for ([pos (in-inclusive-range (+ old-scroll-pos step)
+                                           new-scroll-pos
+                                           step)])
+              ;(printf "scroll-to ~a step-size=~a step=~a~n" pos step-size step)
+              (set! scroll-y pos)
+              (set-scroll-pos 'vertical pos)
+              (if (not visible-elements)
+                  (set-visible-elements!)
+                  (update-visible-elements! step scroll-y (+ scroll-y dh)))
+              (refresh-now)
+              (sleep 0.003))))
+        ;; handle both the non-smooth case and the final step of a smooth scroll if it didn't divide
+        ;; evenly into integer steps
+        (unless (= scroll-y new-scroll-pos)
+          ;(printf "scroll-to ~a~n" new-scroll-pos)
+          (set! scroll-y new-scroll-pos)
+          (set-scroll-pos 'vertical new-scroll-pos)
+          (if (not visible-elements)
+              (set-visible-elements!)
+              (update-visible-elements! (- new-scroll-pos old-scroll-pos) scroll-y (+ scroll-y dh)))
+          (refresh))))
 
     (define (lookup-element-from-snip s)
       (for/first ([e (in-dlist elements)]
