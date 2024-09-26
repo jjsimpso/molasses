@@ -1201,7 +1201,7 @@
                 0
                 (exact-truncate y))))
 
-      ;(printf "scroll-to ~a~n" y)
+      (printf "scroll-to ~a~n" y)
       
       (when (not (= new-scroll-pos old-scroll-pos))
         (when smooth
@@ -1219,7 +1219,7 @@
                   (set-visible-elements!)
                   (update-visible-elements! step scroll-y (+ scroll-y dh)))
               (refresh-now)
-              (sleep 0.003))))
+              (sleep 0.016))))
         ;; handle both the non-smooth case and the final step of a smooth scroll if it didn't divide
         ;; evenly into integer steps
         (unless (= scroll-y new-scroll-pos)
