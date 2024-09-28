@@ -616,6 +616,8 @@
     (define/override (on-paint)
       ;(printf "on-paint: enter~n") 
 
+      ;(define start-time (current-inexact-milliseconds))
+      
       ;; skip drawing if we are in an edit sequence
       ;; end-edit-sequence does a refresh, so that will pick up the drawing when done
       ;; grab edit-lock semaphore to prevent edit sequence during drawing
@@ -659,7 +661,8 @@
             (clear-rectangle (- cw xmargin) 0 xmargin ch))
           (lambda ()
             (send dc resume-flush)
-            (semaphore-post edit-lock)))))
+            (semaphore-post edit-lock)
+            #;(printf "on-paint took ~a ms~n" (- (current-inexact-milliseconds) start-time))))))
 
     (define/override (on-scroll event)
       (define-values (dw dh) (get-drawable-size))
