@@ -11,7 +11,7 @@
 (define layout-canvas%
   (class canvas%
     (super-new
-     (style '(hscroll vscroll resize-corner)))
+     (style '(hscroll vscroll resize-corner no-autoclear)))
     (init [horiz-margin 5]
           [vert-margin 5])
     (init-field [wheel-step 10]
@@ -19,8 +19,7 @@
                 [smooth-scroll-steps 5]
                 [snip-xmargin 0]
                 [snip-ymargin 2])
-    (inherit get-dc
-             get-size
+    (inherit get-size
              get-client-size
              show-scrollbars
              init-manual-scrollbars
@@ -63,8 +62,16 @@
     ;; this can be changed with set-default-style before appending a string to set its snip to this style
     (define default-style (send styles find-named-style "Standard"))
 
+    ;;
+    (define offscreen-dc (new bitmap-dc%))
+
+    (define/override (get-dc)
+      offscreen-dc)
+    
     ;; store the drawing context for efficiency
-    (define dc (get-dc))
+    ;(define dc (get-dc))
+
+    (define canvas-dc (super get-dc))
     
     ;; size of canvas's content, which doesn't include margins if they exist
     ;; equivalent to virtual size minus the margins
@@ -80,7 +87,7 @@
     (define cached-client-height 10)
 
     ;; 
-    (define layout-ctx (new-layout-context dc default-style snip-xmargin snip-ymargin))
+    (define layout-ctx (new-layout-context offscreen-dc default-style snip-xmargin snip-ymargin))
 
     (define/public (get-drawable-size)
       (define-values (cw ch) (get-client-size))
@@ -156,17 +163,36 @@
       (or (equal? mode 'wrapped)
           (equal? mode 'layout)))
 
-    (define (draw-wrapped-text e dc left top)
+    (define (drawing-entirely-within? y h top bottom)
+      (and (>= y top) (<= (+ y h) bottom)))
+    
+    ;; left,top,right,bottom are in client coordinates and define a clipping region
+    ;; any transparent text rendering outside of this clipping region will require a
+    ;; background redraw before rendering text
+    (define (draw-text dc s e x y top bottom transparent-mode?)
+      (if (not transparent-mode?)
+          (send dc draw-text s x y)
+          (let ([extent (element-cached-text-extent e)])
+            (when (not (drawing-entirely-within? y (text-extent-h extent) top bottom))
+              #;(printf "  clear region before drawing text~n")
+              (clear-rectangle dc x y (text-extent-w extent) (text-extent-h extent)))
+            (send dc draw-text s x y))))
+
+    ;; left-vc, top-vc are coordinates of upper left of screen in virtual canvas coordinates
+    (define (draw-wrapped-text e dc left-vc top-vc top bottom)
       (for ([line (in-list (element-lines e))])
         ;(printf "draw-wrapped-text: (~a,~a) ~a~n" (wrapped-line-x line) (wrapped-line-y line) (substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)))
-        (send/apply dc draw-text `(,(substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)) ,(+ (- (wrapped-line-x line) left) xmargin) ,(+ (- (wrapped-line-y line) top) ymargin)))))
+        (send dc draw-text (substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line))
+              (+ (- (wrapped-line-x line) left-vc) xmargin)
+              (+ (- (wrapped-line-y line) top-vc) ymargin))))
 
-    (define (draw-background-image x y w h)
+    (define (draw-background-image dc x y w h)
       (define-values (vx vy) (get-view-start))
       (define srcx (remainder (+ vx x) (send background-bitmap get-width)))
       (define srcy (remainder (+ vy y) (send background-bitmap get-height)))
       (send dc draw-bitmap-section tiled-bg-bitmap x y srcx srcy w h))
-    
+
+    ;; left,top,right,bottom are in client coordinates and define a clipping region
     (define (draw e dc x y left top right bottom dx dy)
       (if (string? (element-snip e))
           (send dc draw-text (element-snip e) x y)
@@ -183,7 +209,7 @@
          (send dc draw-text (substring (element-snip e) 0 (selection-tail-end-pos sel)) x y)]
         [else
          (if (and (wrap-text?) (string? (element-snip e)))
-             (draw-wrapped-text e dc left top)
+             (draw-wrapped-text e dc left top 0 0)
              (draw e dc
                    x y
                    0 0
@@ -237,14 +263,14 @@
           (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                        (+ (- (element-ypos e) top) ymargin)))
           ;(printf "clear snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
-          (set! current-style (check-style-update (get-style e) current-style))
+          (set! current-style (check-style-update dc (get-style e) current-style))
           ;; when clearing highlights, just redraw the entire element/string instead of trying to only clear
           ;; the actual highligted portion. not worth the effort once re-drawing the background became necessary
           (when tiled-bg-bitmap
             (define-values (w h u2 u3) (send dc get-text-extent (element-snip e)))
-            (draw-background-image x y w h))
+            (draw-background-image dc x y w h))
           (if (and (wrap-text?) (string? (element-snip e)))
-             (draw-wrapped-text e dc left top)
+             (draw-wrapped-text e dc left top 0 0)
              (draw e dc
                    x y
                    0 0
@@ -378,16 +404,19 @@
       (show-scrollbars (> new-width dw) (> new-height dh)))
    
     (define (reset-layout)
-      #;(printf "resetting layout~n")
+      ;(printf "resetting layout~n")
       (set! canvas-width 10)
       (set! canvas-height 10)
-      (set! layout-ctx (new-layout-context dc default-style snip-xmargin snip-ymargin))
-      
+      (set! layout-ctx (new-layout-context offscreen-dc default-style snip-xmargin snip-ymargin))
+      (set! last-paint-vx #f)
+      (set! last-paint-vy #f)
+
       (for ([e (in-dlist elements)])
         (place-element e (layout-context-place-x layout-ctx) (layout-context-place-y layout-ctx)))
       
       (when (> (dlist-length elements) 0)
         (set-visible-elements!)))
+
 
     (define (handle-element-properties e)
       (define snip (element-snip e))
@@ -432,7 +461,7 @@
                (calc-word-extents layout-ctx e))
              ;; calculate the extent of the text with word wrapping
              (define font (send (get-style e) get-font))
-             (define-values (width height descent space) (send dc get-text-extent "a" font)) ; only need height, so string doesn't matter
+             (define-values (width height descent space) (send offscreen-dc get-text-extent "a" font)) ; only need height, so string doesn't matter
              (define xpos x)
              (define ypos y)
              (define lines '())
@@ -454,7 +483,7 @@
                      (set! ypos (+ ypos height 1)))))
              ;; add last line of element
              (when (< start-pos (string-length (element-snip e)))
-               (define-values (last-line-width unused-h unused-d unused-s) (send dc get-text-extent (substring (element-snip e) start-pos) font))
+               (define-values (last-line-width unused-h unused-d unused-s) (send offscreen-dc get-text-extent (substring (element-snip e) start-pos) font))
                (set! lines (cons (wrapped-line start-pos (string-length (element-snip e)) x ypos last-line-width height) lines)))
              ;; set the element's lines field and put the lines in order
              (set-element-lines! e (reverse lines))
@@ -556,12 +585,12 @@
       (when (> y2 canvas-height)
         (set! canvas-height y2)))
       
-    (define (clear-rectangle x y width height)
+    (define (clear-rectangle dc x y width height)
       ;(printf "clear-rectangle ~a,~a  ~ax~a~n" x y width height)
       (cond
         [tiled-bg-bitmap
          ;; draw tiled background image if set
-         (draw-background-image x y width height)]
+         (draw-background-image dc x y width height)]
         [else
          (define old-brush (send dc get-brush))
          (define old-pen (send dc get-pen))
@@ -572,7 +601,7 @@
          (send dc set-pen old-pen)]))
 
     ;; update drawing context if style needs to change and return style
-    (define (check-style-update new-style current-style)
+    (define (check-style-update dc new-style current-style)
       (cond
         [(not (eq? new-style current-style))
          (send new-style switch-to dc #f)
@@ -593,7 +622,7 @@
 
       (define current-style #f)
       
-      (send dc suspend-flush)
+      (send canvas-dc suspend-flush)
 
       (dynamic-wind
         void
@@ -603,64 +632,134 @@
             (when e
               (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                            (+ (- (element-ypos e) top) ymargin)))
-              ;(printf "  snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
-              (set! current-style (check-style-update (get-style e) current-style))
-              (draw e dc
+              #;(printf "  redraw snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
+              (set! current-style (check-style-update offscreen-dc (get-style e) current-style))
+              (draw e offscreen-dc
                     x y
                     0 0
                     (- cw xmargin) (- ch ymargin)
-                    0 0))))
+                    0 0)))
+          ;; blit offscreen bitmap to canvas
+          (send canvas-dc draw-bitmap (send offscreen-dc get-bitmap) 0 0))
         (lambda ()
-          (send dc resume-flush))))
-      
+          (send canvas-dc resume-flush))))
+
+    ;; cache virtual canvas position of last frame drawn
+    (define last-paint-vx #f)
+    (define last-paint-vy #f)
+
+    (define clip-region (new region%))
+    
     (define/override (on-paint)
       ;(printf "on-paint: enter~n") 
 
-      ;(define start-time (current-inexact-milliseconds))
-      
+      (define start-time (current-inexact-milliseconds))
+
       ;; skip drawing if we are in an edit sequence
       ;; end-edit-sequence does a refresh, so that will pick up the drawing when done
       ;; grab edit-lock semaphore to prevent edit sequence during drawing
       (when (semaphore-try-wait? edit-lock)
         (dynamic-wind
           (lambda ()
-            (send dc suspend-flush))
+            (send canvas-dc suspend-flush))
           (lambda ()
             (define-values (cw ch) (get-client-size))
             (define-values (vw vh) (get-virtual-size))
             ;; position of viewport in virtual canvas
             (define-values (left top) (get-view-start))
+            (define bottom (- (+ top ch) (* ymargin 2)))
+            
+            ;(printf "on-paint ~ax~a of ~ax~a at ~ax~a bottom=~a~n" cw ch vw vh left top bottom)
 
-            ;(printf "on-paint ~ax~a of ~ax~a at ~ax~a~n" cw ch vw vh left top)
-          
+            (unless (send offscreen-dc get-bitmap)
+              (send offscreen-dc set-bitmap (make-bitmap cw ch)))
+
             (when (not visible-elements)
               (set-visible-elements!))
             
             (define current-style #f)
+
+            (define scroll-change (if last-paint-vy
+                                      (- top last-paint-vy)
+                                      ;; set to value that will trigger full redraw
+                                      (add1 ch)))
+
+            (define clip-left xmargin)
+            (define clip-top ymargin)
+            (define clip-right (- cw xmargin))
+            (define clip-bottom (- ch ymargin))
             
-            (clear-rectangle 0 0 cw ch)
+            (send offscreen-dc set-clipping-region #f)
+            
+            ;; render next frame onto offscreen bitmap
+            ;; copy data from previous frame that is still visible and set new top and bottom
+            ;; virtual coordinates for elements that need to be drawn
+            (define-values (draw-top draw-bottom)
+              (cond
+                [(or (>= (abs scroll-change) ch)
+                     (= scroll-change 0)
+                     (not (equal? left last-paint-vx)))
+                 ;; clear canvas and keep redraw set to all visible elements
+                 ;(printf "redraw everything~n")
+                 (clear-rectangle offscreen-dc 0 0 cw ch)
+                 (values top bottom)]
+                [(> scroll-change 0)
+                 #;(printf "copy from ~a,~a to ~a,~a  ~ax~a~n" xmargin (+ ymargin scroll-change) xmargin ymargin (- cw (* 2 xmargin)) (- ch ymargin scroll-change))
+                 (send offscreen-dc copy xmargin (+ ymargin scroll-change) (- cw (* 2 xmargin)) (- ch ymargin scroll-change) xmargin ymargin)
+                 (set! clip-top (- ch ymargin scroll-change))
+                 (set! clip-bottom (+ clip-top scroll-change))
+                 ;(printf "clearing ~a,~a ~ax~a~n" xmargin clip-top cw scroll-change)
+                 (clear-rectangle offscreen-dc clip-left clip-top cw scroll-change)
+                 (send clip-region set-rectangle clip-left clip-top (- cw (* xmargin 2)) scroll-change)
+                 (send offscreen-dc set-clipping-region clip-region)
+                 (values (- bottom scroll-change) bottom)]
+                [(< scroll-change 0)
+                 (send offscreen-dc copy xmargin ymargin (- cw (* 2 xmargin)) (- ch ymargin (abs scroll-change)) xmargin (+ ymargin (abs scroll-change)))
+                 (set! clip-top ymargin)
+                 (set! clip-bottom (+ clip-top (abs scroll-change)))
+                 (clear-rectangle offscreen-dc clip-left clip-top cw (abs scroll-change))
+                 (send clip-region set-rectangle clip-left clip-top (- cw (* xmargin 2)) (abs scroll-change))
+                 (send offscreen-dc set-clipping-region clip-region)
+                 (values top (+ top (abs scroll-change)))]
+                [else
+                 ;(printf "else condition~n")
+                 (clear-rectangle offscreen-dc 0 0 cw ch)
+                 (values top bottom)]))
+
+            (when visible-elements
+              (set! last-paint-vx left)
+              (set! last-paint-vy top))
+            
             ;; only draw visible elements
-            (for ([e (in-dlist visible-elements)])
+            (for ([e (in-dlist visible-elements)]
+                  #:when (element-visible? e draw-top draw-bottom))
               (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                            (+ (- (element-ypos e) top) ymargin)))
-              ;(printf "  snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
-              (set! current-style (check-style-update (get-style e) current-style))
+              #;(printf "  snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
+              #;(printf "  snip at ~ax~a, text=~a~n" x y (element-snip e))
+              (set! current-style (check-style-update offscreen-dc (get-style e) current-style))
               (if (and (wrap-text?) (string? (element-snip e)))
-                  (draw-wrapped-text e dc left top)
-                  (draw e dc
+                  (draw-wrapped-text e offscreen-dc left top clip-top clip-bottom)
+                  (draw e offscreen-dc
                         x y
-                        0 0
-                        (- cw xmargin) (- ch ymargin)
+                        clip-left clip-top
+                        clip-right clip-bottom
                         0 0)))
-            ;; draw mouse selection
-            (draw-highlight mouse-selection dc)
+
             ;; clear top, bottom and right margins in case they were drawn to
             ;; top is needed for cases where an element is partially above the viewable area
-            (clear-rectangle 0 0 cw ymargin)
-            (clear-rectangle 0 (- ch ymargin) cw ymargin)
-            (clear-rectangle (- cw xmargin) 0 xmargin ch))
+            (send offscreen-dc set-clipping-region #f)
+            (clear-rectangle offscreen-dc 0 0 cw ymargin)
+            (clear-rectangle offscreen-dc 0 (- ch ymargin) cw ymargin)
+            (clear-rectangle offscreen-dc (- cw xmargin) 0 xmargin ch)
+            
+            ;; blit offscreen bitmap to canvas
+            (send canvas-dc draw-bitmap (send offscreen-dc get-bitmap) 0 0)
+            
+            ;; draw mouse selection directly onto canvas
+            (draw-highlight mouse-selection canvas-dc))
           (lambda ()
-            (send dc resume-flush)
+            (send canvas-dc resume-flush)
             (semaphore-post edit-lock)
             #;(printf "on-paint took ~a ms~n" (- (current-inexact-milliseconds) start-time))))))
 
@@ -716,6 +815,11 @@
       (set! cached-client-height ch)
 
       (set-background-image background-bitmap)
+
+      ;; reset the offscreen bitmap. on-paint will recreate on its next call
+      (send offscreen-dc set-bitmap #f)
+      (set! last-paint-vx #f)
+      (set! last-paint-vy #f)
       
       ;; need to update the scroll range when the client size changes
       (define-values (vx vy) (get-virtual-size))
@@ -787,10 +891,10 @@
       (when (not (eq? e element-with-focus))
         ;; send on-goodbye-event to snips that lose mouse focus
         (when (and element-with-focus (is-a? (element-snip element-with-focus) snip%))
-          (send (element-snip element-with-focus) on-goodbye-event dc x y (element-xpos element-with-focus) (element-ypos element-with-focus) event))
+          (send (element-snip element-with-focus) on-goodbye-event canvas-dc x y (element-xpos element-with-focus) (element-ypos element-with-focus) event))
         ;; send enter event when a new snip gets focus
         (when (and e (is-a? (element-snip e) snip%))
-          (send (element-snip e) adjust-cursor dc x y (- x (element-xpos e)) (- y (element-ypos e)) (new mouse-event% [event-type 'enter])))
+          (send (element-snip e) adjust-cursor canvas-dc x y (- x (element-xpos e)) (- y (element-ypos e)) (new mouse-event% [event-type 'enter])))
         (set! element-with-focus e)))
 
     (define/override (on-event event)
@@ -814,7 +918,7 @@
                  x y
                  (element-xpos e) (element-ypos e))
            (send (element-snip e) on-event
-                 dc
+                 canvas-dc
                  (+ (- (element-xpos e) left) xmargin)
                  (+ (- (element-ypos e) top) ymargin)
                  (+ (- (element-xpos e) left) xmargin)
@@ -830,13 +934,13 @@
            (cond
              [(and (not mouse-selection-start) (send event button-down? 'left) mouse-selection)
               ;(printf "  unset text selection~n")
-              (clear-highlight mouse-selection dc)
+              (clear-highlight mouse-selection canvas-dc)
               (set! mouse-selection #f)
               (set! mouse-selection-start (new-selection-start e x y))
               (set! mouse-selection-end (cons (selection-start-x mouse-selection-start) (selection-start-y mouse-selection-start)))]
              [(and (not mouse-selection-start) (send event button-down? 'left))
               ;(printf "  set text selection~n")
-              (clear-highlight mouse-selection dc)
+              (clear-highlight mouse-selection canvas-dc)
               (set! mouse-selection #f)
               (set! mouse-selection-start (new-selection-start e x y))
               (set! mouse-selection-end (cons (selection-start-x mouse-selection-start) (selection-start-y mouse-selection-start)))]
@@ -857,7 +961,7 @@
                                                               (selection-start-y mouse-selection-start)))])
               (set! mouse-selection-end (cons x y))
 
-              (update-highlight mouse-selection old-selection dc)
+              (update-highlight mouse-selection old-selection canvas-dc)
               
               ;; check for scrolling
               (cond
@@ -969,7 +1073,7 @@
                   ([c (in-string (substring str first-pos))]
                    #:break (>= xpos x))
           (define new-string (string-append s (string c)))
-          (define-values (w unused1 unused2 unused3) (send dc get-text-extent new-string font))
+          (define-values (w unused1 unused2 unused3) (send offscreen-dc get-text-extent new-string font))
           (values
            (+ xstart w)
            new-string)))
@@ -1386,7 +1490,7 @@
                           (string-length-or-false (dlist-tail-value elements))))
          (set! mouse-selection-start #f)
          (set! mouse-selection-end #f)
-         (draw-highlight mouse-selection dc)]
+         (draw-highlight mouse-selection canvas-dc)]
         [else void]))
 
     ;; begin/end edit-sequence is used to prevent redundant on-paint calls as well as prevent
@@ -1396,6 +1500,7 @@
     (define edit-lock (make-semaphore 1))
     
     (define/public (begin-edit-sequence)
+      ;(printf "****** begin edit sequence~n")
       (semaphore-wait edit-lock)
       (set! in-edit-sequence #t))
 
@@ -1403,6 +1508,7 @@
       in-edit-sequence)
     
     (define/public (end-edit-sequence)
+      ;(printf "****** end edit sequence~n")
       (if (not (semaphore-try-wait? edit-lock))
           (if in-edit-sequence
               ;; semaphore is held by previous call to begin-edit-sequence, release it

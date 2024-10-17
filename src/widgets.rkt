@@ -839,34 +839,29 @@
             (list (dlink-value (cdr new-selection)))))
     
     (define (change-menu-selection direction item)
-      (define changed-snips (snips-to-redraw menu-selection item))
-      (when menu-selection
-        (unhighlight menu-selection))
-      (set! menu-selection item)
-      (highlight menu-selection)
-      (if (not (selection-visible? menu-selection))
-          (let-values ([(sx sy sw sh) (lookup-snip-position-size (selection-snip item))]
-                       [(w h) (get-drawable-size)]
-                       [(vx vy) (get-virtual-size)])
-            (cond
-              [(eq? direction 'down)
-               (define max-y (- vy h))
-               (define new-y (min max-y (- sy (/ h 4))))
-               (scroll-to new-y canvas-smooth-scrolling)
-               ;; nudge the visible area just a bit so that the first line isn't partially cut off
-               (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
-               (when (and (< fsy new-y) (< new-y max-y))
-                 (scroll-to fsy canvas-smooth-scrolling))]
-              [(eq? direction 'up)
-               (define new-y (max 0 (- sy (* (/ h 4) 3))))
-               (scroll-to new-y canvas-smooth-scrolling)
-               ;; nudge the visible area just a bit so that the first line isn't partially cut off
-               (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
-               (when (and (< fsy new-y) (> new-y 0))
-                 (scroll-to fsy canvas-smooth-scrolling))]
-              [else
-               (error "change-selection: invalid direction")]))
-          (redraw-snips changed-snips)))
+      (update-menu-highlight item)
+      (when (not (selection-visible? menu-selection))
+        (let-values ([(sx sy sw sh) (lookup-snip-position-size (selection-snip item))]
+                     [(w h) (get-drawable-size)]
+                     [(vx vy) (get-virtual-size)])
+          (cond
+            [(eq? direction 'down)
+             (define max-y (- vy h))
+             (define new-y (min max-y (- sy (/ h 4))))
+             (scroll-to new-y canvas-smooth-scrolling)
+             ;; nudge the visible area just a bit so that the first line isn't partially cut off
+             (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
+             (when (and (< fsy new-y) (< new-y max-y))
+               (scroll-to fsy canvas-smooth-scrolling))]
+            [(eq? direction 'up)
+             (define new-y (max 0 (- sy (* (/ h 4) 3))))
+             (scroll-to new-y canvas-smooth-scrolling)
+             ;; nudge the visible area just a bit so that the first line isn't partially cut off
+             (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
+             (when (and (< fsy new-y) (> new-y 0))
+               (scroll-to fsy canvas-smooth-scrolling))]
+            [else
+             (error "change-selection: invalid direction")]))))
     
     (define/override (on-char event)
       (if gopher-menu?
