@@ -510,6 +510,33 @@
     (define (table-position-changed? x y)
       (or (not (= x first-row-x))
           (not (= y first-row-y))))
+
+    ;; if table position on canvas changes, update canvas coordinates of each cell
+    ;; tablex,tabley are new x,y origin of table
+    (define/public (update-cell-coords tablex tabley)
+      ;; firstx, firsty are x,y coordinates of first row in table
+      (define firstx (+ tablex border-width))
+      (define firsty (+ tabley border-width))
+
+      (define xpos-liminal-space
+        (if (> column-rule-width 0)
+            (+ (* cell-border-line-width 2) column-rule-width)
+            0))
+      (define ypos-liminal-space
+        (if (> row-rule-height 0)
+            (+ (* cell-border-line-width 2) row-rule-height)
+            0))
+
+      (when (table-position-changed? firstx firsty)
+        #;(printf "table position changed~n")
+        (set-first-row-position firstx firsty)
+        (for/fold ([rowy firsty])
+                  ([row (in-list rows)])
+          (for/fold ([rowx firstx])
+                    ([c (in-list row)])
+            (send c set-position rowx rowy)
+            (+ rowx (send c get-width) xpos-liminal-space))
+          (+ rowy (row-height row) ypos-liminal-space))))
     
     (define/override (get-extent dc x y	 	 	 	 
                                  [w #f]
@@ -604,20 +631,8 @@
             cell-border-line-width
             0))
       
-      #;(printf "drawing table at ~ax~a~n" x y)
+      ;(printf "drawing table at ~ax~a~n" x y)
 
-      ; if table position on canvas changes, update canvas coordinates of each cell
-      (when (table-position-changed? startx ypos)
-        #;(printf "table position changed~n")
-        (set-first-row-position startx ypos)
-        (for/fold ([rowy ypos])
-                  ([row (in-list rows)])
-          (for/fold ([rowx startx])
-                    ([c (in-list row)])
-            (send c set-position rowx rowy)
-            (+ rowx (send c get-width) xpos-liminal-space))
-          (+ rowy (row-height row) ypos-liminal-space)))
-      
       (when (> border-line-width 0)
         (draw-table-border dc x y width height border-line-width))
       (for ([row (in-list rows)])
@@ -1054,7 +1069,7 @@
           0))
     ))
 
-(module+ main
+#;(module+ main
   (require "layout-canvas.rkt")
   
   (define frame 

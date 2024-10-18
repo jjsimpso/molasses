@@ -4,7 +4,8 @@
          "gopher.rkt"
          "config.rkt"
          "memoize.rkt"
-         "layout.rkt")
+         "layout.rkt"
+         "table.rkt")
 
 (provide layout-canvas%)
 
@@ -690,6 +691,8 @@
             (define clip-bottom (- ch ymargin))
             
             (send offscreen-dc set-clipping-region #f)
+
+            ;(printf "on-paint scroll-change=~a~n" scroll-change)
             
             ;; render next frame onto offscreen bitmap
             ;; copy data from previous frame that is still visible and set new top and bottom
@@ -729,6 +732,14 @@
             (when visible-elements
               (set! last-paint-vx left)
               (set! last-paint-vy top))
+
+            ;; loop through any visible tables and update their cell coordinates
+            ;; need to make sure this happens even if the table doesn't need to be redrawn
+            (for ([e (in-dlist visible-elements)]
+                  #:when (is-a? (element-snip e) table-snip%))
+              (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
+                                           (+ (- (element-ypos e) top) ymargin)))
+              (send (element-snip e) update-cell-coords x y))
             
             ;; only draw visible elements
             (for ([e (in-dlist visible-elements)]
@@ -1308,7 +1319,7 @@
                 0
                 (exact-truncate y))))
 
-      (printf "scroll-to ~a~n" y)
+      ;(printf "scroll-to ~a~n" y)
       
       (when (not (= new-scroll-pos old-scroll-pos))
         (when smooth
