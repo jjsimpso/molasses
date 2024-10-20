@@ -1069,9 +1069,14 @@
           0))
     ))
 
-#;(module+ main
-  (require "layout-canvas.rkt")
-  
+(module+ main
+  #;(require "layout-canvas.rkt")
+  ;; workaround for circular dependency in layout-canvas.rkt
+  (require racket/runtime-path)
+  (define-runtime-module-path-index layout-canvas-mpi "layout-canvas.rkt")
+  (define layout-canvas%
+    (dynamic-require layout-canvas-mpi 'layout-canvas%))
+
   (define frame 
     (new (class frame% (super-new))
          [label "Table test"]
