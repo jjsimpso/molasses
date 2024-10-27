@@ -394,6 +394,9 @@
                 (set-visible-elements!)))
         #;(printf "update-visible-elements: # visible = ~a, first=~a~n" (dlist-length visible-elements) (element-snip (dlist-head-value visible-elements)))))
 
+    (define hscroll-enabled? #f)
+    (define vscroll-enabled? #f)
+    
     ;; update the manual scrollbars range and hide/unhide them
     ;; new width and height are in pixels
     (define (update-scrollbars new-width new-height)
@@ -402,16 +405,30 @@
       (set-scroll-range 'vertical (exact-truncate (max 0 (- new-height dh))))
       (set-scroll-page 'horizontal (max 1 dw))
       (set-scroll-page 'vertical (max 1 dh))
-      (show-scrollbars (> new-width dw) (> new-height dh)))
+      ;; when scrollbar's are enabled, we need to recreate the offscreen bitmap because the client size changes
+      ;(printf "hscroll-enabled=~a, vscroll-enabled=~a~n" hscroll-enabled? vscroll-enabled?)
+      (when (not (equal? hscroll-enabled? (> new-width dw)))
+        (set! hscroll-enabled? (> new-width dw))
+        ;(printf "hscroll enabled changed to ~a (nw=~a, dw=~a)~n" hscroll-enabled? new-width dw)
+        (send offscreen-dc set-bitmap #f)
+        (show-scrollbars hscroll-enabled? vscroll-enabled?))
+      (when (not (equal? vscroll-enabled? (> new-height dh)))
+        (set! vscroll-enabled? (> new-height dh))
+        ;(printf "vscroll enabled changed to ~a (nh=~a, dh=~a)~n" vscroll-enabled? new-height dh)
+        (send offscreen-dc set-bitmap #f)
+        (show-scrollbars hscroll-enabled? vscroll-enabled?)
+        ;; the vertial scrollbar changes the client width and thus the layout
+        ;; so if it changes we need to rerun the layout
+        (reset-layout)))
    
     (define (reset-layout)
-      ;(printf "resetting layout~n")
+      ;(printf "resetting layout, thread=~a~n" (current-thread))
       (set! canvas-width 10)
       (set! canvas-height 10)
       (set! layout-ctx (new-layout-context offscreen-dc default-style snip-xmargin snip-ymargin))
       (set! last-paint-vx #f)
       (set! last-paint-vy #f)
-
+      
       (for ([e (in-dlist elements)])
         (place-element e (layout-context-place-x layout-ctx) (layout-context-place-y layout-ctx)))
       
@@ -439,6 +456,8 @@
     (define (place-element e x y)
       (define-values (dw dh) (get-drawable-size))
       (define-values (vw vh) (get-virtual-size))
+
+      ;(printf "place-element at ~ax~a: ~a~n" x y (element-snip e))
       
       ;; coordinates for element bounding region
       ;; x2, y2 need to be set below
@@ -805,14 +824,14 @@
       (define-values (right bottom) (values (+ left dw) (+ top dh)))
 
       (define-values (w h) (get-size))
-      ;(printf "on-size client=~ax~a window=~ax~a canvas=~ax~a~n" cw ch w h dw dh)
+      ;(printf "on-size client=~ax~a(was ~ax~a) window=~ax~a canvas=~ax~a~n" cw ch cached-client-width cached-client-height w h dw dh)
 
       (when (not visible-elements)
         (set-visible-elements!))
       
       ;; reposition all elements
       (when (and (wrap-text?) (not (= cached-client-width cw)))
-        ;(printf "on-size canvas ~ax~a " canvas-width canvas-height)
+        ;(printf "on-size reposition, canvas ~ax~a~n" canvas-width canvas-height)
         (reset-layout)
         #;(printf "-> ~ax~a~n" canvas-width canvas-height))
 
@@ -1407,8 +1426,6 @@
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       (define e (element s end-of-line alignment properties))
       (place-element e (layout-context-place-x layout-ctx) (layout-context-place-y layout-ctx))
-      (define-values (vx vy) (get-virtual-size))
-      (update-scrollbars vx vy)
       (append-element e))
     
     ;; append a string using the default style and alignment (or provided style and alignment)
@@ -1422,16 +1439,12 @@
            (define e (element line end-of-line alignment properties))
            (set-element-text-style! e (or style default-style))
            (place-element e (layout-context-place-x layout-ctx) (layout-context-place-y layout-ctx))
-           (define-values (vx vy) (get-virtual-size))
-           (update-scrollbars vx vy)
            (append-element e))]
         [else
          ;(printf "append-string: |~a|, eol:~a~n" s end-of-line)
          (define e (element s end-of-line alignment properties))
          (set-element-text-style! e (or style default-style))
          (place-element e (layout-context-place-x layout-ctx) (layout-context-place-y layout-ctx))
-         (define-values (vx vy) (get-virtual-size))
-         (update-scrollbars vx vy)
          (append-element e)]))
 
     (define (find-last-element [alignments '(unaligned center)])
@@ -1520,6 +1533,10 @@
     
     (define/public (end-edit-sequence)
       ;(printf "****** end edit sequence~n")
+      ;; after adding elements to the canvas, we need to update scrollbars
+      ;; do this here instead of inside every call to append a new element
+      (define-values (vx vy) (get-virtual-size))
+      (update-scrollbars vx vy)
       (if (not (semaphore-try-wait? edit-lock))
           (if in-edit-sequence
               ;; semaphore is held by previous call to begin-edit-sequence, release it
@@ -1656,7 +1673,8 @@
   ;(define test-selector "/media/floppies.txt")
   ;(define test-selector ".")
   (define bg (call-with-input-file "test/big.png" (lambda (in) (read-bitmap in))))
-  
+
+  (send canvas begin-edit-sequence)
   (if layout-test
       (let ([square (make-object image-snip% "test/square.png")]
             [square-left (make-object image-snip% "test/square-left.png")]
@@ -1764,5 +1782,6 @@
         (add-gopher-menu canvas)
         (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
           (send canvas append-string (port->string (gopher-response-data-port response))))))
-  
+
+  (send canvas end-edit-sequence)  
   (printf "append finished~n"))
