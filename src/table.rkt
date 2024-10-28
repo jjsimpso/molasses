@@ -830,8 +830,7 @@
       
       (if desired-width
           ;; calculate the width of each column using fixed width algorithm
-          (let ([default-column-width (/ desired-width num-columns)]
-                [remaining-width desired-width]
+          (let ([remaining-width desired-width]
                 [remaining-columns num-columns])
             ; set width of columns with a specified width
             #;(printf "set fixed width columns~n")
