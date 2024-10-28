@@ -98,23 +98,30 @@
   
   (define update-start-time (current-inexact-monotonic-milliseconds))
 
-  (send canvas begin-edit-sequence)
   (cond
     [(gopher-response-error? resp)
-     (send canvas append-string (port->string (gopher-response-data-port resp) #:close? #t))]
+     (send canvas begin-edit-sequence)
+     (send canvas append-string (port->string (gopher-response-data-port resp) #:close? #t))
+     (send canvas end-edit-sequence)]
     [(equal? item-type #\1) ; directory
+     (send canvas begin-edit-sequence)
      (for ([line (in-lines (gopher-response-data-port resp))])
        (insert-directory-line canvas line))
+     (send canvas end-edit-sequence)
      (close-input-port (gopher-response-data-port resp))
      (send canvas init-gopher-menu initial-selection-pos)]
     [(equal? item-type #\0) ; text
+     (send canvas begin-edit-sequence)
      (send canvas append-string (port->string (gopher-response-data-port resp)))
+     (send canvas end-edit-sequence)
      (close-input-port (gopher-response-data-port resp))]
     [(equal? item-type #\h)
+     (send canvas begin-edit-sequence)
      (render-html-to-text (gopher-response-data-port resp)
                           canvas
                           #t
                           #f)
+     (send canvas end-edit-sequence)
      (when initial-selection-pos
        (define y (send canvas find-anchor-position initial-selection-pos))
        (and y (send canvas scroll-to y)))
@@ -123,31 +130,38 @@
      (define img (make-object image-snip%
                               (gopher-response-data-port resp)
                               'unknown))
+     (send canvas begin-edit-sequence)
      (send canvas append-snip img #t)
+     (send canvas end-edit-sequence)
      (close-input-port (gopher-response-data-port resp))]
     [(equal? item-type #\g) ; gif
      (define img (make-object image-snip%
                               (gopher-response-data-port resp)
                               'gif))
      (close-input-port (gopher-response-data-port resp))
-     (send canvas append-snip img #t)]
+     (send canvas begin-edit-sequence)
+     (send canvas append-snip img #t)
+     (send canvas end-edit-sequence)]
     [(or (equal? item-type #\d) ; document (PDF, Word, etc.)
          (equal? item-type #\P))
+     (send canvas begin-edit-sequence)
      (send canvas append-string (format "How would you like to handle document ~a ?~n~n" (request-path/selector req)))
      (insert-menu-item canvas
                        (gopher-dir-entity #\> "Open file in external application" (request-path/selector req) (request-host req) (~a (request-port req))))
      (send canvas append-string "\n")
      (insert-menu-item canvas
                        (gopher-dir-entity #\9 "Download file" (request-path/selector req) (request-host req) (~a (request-port req))))
+     (send canvas end-edit-sequence)
      (send canvas init-gopher-menu #f)
      (close-input-port (gopher-response-data-port resp))]
     [else
+     (send canvas begin-edit-sequence)
      (send canvas append-string (format "Unsupported type ~a~n~n" item-type))
      (insert-menu-item canvas
                        (gopher-dir-entity #\9 "Download file" (request-path/selector req) (request-host req) (~a (request-port req))))
+     (send canvas end-edit-sequence)
      (send canvas init-gopher-menu #f)
-     (close-input-port (gopher-response-data-port resp))])
-  (send canvas end-edit-sequence)
+     (close-input-port (gopher-response-data-port resp))])  
   #;(eprintf "goto-gopher UI update took ~a ms~n" (- (current-inexact-monotonic-milliseconds) update-start-time)))
 
 ;; download gopher selector to a temp file and open it with an external application
