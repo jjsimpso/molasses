@@ -876,14 +876,14 @@
              ;; nudge the visible area just a bit so that the first line isn't partially cut off
              (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
              (when (and (< fsy new-y) (< new-y max-y))
-               (scroll-to fsy canvas-smooth-scrolling))]
+               (scroll-to fsy #f))]
             [(eq? direction 'up)
              (define new-y (max 0 (- sy (* (/ h 4) 3))))
              (scroll-to new-y canvas-smooth-scrolling)
              ;; nudge the visible area just a bit so that the first line isn't partially cut off
              (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
              (when (and (< fsy new-y) (> new-y 0))
-               (scroll-to fsy canvas-smooth-scrolling))]
+               (scroll-to fsy #f))]
             [else
              (error "change-selection: invalid direction")]))))
     
@@ -928,7 +928,7 @@
              ;; nudge the visible area just a bit so that the first line isn't partially cut off
              (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
              (when (and (< fsy new-y) (< new-y max-y))
-               (scroll-to fsy canvas-smooth-scrolling))
+               (scroll-to fsy #f))
              (unless (selection-visible? menu-selection)
                (define item (find-next-visible-menu-item))
                (when item
@@ -941,7 +941,7 @@
              ;; nudge the visible area just a bit so that the first line isn't partially cut off
              (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
              (when (and (< fsy new-y) (> new-y 0))
-               (scroll-to fsy canvas-smooth-scrolling))
+               (scroll-to fsy #f))
              (unless (selection-visible? menu-selection)
                (define item (find-prev-visible-menu-item))
                (when item
