@@ -642,27 +642,28 @@
 
       (define current-style #f)
       
-      (send canvas-dc suspend-flush)
-
-      (dynamic-wind
-        void
-        (lambda ()
-          (for ([snip (in-list snip-list)])
-            (define e (lookup-visible-element-from-snip snip))
-            (when e
-              (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
-                                           (+ (- (element-ypos e) top) ymargin)))
-              #;(printf "  redraw snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
-              (set! current-style (check-style-update offscreen-dc (get-style e) current-style))
-              (draw e offscreen-dc
-                    x y
-                    0 0
-                    (- cw xmargin) (- ch ymargin)
-                    0 0)))
-          ;; blit offscreen bitmap to canvas
-          (send canvas-dc draw-bitmap (send offscreen-dc get-bitmap) 0 0))
-        (lambda ()
-          (send canvas-dc resume-flush))))
+      (when (semaphore-try-wait? edit-lock)
+        (dynamic-wind
+          (lambda ()
+            (send canvas-dc suspend-flush))
+          (lambda ()
+            (for ([snip (in-list snip-list)])
+              (define e (lookup-visible-element-from-snip snip))
+              (when e
+                (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
+                                             (+ (- (element-ypos e) top) ymargin)))
+                (printf "  redraw snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
+                (set! current-style (check-style-update offscreen-dc (get-style e) current-style))
+                (draw e offscreen-dc
+                      x y
+                      0 0
+                      (- cw xmargin) (- ch ymargin)
+                      0 0)))
+            ;; blit offscreen bitmap to canvas
+            (send canvas-dc draw-bitmap (send offscreen-dc get-bitmap) 0 0))
+          (lambda ()
+            (send canvas-dc resume-flush)
+            (semaphore-post edit-lock)))))
 
     ;; cache virtual canvas position of last frame drawn
     (define last-paint-vx #f)
@@ -1537,6 +1538,10 @@
       ;; do this here instead of inside every call to append a new element
       (define-values (vx vy) (get-virtual-size))
       (update-scrollbars vx vy)
+      ;; force on-paint to do full redraw on next call
+      (set! last-paint-vx #f)
+      (set! last-paint-vy #f)
+      
       (if (not (semaphore-try-wait? edit-lock))
           (if in-edit-sequence
               ;; semaphore is held by previous call to begin-edit-sequence, release it

@@ -491,6 +491,11 @@
 
     (define/public (get-current-request)
       (and current-url (browser-url-req current-url)))
+
+    (define (menu-selection->string selection)
+      (if selection
+          (send (selection-snip selection) get-item-label)
+          "<invalid selection>"))
     
     (define/private (selection-snip selection)
       (if (pair? selection)
@@ -524,11 +529,13 @@
         (send snip set-style new-style)))
 
     (define (update-menu-highlight new-selection)
-      (define changed-snips (snips-to-redraw menu-selection new-selection))
+      (begin-edit-sequence)
       (unhighlight menu-selection)
       (set! menu-selection new-selection)
+      ;(printf "update-menu-highlight: new selection ~a~n" (menu-selection->string menu-selection))
       (highlight menu-selection)
-      (redraw-snips changed-snips))
+      (end-edit-sequence)
+      (refresh))
     
     ;; return a pair representing the menu selection or #f
     (define/private (find-next-menu-item)
@@ -574,7 +581,8 @@
          (define-values (dw dh) (get-drawable-size))
          (define-values (ox oy) (get-view-start))
          
-         (let loop ([index (car menu-selection)]
+         (let loop ([index (and (cdr menu-selection)
+                                (add1 (car menu-selection)))]
                     [node (and (cdr menu-selection)
                                (dlink-next (cdr menu-selection)))])
            (if node
@@ -596,7 +604,8 @@
          (define-values (dw dh) (get-drawable-size))
          (define-values (ox oy) (get-view-start))
          
-         (let loop ([index (car menu-selection)]
+         (let loop ([index (and (cdr menu-selection)
+                                (sub1 (car menu-selection)))]
                     [node (and (cdr menu-selection)
                                (dlink-prev (cdr menu-selection)))])
            (if node
@@ -708,6 +717,7 @@
     
     (define/private (load-page req [initial-selection-pos #f] #:back? [back? #f])
       (define (make-history-updater old-url old-position)
+        ;(printf "old-position = ~a~n" old-position)
         (if back?
             (lambda () (pop-history))
             (lambda ()
