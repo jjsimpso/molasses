@@ -34,7 +34,11 @@
          dlist-advance-head!
          dlist-retreat-head!
          dlist-advance-tail!
-         dlist-retreat-tail!)
+         dlist-retreat-tail!
+         dlist-advance-head-while!
+         dlist-retreat-head-while!
+         dlist-advance-tail-while!
+         dlist-retreat-tail-while!)
 
 ;; head points to first element of the dlist, a dlink
 ;; tail points to the last element of the dlist, a dlink
@@ -330,6 +334,64 @@
      (dlist-tail dl)]
     [else #f]))
 
+(define (dlist-advance-head-while! dl pred? #:stop-before-false? [ sbf? #f])
+  ;(printf "advance head value = ")
+  (let loop ([cnt 0])
+    ;(printf "~a, " (dlist-head-value dl))
+    (cond
+      [(dlist-empty? dl)
+       cnt]
+      [(false? (pred? (dlist-head-value dl)))
+       (when (and sbf? (> cnt 0))
+         ;(printf "retreat head~n")
+         (dlist-retreat-head! dl))
+       cnt]
+      [else
+       (dlist-advance-head! dl)
+       (loop (add1 cnt))])))
+
+(define (dlist-retreat-head-while! dl pred? #:stop-before-false? [sbf? #f])
+  (let loop ([cnt 0])
+    (cond
+      [(false? (pred? (dlist-head-value dl)))
+       (when (and sbf? (> cnt 0))
+         (dlist-advance-head! dl))
+       cnt]
+      [(false? (dlist-peek-head-prev dl))
+       cnt]
+      [else
+       (dlist-retreat-head! dl)
+       (loop (add1 cnt))])))
+
+(define (dlist-advance-tail-while! dl pred? #:stop-before-false? [sbf? #f])
+  (let loop ([cnt 0])
+    (cond
+      [(false? (pred? (dlist-tail-value dl)))
+       (when (and sbf? (> cnt 0))
+         (dlist-retreat-tail! dl))
+       cnt]
+      [(false? (dlist-peek-tail-next dl))
+       cnt]
+      [else
+       (dlist-advance-tail! dl)
+       (loop (add1 cnt))])))
+
+(define (dlist-retreat-tail-while! dl pred? #:stop-before-false? [sbf? #f])
+  (let loop ([cnt 0])
+    (cond
+      [(dlist-empty? dl)
+       cnt]
+      [(false? (pred? (dlist-tail-value dl)))
+       (when (and sbf? (> cnt 0))
+         (dlist-advance-tail! dl))
+       cnt]
+      ;; this returns when the dlist only has a head (one element)
+      ;; should we allow retreating the tail until we have an empty dlist?
+      [(false? (dlist-tail dl))
+       cnt]
+      [else
+       (dlist-retreat-tail! dl)
+       (loop (add1 cnt))])))
 
 (module+ test (require rackunit)
   (define a-dlist (dlist-new))
@@ -429,6 +491,40 @@
   (dlist-retreat-head! cursor)
   (dlist-retreat-head! cursor)
   (dlist-retreat-head! cursor)
+  
+  (check-equal? (dlist->list cursor) '(1 2 3 4 5))
+  (check-equal? (dlist-retreat-head-while! cursor (lambda (v) (> v 2))) 0)
+  (check-equal? (dlist-head-value cursor) 1)
+  (check-equal? (dlist-tail-value cursor) 5)
+  (dlist-advance-head-while! cursor (lambda (v) (< v 5)))
+  (check-equal? (dlist-head-value cursor) 5)
+  (dlist-retreat-head-while! cursor (lambda (v) (> v 2)))
+  (check-equal? (dlist-head-value cursor) 2)
+  (dlist-retreat-head-while! cursor (lambda (v) #t))
+  (check-equal? (dlist->list cursor) '(1 2 3 4 5))
+  (dlist-retreat-tail-while! cursor (lambda (v) (> v 3)))
+  (check-equal? (dlist-tail-value cursor) 3)
+  (dlist-advance-tail-while! cursor (lambda (v) (= v 3)))
+  (check-equal? (dlist-tail-value cursor) 4)
+  (dlist-advance-tail-while! cursor (lambda (v) #t))
+  (check-equal? (dlist->list cursor) '(1 2 3 4 5))
+  (dlist-retreat-tail-while! cursor (lambda (v) #t))
+  (check-equal? (dlist-head-value cursor) 1)
+  (check-equal? (dlist-tail-value cursor) 1)
+  (dlist-advance-tail-while! cursor (lambda (v) (< v 5)) #:stop-before-false? #t)
+  (check-equal? (dlist-tail-value cursor) 4)
+  (dlist-retreat-tail-while! cursor (lambda (v) (> v 1)) #:stop-before-false? #t)
+  (check-equal? (dlist-tail-value cursor) 2)
+  (dlist-advance-tail-while! cursor (lambda (v) (< v 5)))
+  (check-equal? (dlist->list cursor) '(1 2 3 4 5))
+  (dlist-advance-head-while! cursor (lambda (v) (< v 4)) #:stop-before-false? #t)
+  (check-equal? (dlist-head-value cursor) 3)
+  (dlist-retreat-head-while! cursor (lambda (v) (> v 1)) #:stop-before-false? #t)
+  (check-equal? (dlist-head-value cursor) 2)
+  (dlist-retreat-head-while! cursor (lambda (v) (> v 1)))
+  (check-equal? (dlist-head-value cursor) 1)
+  (check-equal? (dlist->list cursor) '(1 2 3 4 5))
+  
   ;;; ----------
   
   (dlist-pop! a-dlist)
