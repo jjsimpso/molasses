@@ -320,62 +320,76 @@
            ;; set cursor's tail to element after first visible and advance tail until we reach the
            ;; last visible elment
            (set-dlist-tail! cursor (dlist-head-next cursor))
-           (let loop ([e (dlist-tail-value cursor)])
-             (cond
-               [(not e) void]
-               [(element-visible? e top bottom)
-                (when (dlist-advance-tail! cursor) ; returns false when tail can't advance any further
-                  (loop (dlist-tail-value cursor)))]
-               [else
-                (if (eq? (dlist-tail-prev cursor)
-                         (dlist-head cursor))
-                    (set-dlist-tail! cursor #f)
-                    (set-dlist-tail! cursor (dlist-tail-prev cursor)))]))
+           (cond
+             [(eq? mode 'layout)
+              (define head-bottom (+ (element-ypos (dlist-head-value cursor)) (get-element-height layout-ctx (dlist-head-value cursor))))
+              (dlist-advance-tail-while! cursor
+                                         (lambda (e) (or (element-visible? e top bottom)
+                                                         (< (element-ypos e) head-bottom)))
+                                         #:stop-before-false? #t)]
+             [else
+              (dlist-advance-tail-while! cursor (lambda (e) (element-visible? e top bottom)) #:stop-before-false? #t)])
            (set! visible-elements cursor)
            #;(printf "set-visible-elements ~a to ~a~n" (dlist-head-value visible-elements) (dlist-tail-value visible-elements))])))
 
     (define (adjust-visible-elements-forward! cursor top bottom)
       ;; advance the tail to last visible element
-      (let loop ([e (dlist-tail-value cursor)])
-        (cond
-          [(not e) void]
-          [(element-visible? e top bottom)
-           ;(printf "adjust-visible-elements-forward! loop~n")
-           (when (dlist-advance-tail! cursor) ; returns false when tail can't advance any further
-             (loop (dlist-tail-value cursor)))]
-          [else
-           (if (eq? (dlist-tail-prev cursor)
-                    (dlist-head cursor))
-               (set-dlist-tail! cursor #f)
-               (set-dlist-tail! cursor (dlist-tail-prev cursor)))]))
+      (dlist-advance-tail-while! cursor (lambda (e) (element-visible? e top bottom)) #:stop-before-false? #t)
       ;; advance the head while it isn't visible
-      (for ([e (in-dlist visible-elements)]
-            #:break (element-visible? e top bottom))
-        ;(printf "adjust-visible-elements-forward! for~n")
-        (dlist-advance-head! visible-elements))
+      (dlist-advance-head-while! cursor (lambda (e) (not (element-visible? e top bottom))))
       void)
 
     (define (adjust-visible-elements-back! cursor top bottom)
-      ;; retreat the head to first visible element
-      (let loop ([e (dlist-head-value cursor)])
-        (cond
-          [(not e) void] ; should never happen
-          [(element-visible? e top bottom)
-           ;(printf "adjust-visible-elements-back! loop 1, dlist-tail=~a~n" (dlist-tail cursor))
-           (when (dlist-retreat-head! cursor)
-             (loop (dlist-head-value cursor)))]
-          [else
-           (unless (not (dlist-tail cursor))
-             (set-dlist-head! cursor (dlist-head-next cursor)))]))
-      ;; retreat the tail until it is visible
-      (let loop ([e (dlist-tail-value cursor)])
-        ;(printf "adjust-visible-elements-back! loop 2~n")
-        (cond
-          [(not e) void]
-          [(element-visible? e top bottom) void]
-          [else
-           (when (dlist-retreat-tail! cursor)
-             (loop (dlist-tail-value cursor)))]))
+      (printf "adjust-visible-elements-back! top=~a, bottom=~a~n" top bottom)
+      (cond
+        [(eq? mode 'layout)
+         ;; retreat the head to first non-visible element
+         (dlist-retreat-head-while! cursor (lambda (e) (element-visible? e top bottom)))
+         ;; when scrolling up, there is one complicated scenario we must handle.
+         ;; when elements have different horizontal alignments or when there are elements with a middle
+         ;; vertical alignment, it is possible for non-visible elements to be
+         ;; encountered before a visible element when moving the head back.
+         (unless (element-visible? (dlist-head-value cursor) top bottom)
+           ;; one incomplete solution: handle this by looking for
+           ;; a gap between the top of the first visible element and each element as we move the head back.
+           ;; if there is a gap greater than a few pixels, then we are likely on a line that used middle
+           ;; vertical alignment, so keep searching for a visible element and stop when we find it.
+           #;(define top-visible-e (dlink-value (dlist-head-next cursor)))
+           #;(define top-visible-e-top (and top-visible-e (element-ypos top-visible-e)))
+           #;(define (gap-between? e)
+               (define e-bottom (+ (element-ypos e) (get-element-height layout-ctx e)))
+               (printf "  gap between is (~a - ~a) = ~a , ~a~n" e-bottom top-visible-e-top (- e-bottom top-visible-e-top) (element-snip e))
+               (< (- e-bottom top-visible-e-top) -2))
+           #;(unless (> (dlist-retreat-head-while! cursor gap-between?) 0)
+               ;; if we found a gap and skipped over any elements, then the head will be at a visible element
+               ;; if we didn't find a gap, set head back to first visible element
+               (dlist-advance-head! cursor))
+           ;; still incomplete but better solution (despite being somewhat brute force):
+           (define first-visible (dlist-head-next cursor))
+           (when first-visible
+             ;; if more than one element
+             (for ([i (in-range 9 0 -1)]
+                   #:break (or (false? (dlist-head-value cursor))
+                               (element-visible? (dlist-head-value cursor) top bottom)))
+               (dlist-retreat-head! cursor))
+             (cond
+               [(element-visible? (dlist-head-value cursor) top bottom)
+                (printf "  found visible element ~a~n" (element-snip (dlist-head-value cursor)))
+                ;; found a visible element, signal on-paint to redraw everything
+                (set! last-paint-vy #f)
+                ;; check for any consecutive visible elements just in case there's more than one
+                (dlist-retreat-head-while! cursor (lambda (e) (element-visible? e top bottom)) #:stop-before-false? #t)]
+               [else
+                ;; no new visible elements found. still need to set head to first visible element
+                (set-dlist-head! cursor first-visible)])))
+         
+         ;; retreat the tail until it is visible
+         (dlist-retreat-tail-while! cursor (lambda (e) (not (element-visible? e top bottom))))]
+        [else
+         ;; retreat the head to first visible element
+         (dlist-retreat-head-while! cursor (lambda (e) (element-visible? e top bottom)))
+         ;; retreat the tail until it is visible
+         (dlist-retreat-tail-while! cursor (lambda (e) (not (element-visible? e top bottom))))])
       void)
     
     ;;
@@ -392,7 +406,7 @@
             (if (and head-element (element-visible? head-element top bottom))
                 (adjust-visible-elements-back! visible-elements top bottom)
                 (set-visible-elements!)))
-        #;(printf "update-visible-elements: # visible = ~a, first=~a~n" (dlist-length visible-elements) (element-snip (dlist-head-value visible-elements)))))
+        (printf "update-visible-elements: # visible = ~a, first=~a~n" (dlist-length visible-elements) (element-snip (dlist-head-value visible-elements)))))
 
     (define hscroll-enabled? #f)
     (define vscroll-enabled? #f)
@@ -1339,7 +1353,7 @@
                 0
                 (exact-truncate y))))
 
-      ;(printf "scroll-to ~a~n" y)
+      (printf "scroll-to ~a~n" y)
       
       (when (not (= new-scroll-pos old-scroll-pos))
         (when smooth
