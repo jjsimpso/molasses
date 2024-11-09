@@ -275,8 +275,8 @@
       (super set-bitmap bm mask))
 
     (define/override (resize w h)
-      (define width (exact-round w))
-      (define height (exact-round h))
+      (define width (max 1 (exact-round w)))
+      (define height (max 1 (exact-round h)))
       (define new-bm (make-bitmap width height))
       (define new-bm-dc (new bitmap-dc% (bitmap new-bm)))
       (send new-bm-dc set-scale (/ width base-width) (/ height base-height))
