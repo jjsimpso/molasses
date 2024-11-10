@@ -340,7 +340,7 @@
       void)
 
     (define (adjust-visible-elements-back! cursor top bottom)
-      (printf "adjust-visible-elements-back! top=~a, bottom=~a~n" top bottom)
+      ;(printf "adjust-visible-elements-back! top=~a, bottom=~a~n" top bottom)
       (cond
         [(eq? mode 'layout)
          ;; retreat the head to first non-visible element
@@ -374,7 +374,7 @@
                (dlist-retreat-head! cursor))
              (cond
                [(element-visible? (dlist-head-value cursor) top bottom)
-                (printf "  found visible element ~a~n" (element-snip (dlist-head-value cursor)))
+                #;(printf "  found visible element ~a~n" (element-snip (dlist-head-value cursor)))
                 ;; found a visible element, signal on-paint to redraw everything
                 (set! last-paint-vy #f)
                 ;; check for any consecutive visible elements just in case there's more than one
@@ -406,7 +406,7 @@
             (if (and head-element (element-visible? head-element top bottom))
                 (adjust-visible-elements-back! visible-elements top bottom)
                 (set-visible-elements!)))
-        (printf "update-visible-elements: # visible = ~a, first=~a~n" (dlist-length visible-elements) (element-snip (dlist-head-value visible-elements)))))
+        #;(printf "update-visible-elements: # visible = ~a, first=~a~n" (dlist-length visible-elements) (element-snip (dlist-head-value visible-elements)))))
 
     (define hscroll-enabled? #f)
     (define vscroll-enabled? #f)
@@ -666,7 +666,7 @@
               (when e
                 (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                              (+ (- (element-ypos e) top) ymargin)))
-                (printf "  redraw snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
+                #;(printf "  redraw snip at ~ax~a, text=~a~n" (element-xpos e) (element-ypos e)  (element-snip e))
                 (set! current-style (check-style-update offscreen-dc (get-style e) current-style))
                 (draw e offscreen-dc
                       x y
@@ -1043,7 +1043,7 @@
            (selection cursor 0 #f #f)]
           [(not (dlist-head-next cursor))
            ;; this shouldn't happen
-           (printf "selection doesn't match element!")
+           (error "selection doesn't match element!")
            #f]
           [else
            (dlist-advance-head! cursor)
@@ -1353,7 +1353,7 @@
                 0
                 (exact-truncate y))))
 
-      (printf "scroll-to ~a~n" y)
+      ;(printf "scroll-to ~a~n" y)
       
       (when (not (= new-scroll-pos old-scroll-pos))
         (when smooth
