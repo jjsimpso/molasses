@@ -124,7 +124,7 @@
      (send canvas end-edit-sequence)
      (when initial-selection-pos
        (define y (send canvas find-anchor-position initial-selection-pos))
-       (and y (send canvas scroll-to y)))
+       (and y (send canvas queue-scroll-to y)))
      (close-input-port (gopher-response-data-port resp))]
     [(equal? item-type #\I) ; image
      (define img (make-object image-snip%
@@ -475,6 +475,7 @@
              lookup-snip-position-size
              first-visible-snip
              scroll-to
+             queue-scroll-to
              redraw-snips)
 
     (field [current-url #f]
@@ -698,9 +699,9 @@
             ;; make the selection visible but not at the very top
             (let-values ([(x y w h) (lookup-snip-position-size snip)]
                          [(cw ch) (get-client-size)])
-              (scroll-to (- y (floor (/ ch 4)))))
+              (queue-scroll-to (- y (floor (/ ch 4)))))
             ;; scroll to the beginning
-            (scroll-to 0))))
+            (queue-scroll-to 0))))
 
     (define/public (cancel-request)
       (printf "cancel request called~n")
