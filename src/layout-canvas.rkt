@@ -428,11 +428,11 @@
     ;; update the manual scrollbars range and hide/unhide them
     ;; new width and height are in pixels
     (define (update-scrollbars new-width new-height)
-      (printf "update-scrollbars, thread=~a~n" (current-thread))
+      #;(printf "update-scrollbars, thread=~a~n" (current-thread))
       (when (semaphore-try-wait? edit-lock)
         (define-values (dw dh) (get-drawable-size))
-        (set-scroll-range 'horizontal (exact-truncate (max 0 (- new-width dw))))
-        (set-scroll-range 'vertical (exact-truncate (max 0 (- new-height dh))))
+        (set-scroll-range 'horizontal (exact-truncate (max dw (- new-width dw))))
+        (set-scroll-range 'vertical (exact-truncate (max dh (- new-height dh))))
         (set-scroll-page 'horizontal (max 1 dw))
         (set-scroll-page 'vertical (max 1 dh))
         ;; when scrollbar's are enabled, we need to recreate the offscreen bitmap because the client size changes
@@ -1370,7 +1370,7 @@
                 0
                 (exact-truncate y))))
 
-      (printf "scroll-to ~a, thread=~a~n" y (current-thread))
+      #;(printf "scroll-to ~a, thread=~a~n" y (current-thread))
       
       (when (not (= new-scroll-pos old-scroll-pos))
         (when smooth
