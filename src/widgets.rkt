@@ -699,7 +699,7 @@
             ;; make the selection visible but not at the very top
             (let-values ([(x y w h) (lookup-snip-position-size snip)]
                          [(cw ch) (get-client-size)])
-              (queue-scroll-to (- y (floor (/ ch 4)))))
+              (queue-scroll-to (max 0 (- y (floor (/ ch 4))))))
             ;; scroll to the beginning
             (queue-scroll-to 0))))
 
