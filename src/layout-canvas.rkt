@@ -410,7 +410,21 @@
 
     (define hscroll-enabled? #f)
     (define vscroll-enabled? #f)
-    
+
+    ;; for debugging scrollbars
+    #|
+    (define/override (set-scroll-pos which value)
+      (printf "set-scroll-pos: ~a, ~a~n" which value)
+      (super set-scroll-pos which value))
+
+    (define/override (set-scroll-range which value)
+      (printf "set-scroll-range: ~a, ~a~n" which value)
+      (super set-scroll-range which value))
+
+    (define/override (set-scroll-page which value)
+      (printf "set-scroll-page: ~a, ~a~n" which value)
+      (super set-scroll-page which value))
+    |#
     ;; update the manual scrollbars range and hide/unhide them
     ;; new width and height are in pixels
     (define (update-scrollbars new-width new-height)
