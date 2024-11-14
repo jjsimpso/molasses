@@ -414,15 +414,15 @@
     ;; for debugging scrollbars
     #|
     (define/override (set-scroll-pos which value)
-      (printf "set-scroll-pos: ~a, ~a~n" which value)
+      (printf " set-scroll-pos: ~a, ~a~n" which value)
       (super set-scroll-pos which value))
 
     (define/override (set-scroll-range which value)
-      (printf "set-scroll-range: ~a, ~a~n" which value)
+      (printf " set-scroll-range: ~a, ~a~n" which value)
       (super set-scroll-range which value))
 
     (define/override (set-scroll-page which value)
-      (printf "set-scroll-page: ~a, ~a~n" which value)
+      (printf " set-scroll-page: ~a, ~a~n" which value)
       (super set-scroll-page which value))
     |#
     ;; update the manual scrollbars range and hide/unhide them
@@ -433,18 +433,18 @@
         (define-values (dw dh) (get-drawable-size))
         (set-scroll-range 'horizontal (exact-truncate (max 1 (- new-width dw))))
         (set-scroll-range 'vertical (exact-truncate (max 1 (- new-height dh))))
-        (set-scroll-page 'horizontal (max 1 dw))
+        (set-scroll-page 'horizontal 100)
         (set-scroll-page 'vertical (max 1 dh))
         ;; when scrollbar's are enabled, we need to recreate the offscreen bitmap because the client size changes
         ;(printf "hscroll-enabled=~a, vscroll-enabled=~a~n" hscroll-enabled? vscroll-enabled?)
         (when (not (equal? hscroll-enabled? (> new-width dw)))
           (set! hscroll-enabled? (> new-width dw))
-          ;(printf "hscroll enabled changed to ~a (nw=~a, dw=~a)~n" hscroll-enabled? new-width dw)
+          ;(printf " hscroll enabled changed to ~a (nw=~a, dw=~a)~n" hscroll-enabled? new-width dw)
           (send offscreen-dc set-bitmap #f)
           (show-scrollbars hscroll-enabled? vscroll-enabled?))
         (when (not (equal? vscroll-enabled? (> new-height dh)))
           (set! vscroll-enabled? (> new-height dh))
-          ;(printf "vscroll enabled changed to ~a (nh=~a, dh=~a)~n" vscroll-enabled? new-height dh)
+          ;(printf " vscroll enabled changed to ~a (nh=~a, dh=~a)~n" vscroll-enabled? new-height dh)
           (send offscreen-dc set-bitmap #f)
           (show-scrollbars hscroll-enabled? vscroll-enabled?)
           ;; the vertial scrollbar changes the client width and thus the layout
