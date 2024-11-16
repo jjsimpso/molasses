@@ -755,6 +755,7 @@
             (send canvas-dc suspend-flush))
           (lambda ()
             (define-values (cw ch) (get-client-size))
+            (define-values (dw dh) (get-drawable-size))
             (define-values (vw vh) (get-virtual-size))
             ;; position of viewport in virtual canvas
             (define-values (left top) (get-view-start))
@@ -789,7 +790,7 @@
             ;; virtual coordinates for elements that need to be drawn
             (define-values (draw-top draw-bottom)
               (cond
-                [(or (>= (abs scroll-change) ch)
+                [(or (>= (abs scroll-change) dh)
                      (= scroll-change 0)
                      (not (equal? left last-paint-vx)))
                  ;; clear canvas and keep redraw set to all visible elements
@@ -797,21 +798,21 @@
                  (clear-rectangle offscreen-dc 0 0 cw ch)
                  (values top bottom)]
                 [(> scroll-change 0)
-                 #;(printf "copy from ~a,~a to ~a,~a  ~ax~a~n" xmargin (+ ymargin scroll-change) xmargin ymargin (- cw (* 2 xmargin)) (- ch ymargin scroll-change))
-                 (send offscreen-dc copy xmargin (+ ymargin scroll-change) (- cw (* 2 xmargin)) (- ch ymargin scroll-change) xmargin ymargin)
+                 #;(printf "copy from ~a,~a to ~a,~a  ~ax~a~n" xmargin (+ ymargin scroll-change) xmargin ymargin dw (- ch ymargin scroll-change))
+                 (send offscreen-dc copy xmargin (+ ymargin scroll-change) dw (- ch ymargin scroll-change) xmargin ymargin)
                  (set! clip-top (- ch ymargin scroll-change))
                  (set! clip-bottom (+ clip-top scroll-change))
                  ;(printf "clearing ~a,~a ~ax~a~n" xmargin clip-top cw scroll-change)
                  (clear-rectangle offscreen-dc clip-left clip-top cw scroll-change)
-                 (send clip-region set-rectangle clip-left clip-top (- cw (* xmargin 2)) scroll-change)
+                 (send clip-region set-rectangle clip-left clip-top dw scroll-change)
                  (send offscreen-dc set-clipping-region clip-region)
                  (values (- bottom scroll-change) bottom)]
                 [(< scroll-change 0)
-                 (send offscreen-dc copy xmargin ymargin (- cw (* 2 xmargin)) (- ch ymargin (abs scroll-change)) xmargin (+ ymargin (abs scroll-change)))
+                 (send offscreen-dc copy xmargin ymargin dw (- ch ymargin (abs scroll-change)) xmargin (+ ymargin (abs scroll-change)))
                  (set! clip-top ymargin)
                  (set! clip-bottom (+ clip-top (abs scroll-change)))
                  (clear-rectangle offscreen-dc clip-left clip-top cw (abs scroll-change))
-                 (send clip-region set-rectangle clip-left clip-top (- cw (* xmargin 2)) (abs scroll-change))
+                 (send clip-region set-rectangle clip-left clip-top dw (abs scroll-change))
                  (send offscreen-dc set-clipping-region clip-region)
                  (values top (+ top (abs scroll-change)))]
                 [else
