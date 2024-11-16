@@ -441,7 +441,7 @@
       (cond
         [(eq? which 'vertical)
          ;(printf " set-scroll-range: ~a, ~a(~a)~n" which value (/ value scrollbar-vert-step-size))
-         (super set-scroll-range which (/ value scrollbar-vert-step-size))]
+         (super set-scroll-range which (quotient value scrollbar-vert-step-size))]
         [else
          (super set-scroll-range which value)]))
 
@@ -449,7 +449,7 @@
       (cond
         [(eq? which 'vertical)
          ;(printf " set-scroll-page: ~a, ~a(~a)~n" which value (/ value scrollbar-vert-step-size))
-         (super set-scroll-page which (/ value scrollbar-vert-step-size))]
+         (super set-scroll-page which (quotient value scrollbar-vert-step-size))]
         [else
          (super set-scroll-page which value)]))
 
