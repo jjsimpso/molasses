@@ -24,11 +24,6 @@
              get-client-size
              show-scrollbars
              init-manual-scrollbars
-             set-scroll-page
-             get-scroll-pos
-             set-scroll-pos
-             get-scroll-range
-             set-scroll-range
              suspend-flush
              resume-flush
              flush
@@ -83,6 +78,9 @@
     (define scroll-x 0)
     (define scroll-y 0)
 
+    ;; number of pixels to scroll for each unit of scrollbar movement
+    (define scrollbar-vert-step-size 1)
+    
     ;; needed so that we can tell if the canvas is getting bigger or smaller during on-size events
     (define cached-client-width 10)
     (define cached-client-height 10)
@@ -411,20 +409,50 @@
     (define hscroll-enabled? #f)
     (define vscroll-enabled? #f)
 
-    ;; for debugging scrollbars
-    #|
+    (define (vertical-sb-pos->pos sb-pos)
+      (* sb-pos scrollbar-vert-step-size))
+
+    (define (pos->vertical-sb-pos pos)
+      (/ pos scrollbar-vert-step-size))
+
+    (define/override (get-scroll-pos which)
+      (cond
+        [(eq? which 'vertical)
+         (* (super get-scroll-pos which) scrollbar-vert-step-size)]
+        [else
+         (super get-scroll-pos which)]))
+
+    (define/override (get-scroll-range which)
+      (cond
+        [(eq? which 'vertical)
+         (* (super get-scroll-range which) scrollbar-vert-step-size)]
+        [else
+         (super get-scroll-range which)]))
+    
     (define/override (set-scroll-pos which value)
-      (printf " set-scroll-pos: ~a, ~a~n" which value)
-      (super set-scroll-pos which value))
+      (cond
+        [(eq? which 'vertical)
+         ;(printf " set-scroll-pos: ~a, ~a(~a)~n" which value (quotient value scrollbar-vert-step-size))
+         (super set-scroll-pos which (quotient value scrollbar-vert-step-size))]
+        [else
+         (super set-scroll-pos which value)]))
 
     (define/override (set-scroll-range which value)
-      (printf " set-scroll-range: ~a, ~a~n" which value)
-      (super set-scroll-range which value))
+      (cond
+        [(eq? which 'vertical)
+         ;(printf " set-scroll-range: ~a, ~a(~a)~n" which value (/ value scrollbar-vert-step-size))
+         (super set-scroll-range which (/ value scrollbar-vert-step-size))]
+        [else
+         (super set-scroll-range which value)]))
 
     (define/override (set-scroll-page which value)
-      (printf " set-scroll-page: ~a, ~a~n" which value)
-      (super set-scroll-page which value))
-    |#
+      (cond
+        [(eq? which 'vertical)
+         ;(printf " set-scroll-page: ~a, ~a(~a)~n" which value (/ value scrollbar-vert-step-size))
+         (super set-scroll-page which (/ value scrollbar-vert-step-size))]
+        [else
+         (super set-scroll-page which value)]))
+
     ;; update the manual scrollbars range and hide/unhide them
     ;; new width and height are in pixels
     (define (update-scrollbars new-width new-height)
@@ -449,7 +477,12 @@
           (show-scrollbars hscroll-enabled? vscroll-enabled?)
           ;; the vertial scrollbar changes the client width and thus the layout
           ;; so if it changes we need to rerun the layout
-          (reset-layout))
+          (reset-layout)
+          (define-values (vx vy) (get-virtual-size))
+          (define-values (ndw ndh) (get-drawable-size))
+          (set-scroll-range 'horizontal (exact-truncate (max 1 (- vx ndw))))
+          (set-scroll-range 'vertical (exact-truncate (max 1 (- vy ndh))))
+          (set-scroll-page 'vertical (max 1 ndh)))
         (semaphore-post edit-lock)))
    
     (define (reset-layout)
@@ -462,6 +495,12 @@
       
       (for ([e (in-dlist elements)])
         (place-element e (layout-context-place-x layout-ctx) (layout-context-place-y layout-ctx)))
+
+      (if (< canvas-height 30000)
+          (set! scrollbar-vert-step-size 1)
+          (set! scrollbar-vert-step-size (ceiling (/ canvas-height 30000))))
+
+      ;(printf "reset layout set vert scrollbar step size to ~a~n" scrollbar-vert-step-size)
       
       (when (> (dlist-length elements) 0)
         (set-visible-elements!)))
@@ -828,10 +867,10 @@
     (define/override (on-scroll event)
       (define-values (dw dh) (get-drawable-size))
       (define refresh? #f)
-      ;(printf "on-scroll: ~a ~a~n" (send event get-direction) (send event get-position))
+      ;(printf "on-scroll: ~a ~a(~a)~n" (send event get-direction) (send event get-position) (get-scroll-pos (send event get-direction)))
       
       (if (eq? (send event get-direction) 'vertical)
-          (let* ([top (send event get-position)]
+          (let* ([top (get-scroll-pos 'vertical)]
                  [bottom (+ top dh)]
                  [change (- top scroll-y)])
             (when (not (= change 0))
@@ -840,12 +879,11 @@
             (if (not visible-elements)
                 (set-visible-elements!)
                 (update-visible-elements! change top bottom)))
-          (let* ([left (send event get-position)]
-                 [right (+ left dw)]
+          (let* ([left (get-scroll-pos 'horizontal)]
                  [change (- left scroll-x)])
             (when (not (= change 0))
               (set! refresh? #t))
-            (set! scroll-x (send event get-position))))
+            (set! scroll-x left)))
             
       (when refresh? (refresh)))
     
@@ -912,7 +950,7 @@
       (case (send event get-key-code)
         [(wheel-up wheel-down)
          (define max-scroll (get-scroll-range 'vertical))
-         (define scroll-pos (get-scroll-pos 'vertical))
+         (define scroll-pos scroll-y)
          (define new-scroll-pos
            (if (eq? key-code 'wheel-up)
                (max 0 (- scroll-pos wheel-step))
@@ -921,7 +959,7 @@
          (scroll-to new-scroll-pos #f)]
         [(up down)
          (define max-scroll (get-scroll-range 'vertical))
-         (define scroll-pos (get-scroll-pos 'vertical))
+         (define scroll-pos scroll-y)
          (define line-height wheel-step)
          (define new-scroll-pos
            (if (eq? key-code 'up)
@@ -1028,20 +1066,20 @@
               ;; check for scrolling
               (cond
                 [(> ex dw)
-                 (set! scroll-x (min (get-scroll-range 'horizontal) (+ (get-scroll-pos 'horizontal) wheel-step)))
+                 (set! scroll-x (min (get-scroll-range 'horizontal) (+ scroll-x wheel-step)))
                  (set-scroll-pos 'horizontal scroll-x)
                  (refresh-now)]
                 [(< ex 0)
-                 (set! scroll-x (max 0 (- (get-scroll-pos 'horizontal) wheel-step)))
+                 (set! scroll-x (max 0 (- scroll-x wheel-step)))
                  (set-scroll-pos 'horizontal scroll-x)
                  (refresh-now)])
               (cond
                 [(> ey dh)
                  ;; scroll down if mouse is below bottom edge
-                 (scroll-to (min (get-scroll-range 'vertical) (+ (get-scroll-pos 'vertical) wheel-step)))]
+                 (scroll-to (min (get-scroll-range 'vertical) (+ scroll-y wheel-step)))]
                 [(< ey 0)
                  ;; scroll up if mouse is above top edge
-                 (scroll-to (max 0 (- (get-scroll-pos 'vertical) wheel-step)))])]
+                 (scroll-to (max 0 (- scroll-y wheel-step)))])]
              [else
               void]))]
         [(left-up)
