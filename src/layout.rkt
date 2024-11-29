@@ -294,6 +294,13 @@
       (layout-context-center-elements ctx)
       (layout-context-unaligned-elements ctx)))
 
+(define (calc-unaligned-or-center-element-y2 ctx y h)
+  (cond
+    [(empty? (unaligned-or-center-elements ctx))
+     (+ y h)]
+    [else
+     (bottom-edge-of-line ctx (unaligned-or-center-elements ctx))]))
+
 (define (layout-string ctx e total-width y)
   (define (layout-remainder-of-line word-list space-available)
     ;(printf "layout-remainder-of-line: space-available=~a~n" space-available)

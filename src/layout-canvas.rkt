@@ -409,12 +409,6 @@
     (define hscroll-enabled? #f)
     (define vscroll-enabled? #f)
 
-    (define (vertical-sb-pos->pos sb-pos)
-      (* sb-pos scrollbar-vert-step-size))
-
-    (define (pos->vertical-sb-pos pos)
-      (/ pos scrollbar-vert-step-size))
-
     (define/override (get-scroll-pos which)
       (cond
         [(eq? which 'vertical)
