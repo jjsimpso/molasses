@@ -1,6 +1,6 @@
 #lang info
 
-(define version "0.7.3")
+(define version "0.7.4")
 (define deps (list "base" "gui-lib" "magic" "sxml" "mcfly"
                    "data-lib"
                    "draw-lib"
