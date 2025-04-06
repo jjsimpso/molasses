@@ -399,7 +399,7 @@
     (memq elem para-elements))
 
   (define (is-text-element? elem)
-    (define text-elements '(a b u i big font))
+    (define text-elements '(a b u i big font tt))
     (memq elem text-elements))
 
   (define (update-block current-block elem)
@@ -650,6 +650,9 @@
       [(u)
        (send (current-style-delta) set-delta 'change-underline #t)
        '()]
+      [(tt)
+       (send (current-style-delta) set-delta 'change-family 'modern)
+       '()]
       [(h1)
        (start-new-paragraph)
        (send (current-style-delta) set-delta 'change-bold)
@@ -764,6 +767,46 @@
                 (begin
                   (append-anchor name-value)
                   (loop content)))]
+           [(dl)
+            (define list-table (new table-snip%
+                                    (drawing-context (send canvas get-dc))
+                                    (defstyle html-basic-style)
+                                    (border 0)
+                                    (w 1.0)
+                                    (rules 'none)
+                                    (cellspacing 2)
+                                    (cellpadding 1)))
+            (parameterize ([current-container list-table])
+              (loop (sxml:content node)))
+            (send list-table finalize-table (get-container-width canvas))
+            (start-new-paragraph)
+            (append-snip list-table
+                         #t
+                         current-alignment
+                         '((resizable . 100)))]
+           [(dt)
+            (send (current-container) start-row)
+            (send (current-container) start-cell #:colspan 2)
+            (define prev-alignment current-alignment)
+            (set! current-alignment 'unaligned)
+            (loop (sxml:content node))
+            (set! current-alignment prev-alignment)
+            (send (current-container) end-cell)
+            (send (current-container) end-row)]
+           [(dd)
+            (send (current-container) start-row)
+            ;; first column indents definition item
+            (send (current-container) start-cell #:width '(width-pixels . 30))
+            (append-string " " #f #f 'right)
+            (send (current-container) end-cell)
+            ;; cell for contents
+            (send (current-container) start-cell)
+            (define prev-alignment current-alignment)
+            (set! current-alignment 'unaligned)
+            (loop (sxml:content node))
+            (set! current-alignment prev-alignment)
+            (send (current-container) end-cell)
+            (send (current-container) end-row)]
            [(ul)
             (define list-table (new table-snip%
                                     (drawing-context (send canvas get-dc))
