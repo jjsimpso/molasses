@@ -33,37 +33,44 @@
             [host (third url-components)]
             [port (fourth url-components)]
             [path/selector (or (fifth url-components) "")])
-        #;(eprintf "url->request: ~a,~a,~a,~a~n" protocol host port path/selector)
-        (if (eq? protocol 'gemini)
-            (make-gemini-request protocol
-                                 host
-                                 port
-                                 path/selector)            
-            (make-gopher-request protocol
-                                 host
-                                 port
-                                 path/selector)))
+        ;(printf "url->request: ~a,~a,~a,~a~n" protocol host port path/selector)
+        (cond
+          [(eq? protocol 'gemini)
+           (make-gemini-request protocol
+                                host
+                                port
+                                path/selector)]
+          [(eq? protocol 'http)
+           (make-http-request protocol
+                              host
+                              port
+                              path/selector)]
+          [else
+           (make-gopher-request protocol
+                                host
+                                port
+                                path/selector)]))
       #f))
 
 (define (request->url req)
   (define (protocol->string p)
     (cond
-      [(equal? p 'gopher) "gopher://"]
-      [(equal? p 'gemini) "gemini://"]
-      [(equal? p 'http)   "http://"]
+      [(eq? p 'gopher) "gopher://"]
+      [(eq? p 'gemini) "gemini://"]
+      [(eq? p 'http)   "http://"]
       [else "gopher://"]))
 
   (define (port-number->string port protocol)
     (cond
-      [(equal? protocol 'gopher)
+      [(eq? protocol 'gopher)
        (if (= port 70)
            ""
            (string-append ":" (number->string port)))]
-      [(equal? protocol 'gemini)
+      [(eq? protocol 'gemini)
        (if (= port 1965)
            ""
            (string-append ":" (number->string port)))]
-      [(equal? protocol 'http)
+      [(eq? protocol 'http)
        (if (= port 80)
            ""
            (string-append ":" (number->string port)))]))
@@ -72,7 +79,7 @@
                  (request-host req)
                  (port-number->string (request-port req) (request-protocol req))
                  ;; follow the convention of displaying the type in the URL. if selector is null add a '/' after the type
-                 (if (request-type req)
+                 (if (and (eq? (request-protocol req) 'gopher) (request-type req))
                      (if (and (request-path/selector req) (not (equal? (request-path/selector req) "")))
                          (format "/~a" (request-type req))
                          (format "/~a/" (request-type req)))
@@ -104,13 +111,14 @@
     [(false? s) default]
     [(equal? s "gopher://") 'gopher]
     [(equal? s "gemini://") 'gemini]
+    [(equal? s "http://") 'http]
     [else 'unsupported]))
 
 (define (default-port p)
   (cond
-    [(equal? p 'gopher) 70]
-    [(equal? p 'gemini) 1965]
-    [(equal? p 'http) 80]
+    [(eq? p 'gopher) 70]
+    [(eq? p 'gemini) 1965]
+    [(eq? p 'http) 80]
     [else 70]))
 
 (define (strip-type-from-path path protocol)
@@ -145,6 +153,21 @@
         (substring path-plus-query 1)
         path-plus-query))
   
+  (request protocol
+           host
+           (or (and (string? port) (string->number (substring port 1)))
+               (default-port protocol))
+           (if (non-empty-string? sanitized-path) sanitized-path "/")
+           #f))
+
+(define (make-http-request protocol host port path-plus-query)
+  ;; prevent double slash at begining of path, can happen when url ending in slash is concatenated
+  ;; with a path starting with a slash
+  (define sanitized-path
+    (if (string-prefix? path-plus-query "//")
+        (substring path-plus-query 1)
+        path-plus-query))
+
   (request protocol
            host
            (or (and (string? port) (string->number (substring port 1)))

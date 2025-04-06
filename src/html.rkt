@@ -16,6 +16,7 @@
          "html-snips.rkt"
          "table.rkt"
          "gopher.rkt"
+         "http.rkt"
          "request.rkt"
          "memoize.rkt")
 
@@ -89,6 +90,8 @@
 ;; use img src attribute and request structure to compose a gopher request to the image
 ;; 
 (define (load-new-bitmap src request)
+  ; hack to generate the 'missing image' bitmap. don't know how to reference this bitmap directly.
+  (define missing-bitmap (make-object bitmap% "/invalid/path/a40aiduuhsth4"))
   (define selector
     (if (equal? (string-ref src 0) #\/)
         src
@@ -96,24 +99,44 @@
         (string-replace (request-path/selector request)
                         (last (string-split (request-path/selector request) "/"))
                         src)))
-  (define response (gopher-fetch (request-host request)
-                                 selector
-                                 "I"
-                                 (request-port request)))
-  (with-handlers
-    ([exn:fail?
-      (lambda (exn)
-        (eprintf "load-new-bitmap exception~n")
-        (close-input-port (gopher-response-data-port response))
-        ; hack to generate the 'missing image' bitmap. don't know how to reference this bitmap directly.
-        (make-object bitmap% "/invalid/path/a40aiduuhsth3"))])
-    (define data (port->bytes (gopher-response-data-port response)))
-    (close-input-port (gopher-response-data-port response))
-    (define new-bitmap (make-object bitmap%
-                                    (open-input-bytes data)
-                                    (call-with-input-bytes data guess-kind)))
-    #;(printf "guess kind returns ~a~n" (call-with-input-bytes data guess-kind))
-    new-bitmap))
+  #;(printf "load-new-bitmap: ~a~n" (request-protocol request))
+  (define data
+    (case (request-protocol request)
+      [(http)
+       (define response (http-fetch (request-host request) selector (request-port request)))
+       ;(printf "load-new-bitmap: http status=~a, url=~a~n" (http-response-status response) selector)
+       (if (http-response-error? response)
+           (begin
+             (close-input-port (http-response-data-port response))
+             #f)
+           (let ([data (port->bytes (http-response-data-port response))])
+             (close-input-port (http-response-data-port response))
+             data))]
+      [else
+       (define response (gopher-fetch (request-host request)
+                                      selector
+                                      "I"
+                                      (request-port request)))
+       (if (gopher-response-error? response)
+           (begin
+             (close-input-port (gopher-response-data-port response))
+             #f)
+           (let ([data (port->bytes (gopher-response-data-port response))])
+             (close-input-port (gopher-response-data-port response))
+             data))]))
+
+  (if (false? data)
+      missing-bitmap
+      (with-handlers
+        ([exn:fail?
+          (lambda (exn)
+            (eprintf "load-new-bitmap exception~n")
+            missing-bitmap)])
+        (define new-bitmap (make-object bitmap%
+                                        (open-input-bytes data)
+                                        (call-with-input-bytes data guess-kind)))
+        #;(printf "guess kind returns ~a~n" (call-with-input-bytes data guess-kind))
+        new-bitmap)))
 
 (define load-new-bitmap-cached (memoize-2args load-new-bitmap))
 

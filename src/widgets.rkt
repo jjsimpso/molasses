@@ -6,6 +6,7 @@
 (require "gopher.rkt")
 (require "gemini.rkt")
 (require "download.rkt")
+(require "http.rkt")
 (require "html.rkt")
 (require "dlist.rkt")
 (require "layout-canvas.rkt")
@@ -451,6 +452,28 @@
     
     [else (show-gemini-error "Unknown status code returned from server")]))
 
+(define (goto-http req canvas initial-selection-pos)
+  (define (show-http-error msg)
+    (send canvas begin-edit-sequence)
+    (send canvas append-string msg)
+    (send canvas end-edit-sequence)
+    (close-input-port (http-response-data-port response)))
+  
+  (define response (http-fetch (request-host req) (request-path/selector req) (request-port req)))
+  (if (http-response-error? response)
+      (show-http-error (http-response-status response))
+      (begin
+        (send canvas begin-edit-sequence)
+        (render-html-to-text (http-response-data-port response)
+                             canvas
+                             #t
+                             #f)
+        (send canvas end-edit-sequence)
+        (when initial-selection-pos
+          (define y (send canvas find-anchor-position initial-selection-pos))
+          (and y (send canvas queue-scroll-to y)))
+        (close-input-port (http-response-data-port response)))))
+
 (define browser-canvas%
   (class layout-canvas% (super-new)
     (init-field [tab-id 0]
@@ -772,6 +795,18 @@
                       (set! current-url (browser-url terminal-request #f))
                       (update-address terminal-request)
                       (update-status "Ready"))))]
+          [(eq? (request-protocol req) 'http)
+           (update-history)
+           (set! current-url (browser-url req #f))
+           (update-address req)
+           ;; clear the current page contents
+           (begin-edit-sequence)
+           (erase)
+           (end-edit-sequence)
+           (set! request-thread-id
+                 (thread (thunk
+                          (goto-http req this #f)
+                          (update-status "Ready"))))]
           [else
            ;; TODO display error to user?
            (eprintf "Invalid request protocol!~n")])))
