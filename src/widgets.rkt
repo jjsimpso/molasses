@@ -822,6 +822,8 @@
          ;; and what we need to do with it. We have to handle this in the request thread instead of before
          ;; creating the thread as we do with gopher.
          (load-page req)]
+        [(equal? (request-protocol req) 'http)
+         (load-page req)]
         ;; Below here is for gopher
         [(download-only-type? (request-type req)) ; open save file dialog
          (thread (thunk
