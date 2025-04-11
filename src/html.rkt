@@ -150,8 +150,16 @@
       [else
        (string-normalize-spaces accum-s)])))
 
+(define (filter-newlines lst)
+  (filter (lambda (s)
+            (not
+             (or (equal? s "\n")
+                 (equal? s "\r\n"))))
+          lst))
+
+;; find all strings at the front of the list c, filter out newlines, and join them
 (define (join-strings c)
-  (string-normalize-spaces (string-join (takef c string?)) #:trim? #f))
+  (string-normalize-spaces (string-join (filter-newlines (takef c string?))) #:trim? #f))
 
 (define (skip-strings c)
   (dropf c string?))
@@ -159,9 +167,15 @@
 (define (fixup-newlines2 c)
   (cond
     [(and (pair? c) (eq? (car c) 'pre))
-     (fixup-newlines c)]
+     (define rest (cdr c))
+      ;; remove newline if one immediately follows the PRE tag(as per spec)
+      (if (or (equal? (car rest) "\n")
+              (equal? (car rest) "\r\n"))
+          (fixup-newlines (cons (car c) (cdr rest)))
+          (fixup-newlines c))]
     [(and (pair? c) (string? (car c)))
      (define s (join-strings c))
+     ;(printf "fixup-newlines2: c=~a, s=|~a|~n" c s)
      (if (non-empty-string? s)
          (cons s
                (fixup-newlines2 (skip-strings c)))
@@ -357,6 +371,11 @@
         (send (current-container) last-element-eol?)
         (send canvas last-element-eol?)))
 
+  (define (last-element-break?)
+    (if (not (is-a? (current-container) null-container%))
+        (send (current-container) last-element-has-property? 'break)
+        (send canvas last-element-has-property? 'break)))
+
   (define (last-element-ews?)
     (if (not (is-a? (current-container) null-container%))
         (send (current-container) last-element-ews?)
@@ -371,16 +390,23 @@
            (eq? (sxml:element-name node) 'hr))]
       [else
        #f]))
+
+  (define (set-eol)
+    (if (not (is-a? (current-container) null-container%))
+        (send (current-container) set-last-element-eol)
+        (send canvas set-last-element-eol)))
   
-  (define (insert-newline)
+  (define (insert-break)
     #;(eprintf "inserting newline~n")
     (define style (send style-list find-or-create-style (current-style) (current-style-delta)))
-    (append-string "\n" style #t current-alignment))
+    (append-string "\n" style #t current-alignment '((break . #t))))
 
   (define (start-new-paragraph)
+    #;(eprintf "starting new paragraph~n")
     (when (not (last-element-eol?))
-      #;(eprintf "starting new paragraph~n")
-      (insert-newline)))
+      (set-eol))
+    (when (not (last-element-break?))
+       (insert-break)))
 
   (define (last-node-in-paragraph? s)
     (and (is-paragraph-element? (current-block))
@@ -549,10 +575,10 @@
     (if value
         (let ([prev-alignment current-alignment])
           (set! current-alignment (align-attr node current-alignment))
-          (list insert-newline
+          (list set-eol
                 (lambda ()
                   (set! current-alignment prev-alignment))))
-        (list insert-newline)))
+        (list set-eol)))
 
   (define (handle-div-attributes node)
     (define value (sxml:attr-safer node 'align))
@@ -675,15 +701,17 @@
       [(pre)
        (start-new-paragraph)
        (send (current-style-delta) set-delta 'change-family 'modern)
-       (list insert-newline)]
+       (list set-eol)]
       [(div)
        (start-new-paragraph)
        (handle-paragraph-attributes node)]
       [(center)
-       (start-new-paragraph)
+       ;; center does not create a paragraph break
+       (when (not (last-element-eol?))
+         (set-eol))
        (define prev-alignment current-alignment)
        (set! current-alignment 'center)
-       (list insert-newline
+       (list set-eol
              (lambda ()
                (set! current-alignment prev-alignment)))]
       [(body)
@@ -710,7 +738,9 @@
          ;(printf "element ~a~n" (sxml:element-name node))
          (case (sxml:element-name node)
            [(br)
-            (insert-newline)]
+            (if (last-element-eol?)
+                (insert-break)
+                (set-eol))]
            [(hr)
             (define width-property
               (or (width-attr node)
@@ -726,12 +756,11 @@
                   #f))
             (define align (align-attr node 'center))
             (when (not (last-element-eol?))
-              (insert-newline))
+              (set-eol))
             (append-snip (new horz-line-snip% [w width-pixels])
                          #t
                          align
-                         (if resizable-property (list resizable-property) '()))
-            #;(insert-newline)]
+                         (if resizable-property (list resizable-property) '()))]
            [(img)
             (handle-img node)]
            [(a)
@@ -776,9 +805,11 @@
                                     (rules 'none)
                                     (cellspacing 2)
                                     (cellpadding 1)))
+            ;(printf "-- starting definition list~n")
             (parameterize ([current-container list-table])
               (loop (sxml:content node)))
             (send list-table finalize-table (get-container-width canvas))
+            ;(printf "-- ending definition list~n")
             (start-new-paragraph)
             (append-snip list-table
                          #t
@@ -978,11 +1009,11 @@
 
             ;; insert a newline after a "paragraph" element unless the next element is a <br> or <hr>
             ;; don't do this for 'center' elements
-            (when (is-paragraph-element? (car node))
+            #;(when (is-paragraph-element? (car node))
               (when (and (not (empty? (cdr s)))
                          (not (followed-by-newline? (cadr s))))
                 #;(eprintf "inserting newline after 'paragraph'~n")
-                (insert-newline)))])
+                (insert-break)))])
          (loop (cdr s))]
         [(string? node)
          (case (current-block)
@@ -996,7 +1027,7 @@
             ;; attempt to normalize spacing when one string ends with whitespace and the following
             ;; string starts with whitespace. skip strings that are whitespace only.
             (define text (if (regexp-match #px"^\\s+$" node)
-                             ""
+                             (if (last-element-ews?) "" " ")
                              (string-trim node #:right? #f #:left? (last-element-ews?))))
             (when (non-empty-string? text)
               (define style (send style-list find-or-create-style (current-style) (current-style-delta)))

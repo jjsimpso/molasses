@@ -423,9 +423,9 @@
       (initial-place-element e (layout-context-place-x layout-ctx) (layout-context-place-y layout-ctx))
       (dlist-append! elements e))
 
-    (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned])
+    (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned] [properties '()])
       #;(printf "cell append-string ~a~n" s)
-      (define e (element s end-of-line alignment '()))
+      (define e (element s end-of-line alignment properties))
       (set-element-text-style! e (or style default-style))
       (initial-place-element e (layout-context-place-x layout-ctx) (layout-context-place-y layout-ctx))
       (dlist-append! elements e))
@@ -443,6 +443,13 @@
           ;; true if no elements
           #t))
 
+    (define/public (last-element-has-property? prop)
+      (define last-element (find-last-element))
+      (if last-element
+          (assoc prop (element-properties last-element))
+          ;; true if no elements
+          #t))
+    
     ;; last element ends with whitespace
     (define/public (last-element-ews?)
       (define last-element (find-last-element))
@@ -723,7 +730,7 @@
     (define rip #f)
 
     (define (current-cell)
-      (and rip (car rip)))
+      (and rip (pair? rip) (car rip)))
 
     ;; adds each cell in row to its respective column
     ;; row is a list of cells in column order
@@ -1043,24 +1050,30 @@
       (when c
         (send c append-snip s end-of-line alignment properties)))
 
-    ;; properties argument is currently unused, but need to match function signature in layout-canvas%
     (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned] [properties '()])
       (define c (current-cell))
       (when c
-        (send c append-string s style end-of-line alignment)))
+        (send c append-string s style end-of-line alignment properties)))
 
     (define/public (last-element-eol?)
       (define c (current-cell))
       (when c
         (send c last-element-eol?)))
 
+    (define/public (last-element-has-property? prop)
+      (define c (current-cell))
+      (when c
+        (send c last-element-has-property? prop)))
+    
     (define/public (last-element-ews?)
       (define c (current-cell))
       (when c
         (send c last-element-ews?)))
 
     (define/public (set-last-element-eol)
-      void)
+      (define c (current-cell))
+      (when c
+        (send c set-last-element-eol)))
 
     (define/public (estimate-current-cell-width)
       (if (current-cell)

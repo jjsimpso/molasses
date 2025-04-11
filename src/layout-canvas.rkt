@@ -1528,6 +1528,13 @@
           ;; true if no elements
           #t))
 
+    (define/public (last-element-has-property? prop)
+      (define last-element (find-last-element))
+      (if last-element
+          (assoc prop (element-properties last-element))
+          ;; true if no elements
+          #t))
+
     ;; last element ends with whitespace
     (define/public (last-element-ews?)
       (define last-element (find-last-element))
