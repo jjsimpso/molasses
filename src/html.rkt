@@ -395,6 +395,10 @@
     (if (not (is-a? (current-container) null-container%))
         (send (current-container) set-last-element-eol)
         (send canvas set-last-element-eol)))
+
+  (define (insert-eol)
+    (when (not (last-element-eol?))
+      (set-eol)))
   
   (define (insert-break)
     #;(eprintf "inserting newline~n")
@@ -707,8 +711,7 @@
        (handle-paragraph-attributes node)]
       [(center)
        ;; center does not create a paragraph break
-       (when (not (last-element-eol?))
-         (set-eol))
+       (insert-eol)
        (define prev-alignment current-alignment)
        (set! current-alignment 'center)
        (list set-eol
@@ -755,8 +758,7 @@
                   (cons 'resizable (cdr width-property))
                   #f))
             (define align (align-attr node 'center))
-            (when (not (last-element-eol?))
-              (set-eol))
+            (insert-eol)
             (append-snip (new horz-line-snip% [w width-pixels])
                          #t
                          align
@@ -810,7 +812,7 @@
               (loop (sxml:content node)))
             (send list-table finalize-table (get-container-width canvas))
             ;(printf "-- ending definition list~n")
-            (start-new-paragraph)
+            (insert-eol)
             (append-snip list-table
                          #t
                          current-alignment
@@ -853,7 +855,7 @@
               (loop (sxml:content node))
               #;(printf "end unordered list~n"))
             (send list-table finalize-table (get-container-width canvas))
-            (start-new-paragraph)
+            (insert-eol)
             (append-snip list-table
                          #t
                          current-alignment
@@ -874,7 +876,7 @@
               (loop (sxml:content node))
               #;(printf "end ordered list~n"))
             (send list-table finalize-table (get-container-width canvas))
-            (start-new-paragraph)
+            (insert-eol)
             (append-snip list-table
                          #t
                          current-alignment
