@@ -384,10 +384,11 @@
   (define (followed-by-newline? node)
     ;(eprintf "followed-by-newline? ~a~n" node)
     (cond
+      [(last-element-break?) #t]
       [(empty? node) #f]
       [(sxml:element? node)
        (or (eq? (sxml:element-name node) 'br)
-           (eq? (sxml:element-name node) 'hr))]
+           #;(eq? (sxml:element-name node) 'hr))]
       [else
        #f]))
 
@@ -707,7 +708,8 @@
        (send (current-style-delta) set-delta 'change-family 'modern)
        (list set-eol)]
       [(div)
-       (start-new-paragraph)
+       ;; div does not create a paragraph break
+       (insert-eol)
        (handle-paragraph-attributes node)]
       [(center)
        ;; center does not create a paragraph break
@@ -928,7 +930,7 @@
               (loop (sxml:content node))
               #;(printf "end table~n"))
             (send table-snip finalize-table (get-container-width canvas))
-            (start-new-paragraph)
+            (insert-eol)
             (append-snip table-snip
                          #t
                          current-alignment
@@ -1011,7 +1013,7 @@
 
             ;; insert a newline after a "paragraph" element unless the next element is a <br> or <hr>
             ;; don't do this for 'center' elements
-            #;(when (is-paragraph-element? (car node))
+            (when (is-paragraph-element? (car node))
               (when (and (not (empty? (cdr s)))
                          (not (followed-by-newline? (cadr s))))
                 #;(eprintf "inserting newline after 'paragraph'~n")
