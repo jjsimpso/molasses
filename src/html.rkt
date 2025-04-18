@@ -771,24 +771,56 @@
             (define content (sxml:content node))
             (define href-value (sxml:attr-safer node 'href))
             (define name-value (sxml:attr-safer node 'name))
+            #;(printf "---A content= ~a~n" content)
             (if href-value
                 ;; create link
                 (cond
                   [(empty? content)
                    #;(printf "unhandled href, no content~n")
                    (append-anchor name-value)]
-                  [(non-empty-string? (car content))
+                  [(or (and (pair? (car content))
+                            (is-text-element? (sxml:element-name (car content))))
+                       (non-empty-string? (car content)))
                    #;(printf "handle text href ~a~n" content)
-                   (define text (car content))
+                   ;; setup default link style
                    (define style-copy (make-object style-delta% 'change-nothing))
                    (send style-copy copy (current-style-delta))
                    (send style-copy set-delta-foreground current-link-color)
                    (send style-copy set-delta 'change-underline #t)
-                   (define style (send style-list find-or-create-style (current-style) style-copy))
-                   (define link-snip (new html-link-snip% (url href-value) (base-req (send canvas get-current-request)) (browser-canvas canvas)))
-                   (send link-snip set-style style)
-                   (send link-snip insert text (string-length text))
-                   (append-snip link-snip #f current-alignment (if name-value (list (cons 'anchor name-value)) '()))]
+                   (parameterize ([current-style-delta style-copy])
+                     (let loop-href ([c content])
+                       (unless (empty? c)
+                         (define node (car c))
+                         #;(printf "  handling ~a~n" node)
+                         (cond
+                           [(non-empty-string? node)
+                            (define text node)
+                            (define style-copy (make-object style-delta% 'change-nothing))
+                            (send style-copy copy (current-style-delta))
+                            (define style (send style-list find-or-create-style (current-style) style-copy))
+                            (define link-snip (new html-link-snip% (url href-value) (base-req (send canvas get-current-request)) (browser-canvas canvas)))
+                            (send link-snip set-style style)
+                            (send link-snip insert text (string-length text))
+                            (append-snip link-snip #f current-alignment (if name-value (list (cons 'anchor name-value)) '()))
+                            (loop-href (cdr c))]
+                           [(and (pair? node) (is-text-element? (car node)))
+                            ;; only handle text elements
+                            (define style-copy (make-object style-delta% 'change-nothing))
+                            (send style-copy copy (current-style-delta))
+                            (parameterize ([current-style-delta style-copy])
+                              ;; handle the element. returns a list of functions to call when closing the tag
+                              ;; will also update the current style
+                              (define close-tag-funcs (handle-element node))
+                              (loop-href (cdr node))
+                              ;; perform actions to close the tag
+                              (for ([f (in-list close-tag-funcs)])
+                                (f)))
+                            (loop-href (cdr c))]
+                           [((ntype-names?? '(img)) node)
+                            (handle-img node href-value name-value)
+                            (loop-href (cdr c))]
+                           [else
+                            (loop-href (cdr c))]))))]
                   [((ntype-names?? '(img)) (car content))
                    #;(printf "handle img href~n")
                    (handle-img (car content) href-value name-value)]
