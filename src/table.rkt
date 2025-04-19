@@ -1030,6 +1030,10 @@
       void)
 
     (define/public (finalize-table layout-width)
+      (when (current-cell)
+        (end-cell))
+      (when rip
+        (end-row))
       (set! rows (reverse rows))
       #;(printf "finalize table ~ax~a, lw=~a~n" num-columns num-rows layout-width)
       (calc-column-min/max-widths)
@@ -1047,11 +1051,25 @@
     
     (define/public (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       (define c (current-cell))
+      (unless c
+        ;; start a new row and/or cell
+        (if rip
+            (start-cell)
+            (begin
+              (start-row)
+              (start-cell))))
       (when c
         (send c append-snip s end-of-line alignment properties)))
 
     (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned] [properties '()])
       (define c (current-cell))
+      (unless c
+        ;; start a new row and/or cell
+        (if rip
+            (start-cell)
+            (begin
+              (start-row)
+              (start-cell))))
       (when c
         (send c append-string s style end-of-line alignment properties)))
 
