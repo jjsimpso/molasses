@@ -67,6 +67,7 @@
            void]
           ;; display error line
           [(equal? (gopher-dir-entity-type dir-entity) #\3)
+           (send canvas append-string " (ERR) " #f #f)
            (send canvas append-string (gopher-dir-entity-user-name dir-entity))]
           ;; insert informational lines as plain text
           [(equal? (gopher-dir-entity-type dir-entity) #\i)
