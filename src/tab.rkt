@@ -287,25 +287,26 @@ END
     ;; Each style created with this procedure copies "Standard" style
     ;; and creates a new style by name 'name' and with the foreground
     ;; color 'color'.
-    (send (send style-list new-named-style name standard)
-          set-delta (send* (make-object style-delta%)
-                      (copy standard-delta)
-                      (set-delta-foreground color))))
+    (send style-list new-named-style name
+          (send style-list find-or-create-style standard
+                (send (make-object style-delta%)
+                      set-delta-foreground color))))
 
   (define (make-header-style name size)
     ;; Each style created with this procedure copies "Standard" style
     ;; and creates a new style by name 'name' and with the size 'size'.
-    (send (send style-list new-named-style name standard)
-          set-delta (send* (make-object style-delta%)
-                      (copy standard-delta)
-                      (set-delta 'change-weight 'bold)
-                      (set-delta 'change-size size))))
+    (send style-list new-named-style name
+          (send style-list find-or-create-style standard
+                (send* (make-object style-delta%)
+                  (set-delta 'change-weight 'bold)
+                  ;I'd really like this to be a multiplicative size increase
+                  (set-delta 'change-bigger size)))))
   
   (make-color-style "Link" link-color)
   (make-color-style "Link Highlight" link-highlight-color)
-  (make-header-style "Header1" 24)
-  (make-header-style "Header2" 18)
-  (make-header-style "Header3" 14)
+  (make-header-style "Header1" 12)
+  (make-header-style "Header2" 6)
+  (make-header-style "Header3" 2)
 
   ;; create default html style
   (define html-standard (send style-list new-named-style "Html Standard" standard))

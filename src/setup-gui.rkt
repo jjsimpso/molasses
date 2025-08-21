@@ -35,6 +35,14 @@
               (send (send address-field get-editor) select-all)]
              [(and ctrl? (eq? key-code #\t))
               (new-tab tab-panel)]
+             [(and ctrl? (eq? key-code #\=))
+              (define canvas (active-page-canvas tab-panel))
+              (when canvas
+                (change-canvas-font-size canvas 1))]
+             [(and ctrl? (eq? key-code #\-))
+              (define canvas (active-page-canvas tab-panel))
+              (when canvas
+                (change-canvas-font-size canvas -1))]
              ;; Return #f if we don't recognise this key code so that it can be
              ;; delegated to lower levels in on-subwindow-char (such as the
              ;; canvas or the text).
@@ -75,6 +83,18 @@
       (and (or (is-a? o editor<%>) (is-a? o browser-canvas%))
            o)))
 
+  (define (change-canvas-font-size canvas amount)
+    (define standard (send (send canvas get-style-list) find-named-style "Standard"))
+    (define link (send (send canvas get-style-list) find-named-style "Link"))
+    (define link-highlight (send (send canvas get-style-list) find-named-style "Link Highlight"))
+    (when standard
+      (define delta (make-object style-delta%))
+      (send standard get-delta delta)
+      (send delta set-delta 'change-size (+ (send standard get-size) amount))
+      (printf "increasing font size to ~a~n" (send delta get-size-add))
+      (send standard set-delta delta)
+      (send canvas redo-layout)))
+  
   (define menu-bar (new menu-bar% (parent frame)))
   (define file-menu 
     (new menu%
@@ -84,9 +104,9 @@
     (new menu%
          (label "&Edit")
          (parent menu-bar)))
-  #;(define font-menu
+  (define view-menu
       (new menu%
-           [label "Font"]
+           [label "View"]
            [parent menu-bar]))
   (define options-menu
     (new menu%
@@ -133,6 +153,24 @@
           (when o
             (send o do-edit-operation 'select-all)))))
 
+  (new menu-item%
+       (label "Increase Font Size")
+       (parent view-menu)
+       (callback 
+        (lambda (item event)
+          (define canvas (active-page-canvas tab-panel))
+          (when canvas
+            (change-canvas-font-size canvas 1)))))
+
+  (new menu-item%
+       (label "Decrease Font Size")
+       (parent view-menu)
+       (callback 
+        (lambda (item event)
+          (define canvas (active-page-canvas tab-panel))
+          (when canvas
+            (change-canvas-font-size canvas -1)))))
+  
   (new checkable-menu-item%
        (label "Smooth Scrolling")
        (parent options-menu)

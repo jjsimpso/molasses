@@ -68,6 +68,9 @@
     ;(define dc (get-dc))
 
     (define canvas-dc (super get-dc))
+
+    ; example of how to scale the entire canvas
+    ;(send canvas-dc set-scale 2.0 2.0)
     
     ;; size of canvas's content, which doesn't include margins if they exist
     ;; equivalent to virtual size minus the margins
@@ -530,7 +533,7 @@
 
       ;; cause get-extent to recalculate text extents by deleting cached value
       (set-element-cached-text-extent! e #f)
-
+      
       (handle-element-properties e)
       
       ;; get extent of element
@@ -646,7 +649,7 @@
                  ;(printf "snip end of line~n")
                  (layout-advance-to-new-line layout-ctx y1))]
               [else
-               ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y snip-w snip-h snip-descent snip-space)
+               ;(printf "snip size = ~a,~a ~ax~a ~a ~a~n" x y (unbox snip-w) (unbox snip-h) (unbox snip-descent) (unbox snip-space))
                (set! x2 (exact-truncate (+ x (unbox snip-w))))
                (set! y2 (add1 (exact-truncate (+ y (unbox snip-h)))))
                ;; set position for adding next element
@@ -1366,6 +1369,17 @@
               [else
                (cons (string-append (element-snip e) (if (element-end-of-line e) "\n" ""))
                      s)]))))
+
+    (define/public (redo-layout)
+      (unless (dlist-empty? elements)
+        ; invalidate snip size caches in case the style was changed
+        (for ([e (in-dlist elements)])
+          (when (not (string? (element-snip e)))
+            (send (element-snip e) size-cache-invalid)))
+        (reset-layout)
+        (let-values ([(x y) (get-virtual-size)])
+          (update-scrollbars x y))
+        (refresh)))
     
     (define/public (get-mode)
       mode)
@@ -1375,11 +1389,7 @@
       (unless (or (eq? mode m)
                   (not (member m '(plaintext wrapped layout))))
         (set! mode m)
-        (unless (dlist-empty? elements)
-          (reset-layout)
-          (let-values ([(x y) (get-virtual-size)])
-            (update-scrollbars x y))
-          (refresh))))
+        (redo-layout)))
 
     ;; clear the canvas contents
     (define/public (erase)
