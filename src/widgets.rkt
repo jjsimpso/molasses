@@ -382,6 +382,9 @@
     (send canvas append-string msg)
     (send canvas end-edit-sequence)
     (close-input-port (gemini-response-data-port resp)))
+
+  ;; need to clear this flag since it is used in the on-char event handler
+  (set-field! gopher-menu? canvas #f)
   
   (define resp (gemini-fetch (request-host req)
                              (request-path/selector req)
@@ -459,6 +462,9 @@
     (send canvas append-string msg)
     (send canvas end-edit-sequence)
     (close-input-port (http-response-data-port response)))
+
+  ;; need to clear this flag since it is used in the on-char event handler
+  (set-field! gopher-menu? canvas #f)
   
   (define response (http-fetch (request-host req) (request-path/selector req) (request-port req)))
   (if (http-response-error? response)
