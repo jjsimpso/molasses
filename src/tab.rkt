@@ -278,7 +278,7 @@ END
   (send* standard-delta
     (set-family 'modern)
     ;(set-face font-name)
-    (set-delta 'change-size 12)
+    ;(set-delta 'change-size 12)
     (set-delta-foreground text-fg-color)
     (set-delta-background canvas-bg-color))
   (send standard set-delta standard-delta)
@@ -309,15 +309,14 @@ END
   (make-header-style "Header3" 2)
 
   ;; create default html style
-  (define html-standard (send style-list new-named-style "Html Standard" standard))
-  (define html-standard-delta (make-object style-delta%))
-  (send* html-standard-delta
-    (set-family 'roman)
-    (set-delta 'change-size 11)
-    (set-delta-foreground html-text-fg-color)
-    (set-delta-background html-text-bg-color))
-  (send html-standard set-delta html-standard-delta)
-)
+  (send style-list new-named-style "Html Standard"
+        (send style-list find-or-create-style standard
+              (send* (make-object style-delta%)
+                (set-family 'roman)
+                ;(set-delta 'change-size 11)
+                (set-delta 'change-smaller 1)
+                (set-delta-foreground html-text-fg-color)
+                (set-delta-background html-text-bg-color)))))
 
 (define (find-tp-address-field tp)
   (define tab (find-tab-at-index (send tp get-selection)))

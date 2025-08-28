@@ -1082,7 +1082,6 @@
 (define (render-html-to-text port canvas [img-ok? #f] [eval-ok? #f])
   (unless (input-port? port)
     (raise-type-error 'render-html-to-text "input port" 0 (list port canvas)))
-  ;; TEMP - enable auto wrap automatically for html pages
   (send canvas set-mode 'layout)
   ;; set the canvas background color to match the default for html
   (send canvas set-canvas-background html-text-bg-color)

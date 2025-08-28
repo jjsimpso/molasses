@@ -85,12 +85,11 @@
 
   (define (change-canvas-font-size canvas amount)
     (define standard (send (send canvas get-style-list) find-named-style "Standard"))
-    (define link (send (send canvas get-style-list) find-named-style "Link"))
-    (define link-highlight (send (send canvas get-style-list) find-named-style "Link Highlight"))
     (when standard
       (define delta (make-object style-delta%))
       (send standard get-delta delta)
-      (send delta set-delta 'change-size (+ (send standard get-size) amount))
+      (define additive-factor (max 0 (+ (send delta get-size-add) amount)))
+      (send delta set-delta 'change-bigger additive-factor)
       (printf "increasing font size to ~a~n" (send delta get-size-add))
       (send standard set-delta delta)
       (send canvas redo-layout)))
