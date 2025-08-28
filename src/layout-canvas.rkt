@@ -450,12 +450,20 @@
         [else
          (super set-scroll-page which value)]))
 
+    (define (update-scrollbar-step-size new-width new-height)
+      ; only update vertical step size for now
+      (if (< new-height 30000)
+          (set! scrollbar-vert-step-size 1)
+          (set! scrollbar-vert-step-size (ceiling (/ new-height 30000))))
+      #;(printf "reset layout set vert scrollbar step size to ~a~n" scrollbar-vert-step-size))
+
     ;; update the manual scrollbars range and hide/unhide them
     ;; new width and height are in pixels
     (define (update-scrollbars new-width new-height)
       #;(printf "update-scrollbars, thread=~a~n" (current-thread))
       (when (semaphore-try-wait? edit-lock)
         (define-values (dw dh) (get-drawable-size))
+        (update-scrollbar-step-size new-width new-height)
         (set-scroll-range 'horizontal (exact-truncate (max 1 (- new-width dw))))
         (set-scroll-range 'vertical (exact-truncate (max 1 (- new-height dh))))
         (set-scroll-page 'horizontal 100)
@@ -481,7 +489,7 @@
           (set-scroll-range 'vertical (exact-truncate (max 1 (- vy ndh))))
           (set-scroll-page 'vertical (max 1 ndh)))
         (semaphore-post edit-lock)))
-   
+
     (define (reset-layout)
       ;(printf "resetting layout, thread=~a~n" (current-thread))
       (set! canvas-width 10)
@@ -493,11 +501,7 @@
       (for ([e (in-dlist elements)])
         (place-element e (layout-context-place-x layout-ctx) (layout-context-place-y layout-ctx)))
 
-      (if (< canvas-height 30000)
-          (set! scrollbar-vert-step-size 1)
-          (set! scrollbar-vert-step-size (ceiling (/ canvas-height 30000))))
-
-      ;(printf "reset layout set vert scrollbar step size to ~a~n" scrollbar-vert-step-size)
+      (update-scrollbar-step-size canvas-width canvas-height)
       
       (when (> (dlist-length elements) 0)
         (set-visible-elements!)))
