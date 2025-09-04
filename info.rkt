@@ -9,7 +9,7 @@
                    "snip-lib"))
 (define build-deps '("rackunit-lib"
                      "overeasy"))
-(define license 'Apache-2.0)
+(define license 'LGPL-3.0-or-later)
 
 (define gracket-launcher-names     '("molasses"))
 (define gracket-launcher-libraries '("src/main.rkt"))
