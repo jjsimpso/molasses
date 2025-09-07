@@ -366,25 +366,25 @@
            (min w dw) ; estimate uses max width, so constrain if too large
            (* (send canvas layout-space-on-current-line) 0.75))]))
   
-  (define (last-element-eol?)
+  (define (last-element-eol? [alignments-to-search '(unaligned center)])
     (if (not (is-a? (current-container) null-container%))
         (send (current-container) last-element-eol?)
-        (send canvas last-element-eol?)))
+        (send canvas last-element-eol? alignments-to-search)))
 
-  (define (last-element-break?)
+  (define (last-element-break? [alignments-to-search '(unaligned center)])
     (if (not (is-a? (current-container) null-container%))
         (send (current-container) last-element-has-property? 'break)
-        (send canvas last-element-has-property? 'break)))
+        (send canvas last-element-has-property? 'break alignments-to-search)))
 
   (define (last-element-ews?)
     (if (not (is-a? (current-container) null-container%))
         (send (current-container) last-element-ews?)
         (send canvas last-element-ews?)))
   
-  (define (followed-by-newline? node)
+  (define (followed-by-newline? node at-alignments)
     ;(eprintf "followed-by-newline? ~a~n" node)
     (cond
-      [(last-element-break?) #t]
+      [(last-element-break? at-alignments) #t]
       [(empty? node) #f]
       [(sxml:element? node)
        (or (eq? (sxml:element-name node) 'br)
@@ -392,10 +392,10 @@
       [else
        #f]))
 
-  (define (set-eol)
+  (define (set-eol [alignments-to-search '(unaligned center)])
     (if (not (is-a? (current-container) null-container%))
         (send (current-container) set-last-element-eol)
-        (send canvas set-last-element-eol)))
+        (send canvas set-last-element-eol alignments-to-search)))
 
   (define (insert-eol)
     (when (not (last-element-eol?))
@@ -580,10 +580,12 @@
     (if value
         (let ([prev-alignment current-alignment])
           (set! current-alignment (align-attr node current-alignment))
-          (list set-eol
+          (list (lambda ()
+                  (set-eol '(left right unaligned center)))
                 (lambda ()
                   (set! current-alignment prev-alignment))))
-        (list set-eol)))
+        (list (lambda ()
+                  (set-eol '(left right unaligned center))))))
 
   (define (handle-div-attributes node)
     (define value (sxml:attr-safer node 'align))
@@ -1025,6 +1027,7 @@
             ;; skip element
             void]
            [else
+            (define element-alignment current-alignment)
             (define style-copy (make-object style-delta% 'change-nothing))
             (send style-copy copy (current-style-delta))
             (parameterize ([current-style-delta style-copy]
@@ -1034,7 +1037,9 @@
               (define close-tag-funcs (handle-element node))
 
               ;(eprintf "handling ~a~n" (car node))
-
+              ;; save for paragraph newline checks below
+              (set! element-alignment current-alignment)
+              
               ;; recurse into the element
               (loop (cdr node))
               
@@ -1047,7 +1052,7 @@
             ;; don't do this for 'center' elements
             (when (is-paragraph-element? (car node))
               (when (and (not (empty? (cdr s)))
-                         (not (followed-by-newline? (cadr s))))
+                         (not (followed-by-newline? (cadr s) (list element-alignment))))
                 #;(eprintf "inserting newline after 'paragraph'~n")
                 (insert-break)))])
          (loop (cdr s))]

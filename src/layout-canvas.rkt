@@ -1529,21 +1529,23 @@
          (place-element e (layout-context-place-x layout-ctx) (layout-context-place-y layout-ctx))
          (append-element e)]))
 
-    (define (find-last-element [alignments '(unaligned center)])
-      ;; the end-of-line flag is only relevant for unaligned or centered elements
+    (define (find-last-element [alignments-to-search '(unaligned center)])
+      ;; default to not include left or right aligned elements as the "last" element
       (for/or ([e (in-dlist-reverse elements)]
-               #:when (memq (element-alignment e) alignments))
+               #:when (memq (element-alignment e) alignments-to-search))
         e))
 
-    (define/public (last-element-eol?)
-      (define last-element (find-last-element))
+    (define/public (last-element-eol? [alignments-to-search '(unaligned center)])
+      ;; the end-of-line flag may only be relevant for unaligned or centered elements
+      ;; unless text layout is desired for left or right content as well
+      (define last-element (find-last-element alignments-to-search))
       (if last-element
           (element-end-of-line last-element)
           ;; true if no elements
           #t))
 
-    (define/public (last-element-has-property? prop)
-      (define last-element (find-last-element))
+    (define/public (last-element-has-property? prop [alignments-to-search '(unaligned center)])
+      (define last-element (find-last-element alignments-to-search))
       (if last-element
           (assoc prop (element-properties last-element))
           ;; true if no elements
@@ -1557,8 +1559,8 @@
               (element-end-of-line last-element))
           #f))
 
-    (define/public (set-last-element-eol)
-      (define last-element (find-last-element))
+    (define/public (set-last-element-eol [alignments-to-search '(unaligned center)])
+      (define last-element (find-last-element alignments-to-search))
       (when (and last-element (not (element-end-of-line last-element)))
         (set-element-end-of-line! last-element #t)
         (layout-advance-to-new-line layout-ctx (element-ypos last-element))))
