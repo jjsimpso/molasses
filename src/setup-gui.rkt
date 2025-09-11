@@ -90,9 +90,37 @@
       (send standard get-delta delta)
       (define additive-factor (max 0 (+ (send delta get-size-add) amount)))
       (send delta set-delta 'change-bigger additive-factor)
-      (printf "increasing font size to ~a~n" (send delta get-size-add))
+      ;(printf "increasing font size to ~a~n" (send delta get-size-add))
       (send standard set-delta delta)
       (send canvas redo-layout)))
+
+  (define (set-light-mode canvas on?)
+    (define (set-style-color name fg-color bg-color)
+      (define style (send (send canvas get-style-list) find-named-style name))
+      (when style
+        ;(printf "setting ~a's light mode to ~a~n" name on?)
+        (define delta (make-object style-delta%))
+        (send style get-delta delta)
+        (send* delta
+          (set-delta-foreground fg-color)
+          (set-delta-background bg-color))
+        (send style set-delta delta)))
+
+    (send canvas begin-edit-sequence)
+    (if on?
+        (begin
+          (set-field! default-bg-color canvas light-canvas-bg-color)
+          (send canvas set-canvas-background light-canvas-bg-color)
+          (set-style-color "Standard" light-text-fg-color light-text-bg-color)
+          (set-style-color "Link" light-link-color light-text-bg-color)
+          (set-style-color "Link Highlight" light-link-highlight-color light-text-bg-color))
+        (begin
+          (set-field! default-bg-color canvas canvas-bg-color)
+          (send canvas set-canvas-background canvas-bg-color)
+          (set-style-color "Standard" text-fg-color text-bg-color)
+          (set-style-color "Link" link-color text-bg-color)
+          (set-style-color "Link Highlight" link-highlight-color text-bg-color)))
+    (send canvas end-edit-sequence))
   
   (define menu-bar (new menu-bar% (parent frame)))
   (define file-menu 
@@ -103,9 +131,9 @@
     (new menu%
          (label "&Edit")
          (parent menu-bar)))
-  (define view-menu
+  (define tab-menu
       (new menu%
-           [label "View"]
+           [label "&Tab"]
            [parent menu-bar]))
   (define options-menu
     (new menu%
@@ -152,43 +180,9 @@
           (when o
             (send o do-edit-operation 'select-all)))))
 
-  (new menu-item%
-       (label "Increase Font Size")
-       (parent view-menu)
-       (callback 
-        (lambda (item event)
-          (define canvas (active-page-canvas tab-panel))
-          (when canvas
-            (change-canvas-font-size canvas 1)))))
-
-  (new menu-item%
-       (label "Decrease Font Size")
-       (parent view-menu)
-       (callback 
-        (lambda (item event)
-          (define canvas (active-page-canvas tab-panel))
-          (when canvas
-            (change-canvas-font-size canvas -1)))))
-  
-  (new checkable-menu-item%
-       (label "Smooth Scrolling")
-       (parent options-menu)
-       (demand-callback
-        (lambda (item)
-          (if canvas-smooth-scrolling
-              (send item check #t)
-              (send item check #f))))
-       (callback 
-        (lambda (item event)
-          (define checked? (send item is-checked?))
-          (set-canvas-smooth-scrolling! checked?)
-          (define canvas-list (get-all-tab-canvases))
-          (for ([canvas (in-list canvas-list)])
-            (set-field! smooth-scrolling canvas checked?)))))
-  
   (new checkable-menu-item%
        (label "Word Wrap")
-       (parent options-menu)
+       (parent tab-menu)
        (demand-callback
         (lambda (item)
           (define canvas (active-page-canvas tab-panel))
@@ -207,6 +201,57 @@
             #;(eprintf "word wrap callback~n")
             (define checked? (send item is-checked?))
             (send canvas set-mode (if checked? 'wrapped 'plaintext))))))
+
+  (new menu-item%
+       (label "Increase Font Size")
+       (parent tab-menu)
+       (callback 
+        (lambda (item event)
+          (define canvas (active-page-canvas tab-panel))
+          (when canvas
+            (change-canvas-font-size canvas 1)))))
+
+  (new menu-item%
+       (label "Decrease Font Size")
+       (parent tab-menu)
+       (callback 
+        (lambda (item event)
+          (define canvas (active-page-canvas tab-panel))
+          (when canvas
+            (change-canvas-font-size canvas -1)))))
+
+  (new checkable-menu-item%
+       (label "Smooth Scrolling")
+       (parent options-menu)
+       (demand-callback
+        (lambda (item)
+          (if canvas-smooth-scrolling
+              (send item check #t)
+              (send item check #f))))
+       (callback 
+        (lambda (item event)
+          (define checked? (send item is-checked?))
+          (set-canvas-smooth-scrolling! checked?)
+          (define canvas-list (get-all-tab-canvases))
+          (for ([canvas (in-list canvas-list)])
+            (set-field! smooth-scrolling canvas checked?)))))
+
+  (new checkable-menu-item%
+       (label "Light Mode")
+       (parent options-menu)
+       (demand-callback
+        (lambda (item)
+          (if canvas-light-mode
+              (send item check #t)
+              (send item check #f))))
+       (callback 
+        (lambda (item event)
+          (define checked? (send item is-checked?))
+          (set-canvas-light-mode! checked?)
+          (define canvas-list (get-all-tab-canvases))
+          (for ([canvas (in-list canvas-list)])
+            (set-light-mode canvas checked?)))))
+  
 
   ;(append-editor-font-menu-items font-menu)
 
