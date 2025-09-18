@@ -459,7 +459,7 @@
 (define (goto-http req canvas initial-selection-pos)
   (define (show-http-error msg)
     (send canvas begin-edit-sequence)
-    (send canvas append-string msg)
+    (send canvas append-string (bytes->string/utf-8 msg))
     (send canvas end-edit-sequence)
     (close-input-port (http-response-data-port response)))
 
