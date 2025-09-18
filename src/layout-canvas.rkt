@@ -45,7 +45,12 @@
     ;; method name from editor-canvas%
     (define/public (vertical-inset)
       ymargin)
-    
+
+    (define/public (set-horizontal-inset inset)
+      (set! xmargin inset)
+      (reset-layout)
+      (refresh))
+
     ;; initially hide both scrollbars 
     (init-manual-scrollbars #f #f 10 10 0 0)
 

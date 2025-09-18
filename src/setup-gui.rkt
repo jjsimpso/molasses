@@ -43,6 +43,14 @@
               (define canvas (active-page-canvas tab-panel))
               (when canvas
                 (change-canvas-font-size canvas -1))]
+             [(and meta? (eq? key-code #\=))
+              (define canvas (active-page-canvas tab-panel))
+              (when canvas
+                (change-canvas-horizontal-inset canvas 50))]
+             [(and meta? (eq? key-code #\-))
+              (define canvas (active-page-canvas tab-panel))
+              (when canvas
+                (change-canvas-horizontal-inset canvas -50))]
              ;; Return #f if we don't recognise this key code so that it can be
              ;; delegated to lower levels in on-subwindow-char (such as the
              ;; canvas or the text).
@@ -94,6 +102,10 @@
       (send standard set-delta delta)
       (send canvas redo-layout)))
 
+  (define (change-canvas-horizontal-inset canvas amount)
+    (define inset (send canvas horizontal-inset))
+    (send canvas set-horizontal-inset (max 0 (+ inset amount))))
+  
   (define (set-light-mode canvas on?)
     (define (set-style-color name fg-color bg-color)
       (define style (send (send canvas get-style-list) find-named-style name))
