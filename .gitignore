@@ -1,3 +1,5 @@
 *~
 *.dep
 *.zo
+*.zip
+*.tar.gz
