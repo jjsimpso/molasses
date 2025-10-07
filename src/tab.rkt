@@ -56,6 +56,10 @@
               #:when (= id (tab-info-id tab)))
     tab))
 
+;; returns the tab id for the active tab
+(define (active-tab-id tp)
+  (tab-info-id (find-tab-at-index (send tp get-selection))))
+
 (define (init-new-tab tp index)
   #;(printf "Init tab selection ~a~n" index)
   (send tp change-children
@@ -75,10 +79,11 @@
         (send back-button enable #t)))
 
   ;; callback called when the browser-canvas needs to update a status message
-  ;; update the text of the message% widget on the status bar. we only have
-  ;; one global status bar, so the tab id parameter isn't used
+  ;; update the text of the message% widget on the status bar
   (define (update-status id text)
-    (send status-msg set-label text))
+    ;(printf "update-status: id=~a, curid=~a, text=~a~n" id (active-tab-id tp) text)
+    (when (= id (active-tab-id tp))
+      (send status-msg set-label text)))
 
   ;; gotta replace this at some point
   ;; gets the status-msg message% widget from status-bar

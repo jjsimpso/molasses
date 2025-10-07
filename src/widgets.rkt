@@ -52,7 +52,8 @@
   (send type-snip set-style standard-style)
   (send type-snip insert type-text (string-length type-text))
   (send canvas append-snip type-snip)
-
+  ;(send canvas append-string type-text standard-style #f)
+  
   (send link-snip set-style link-style)
   (send link-snip insert display-text (string-length display-text)) ;(send link-snip get-count))
   (send canvas append-snip link-snip #t))
@@ -551,7 +552,8 @@
       (when selection
         (define snip (selection-snip selection))
         (define new-style (send (get-style-list) find-named-style "Link Highlight"))
-        (send snip set-style new-style)))
+        (send snip set-style new-style)
+        (send snip update-status)))
 
     (define (unhighlight selection)
       (when selection
@@ -720,18 +722,19 @@
       (if initial-selection-pos
           (set! menu-selection (find-menu-item initial-selection-pos)) 
           (set! menu-selection (find-first-menu-item)))
-      (when (and menu-selection (cdr menu-selection))
-        #;(eprintf "highlight first menu item~n")
-        (define snip (selection-snip menu-selection))
-        (define new-style (send (get-style-list) find-named-style "Link Highlight"))
-        (send snip set-style new-style)
-        (if initial-selection-pos
-            ;; make the selection visible but not at the very top
-            (let-values ([(x y w h) (lookup-snip-position-size snip)]
-                         [(cw ch) (get-client-size)])
-              (queue-scroll-to (max 0 (- y (floor (/ ch 4))))))
-            ;; scroll to the beginning
-            (queue-scroll-to 0))))
+      (cond
+        [(and menu-selection (cdr menu-selection))
+         #;(eprintf "highlight first menu item~n")
+         (highlight menu-selection)
+         (if initial-selection-pos
+             ;; make the selection visible but not at the very top
+             (let-values ([(x y w h) (lookup-snip-position-size (selection-snip menu-selection))]
+                          [(cw ch) (get-client-size)])
+               (queue-scroll-to (max 0 (- y (floor (/ ch 4))))))
+             ;; scroll to the beginning
+             (queue-scroll-to 0))]
+        [else
+         (update-status "Ready")]))
 
     (define/public (cancel-request)
       (printf "cancel request called~n")
@@ -787,7 +790,8 @@
            (set! request-thread-id
                  (thread (thunk
                           (goto-gopher req this initial-selection-pos)
-                          (update-status "Ready"))))]
+                          (unless gopher-menu?
+                            (update-status "Ready")))))]
           [(equal? (request-protocol req) 'gemini)
            (update-history)
            (set! current-url (browser-url req #f))
@@ -1045,11 +1049,21 @@
     (set-flags (cons 'handles-all-mouse-events (get-flags)))
     ;(set-flags (cons 'handles-events (get-flags)))
 
+    (define status-text (string-append "=> "
+                                       (gopher-dir-entity-selector dir-entity)
+                                       "@"
+                                       (gopher-dir-entity-host dir-entity)
+                                       ":"
+                                       (gopher-dir-entity-port dir-entity)))
+    
     (define/public (get-item-label)
       (gopher-dir-entity-user-name dir-entity))
     
     (define (follow-link)
       (send browser-canvas go (dir-entity->request dir-entity)))
+
+    (define/public (update-status)
+      (send browser-canvas update-status status-text))
     
     (define/override (on-event dc x y editorx editory e)
       #;(eprintf "menu-item-snip% on-event~n")
