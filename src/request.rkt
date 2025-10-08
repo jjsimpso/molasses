@@ -26,8 +26,13 @@
 
 ;; (regexp-match #px"^(\\w+://)?([a-zA-Z0-9\\.]+)(:\\d+)?(/.*)?" "gopher://abc6.def.com:70/a/b/c.txt")
 (define (url->request url #:default-scheme [default-scheme 'gopher])
+  ;; some gopher servers don't accept "/" as a selector and expect a blank selector
+  (define (refine-selector selector)
+    (if (or (string=? selector "/")
+            (string=? selector "/1/"))
+        ""
+        selector))
   (define url-components (regexp-match #px"^(\\w+://)?([a-zA-Z0-9\\-\\.]+)(:\\d+)?(/.*)?$" url))
-
   (if url-components
       (let ([protocol (string->protocol (second url-components) default-scheme)]
             [host (third url-components)]
@@ -49,7 +54,7 @@
            (make-gopher-request protocol
                                 host
                                 port
-                                path/selector)]))
+                                (refine-selector path/selector))]))
       #f))
 
 (define (request->url req)
