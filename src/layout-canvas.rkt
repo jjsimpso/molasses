@@ -302,6 +302,27 @@
          (if (>= (+ (element-ypos e) (unbox h)) top)
              #t
              #f)]))
+
+    (define (scan-for-visible-elements-after-tail! cursor top bottom)
+      ;; look up to ten elements after tail for any more visible elements (with intervening non-visible elements)
+      (define advance-count
+        (let loop ([i 1]
+                   [tail (if (dlist-tail cursor)
+                             (dlink-next (dlist-tail cursor))
+                             #f)]
+                   [adv-count 0])
+          (cond
+            [(> i 10) adv-count]
+            [(not tail) adv-count]
+            [else
+             (define e (dlink-value tail))
+             (if (element-visible? e top bottom)
+                 (loop (add1 i) (dlink-next tail) i)
+                 (loop (add1 i) (dlink-next tail) adv-count))])))
+      (when (> advance-count 0)
+        ;(printf "advancing visible-elements tail forward ~a places to find more visible elements~n" advance-count)
+        (for ([i (in-range 0 advance-count)])
+          (dlist-advance-tail! cursor))))
     
     (define/public (set-visible-elements!)
       (define-values (dw dh) (get-drawable-size))
@@ -328,11 +349,8 @@
            (set-dlist-tail! cursor (dlist-head-next cursor))
            (cond
              [(eq? mode 'layout)
-              (define head-bottom (+ (element-ypos (dlist-head-value cursor)) (get-element-height layout-ctx (dlist-head-value cursor))))
-              (dlist-advance-tail-while! cursor
-                                         (lambda (e) (or (element-visible? e top bottom)
-                                                         (< (element-ypos e) head-bottom)))
-                                         #:stop-before-false? #t)]
+              (dlist-advance-tail-while! cursor (lambda (e) (element-visible? e top bottom)) #:stop-before-false? #t)
+              (scan-for-visible-elements-after-tail! cursor top bottom)]
              [else
               (dlist-advance-tail-while! cursor (lambda (e) (element-visible? e top bottom)) #:stop-before-false? #t)])
            (set! visible-elements cursor)
@@ -341,6 +359,8 @@
     (define (adjust-visible-elements-forward! cursor top bottom)
       ;; advance the tail to last visible element
       (dlist-advance-tail-while! cursor (lambda (e) (element-visible? e top bottom)) #:stop-before-false? #t)
+      (when (eq? mode 'layout)
+        (scan-for-visible-elements-after-tail! cursor top bottom))
       ;; advance the head while it isn't visible
       (dlist-advance-head-while! cursor (lambda (e) (not (element-visible? e top bottom))))
       void)
@@ -837,6 +857,8 @@
               (define-values (x y) (values (+ (- (element-xpos e) left) xmargin)
                                            (+ (- (element-ypos e) top) ymargin)))
               (send (element-snip e) update-cell-coords x y))
+
+            ;(printf "drawing from ~a to ~a~n" draw-top draw-bottom)
             
             ;; only draw visible elements
             (for ([e (in-dlist visible-elements)]
