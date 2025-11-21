@@ -10,6 +10,7 @@
 (require "html.rkt")
 (require "dlist.rkt")
 (require "layout-canvas.rkt")
+(require "ecma.rkt")
 
 (provide browser-canvas%
          menu-item-snip%
@@ -75,7 +76,7 @@
            (send canvas append-string "       " #f #f)  ; indent information text to line up with menu items
            (if (= (string-length (gopher-dir-entity-user-name dir-entity)) 0)
                (send canvas append-string "\n")
-               (send canvas append-string (gopher-dir-entity-user-name dir-entity)))]
+               (send canvas append-string (ecma-csi-remove (gopher-dir-entity-user-name dir-entity))))]
           [else
            (insert-menu-item canvas dir-entity)]))
       ;; be permissive of blank lines
