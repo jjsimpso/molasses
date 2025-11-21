@@ -35,14 +35,6 @@
               (send (send address-field get-editor) select-all)]
              [(and ctrl? (eq? key-code #\t))
               (new-tab tab-panel)]
-             [(and ctrl? (eq? key-code #\=))
-              (define canvas (active-page-canvas tab-panel))
-              (when canvas
-                (change-canvas-font-size canvas 1))]
-             [(and ctrl? (eq? key-code #\-))
-              (define canvas (active-page-canvas tab-panel))
-              (when canvas
-                (change-canvas-font-size canvas -1))]
              [(and meta? (eq? key-code #\=))
               (define canvas (active-page-canvas tab-panel))
               (when canvas
@@ -217,6 +209,8 @@
   (new menu-item%
        (label "Increase Font Size")
        (parent tab-menu)
+       (shortcut #\=)
+       (shortcut-prefix '(ctl))
        (callback 
         (lambda (item event)
           (define canvas (active-page-canvas tab-panel))
@@ -226,6 +220,8 @@
   (new menu-item%
        (label "Decrease Font Size")
        (parent tab-menu)
+       (shortcut #\-)
+       (shortcut-prefix '(ctl))
        (callback 
         (lambda (item event)
           (define canvas (active-page-canvas tab-panel))
