@@ -155,6 +155,8 @@
   (new menu-item%
        (label "Copy")
        (parent edit-menu)
+       (shortcut #\C)
+       (shortcut-prefix '(ctl))
        (callback 
         (lambda (item event)
           (define o (find-item-editor item))
@@ -169,6 +171,8 @@
              (enable (and o (send o can-do-edit-operation? 'paste))))))
        (label "Paste")
        (parent edit-menu)
+       (shortcut #\V)
+       (shortcut-prefix '(ctl))
        (callback 
         (lambda (item event)
           (define o (find-item-editor item))
@@ -178,6 +182,8 @@
   (new menu-item%
        (label "Select All")
        (parent edit-menu)
+       (shortcut #\A)
+       (shortcut-prefix '(ctl))
        (callback 
         (lambda (item event)
           (define o (find-item-editor item))
