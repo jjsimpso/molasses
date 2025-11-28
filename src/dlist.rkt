@@ -288,7 +288,7 @@
       #f))
 
 ;; advances the head pointer to the next link if it exists
-;; returns void or #f if head didn't change
+;; returns the new head or #f if head didn't change
 (define (dlist-advance-head! dl)
   (cond
     [(and (dlist-head dl) (dlink-next (dlist-head dl)))

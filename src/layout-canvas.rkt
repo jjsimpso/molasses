@@ -1,6 +1,7 @@
 #lang racket/gui
 
-(require "dlist.rkt"
+(require racket/treelist
+         "dlist.rkt"
          "gopher.rkt"
          "config.rkt"
          "memoize.rkt"
@@ -127,6 +128,9 @@
     (define mouse-selection-start #f) 
     (define mouse-selection-end #f) ; false or a pair holding x,y coordinates in virtual canvas coordinates
 
+    ;; a treelist of selections holding the results of a "find in page" text search
+    (define find-in-page-selections (treelist))
+    
     (define (selection-equal? s1 s2)
       (or (and (false? s1) (false? s2))
           (and s1 s2
@@ -887,7 +891,8 @@
             (send canvas-dc draw-bitmap (send offscreen-dc get-bitmap) 0 0)
             
             ;; draw mouse selection directly onto canvas
-            (draw-highlight mouse-selection canvas-dc))
+            (draw-highlight mouse-selection canvas-dc)
+            (draw-find-results canvas-dc top bottom))
           (lambda ()
             (send canvas-dc resume-flush)
             (semaphore-post edit-lock)
@@ -1401,6 +1406,93 @@
                (cons (string-append (element-snip e) (if (element-end-of-line e) "\n" ""))
                      s)]))))
 
+    ;; needle is a byte string
+    (define/public (search-text needle-string)
+      (define needle (string->bytes/utf-8 needle-string))
+      (define (new-find-selection cursor start end)
+        (selection (dlist (dlist-head cursor) #f) start end #f))
+      
+      (define (make-skip-table-horspool phrase)
+        (define phrase-length (bytes-length phrase))
+        (define skip-table (make-vector 256 phrase-length))
+        
+        (for ([i (in-range 0 (- phrase-length 1))]
+              [ch phrase])
+          (vector-set! skip-table ch (- phrase-length i 1)))
+        
+        skip-table)
+
+      (define skip-table (make-skip-table-horspool needle))
+      (define needle-length (bytes-length needle))
+
+      ;; run boyer-moore-horspool string search
+      ;; return treelist of selection structs representing matches
+      (define (find-in-element cursor)
+        (define e (dlist-head-value cursor))
+        (define haystack (string->bytes/utf-8 (element-snip e)))
+        (define stop-pos (bytes-length haystack))
+        (let loop ([pos (- needle-length 1)]
+                   [hits (treelist)])
+          (cond
+            [(>= pos stop-pos) hits]
+            [else
+             (define b (bytes-ref haystack pos))
+             (define skip (vector-ref skip-table b))
+             (cond
+               [(>= pos stop-pos) hits]
+               [(not (= b (bytes-ref needle (- needle-length 1)))) 
+                (loop (+ pos skip) hits)]
+               [else
+                (let loop-match ([i (sub1 pos)]
+                                 [needle-index (- needle-length 2)])
+                  (cond
+                    [(not (= (bytes-ref haystack i)
+                             (bytes-ref needle needle-index)))
+                     (loop (+ pos skip) hits)]
+                    [(= needle-index 0)
+                     (loop (+ pos skip)
+                           (treelist-add hits (new-find-selection cursor i (+ i needle-length))))]
+                    [else
+                     (loop-match (sub1 i) (sub1 needle-index))]))])])))
+
+      (define results
+        (let loop ([cursor (dlist-cursor elements)]
+                   [matches (treelist)])
+          (define e (dlist-head-value cursor))
+          (cond
+            [(false? e) matches]
+            [(highlightable-element? e)
+             (define hits (find-in-element cursor))
+             (if (dlist-advance-head! cursor)
+                 (loop cursor (if (treelist-empty? hits) matches (treelist-append hits matches)))
+                 (if (treelist-empty? hits) matches (treelist-append hits matches)))
+             #;(if (empty? hits)
+                 (loop cursor matches)
+                 (loop cursor (append hits matches)))]
+            [else
+             (if (dlist-advance-head! cursor)
+                 (loop cursor matches)
+                 matches)])))
+
+      (set! find-in-page-selections results)
+      void)
+
+    (define (draw-find-results dc top bottom)
+      (for ([sel (in-treelist find-in-page-selections)])
+        (define elements (selection-elements sel))
+        (define head-element (dlist-head-value elements))
+        (cond
+          [(eq? head-element (dlist-tail-value elements))
+           ; only one element in selection
+           (when (and (< (element-ypos head-element) bottom)
+                      (>= (+ (element-ypos head-element) (get-element-height layout-ctx head-element)) top))
+             (draw-highlight sel dc))]
+          [else
+           (define tail-element (dlist-tail-value elements))
+           (when (and (< (element-ypos head-element) bottom)
+                      (>= (+ (element-ypos tail-element) (get-element-height layout-ctx tail-element)) top))
+             (draw-highlight sel dc))])))
+    
     (define/public (redo-layout)
       (unless (dlist-empty? elements)
         ; invalidate snip size caches in case the style was changed
@@ -1904,9 +1996,12 @@
         (send canvas append-string "text ending with just carriage return\n")
         (send canvas append-string "text ending with carriage return + new line\r\n")
         (send canvas append-string "text ending with just new line\n")
+        (send canvas append-string "text1" #f #f)
+        (send canvas append-string "text2\n")
         (add-gopher-menu canvas)
         (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
-          (send canvas append-string (port->string (gopher-response-data-port response))))))
+          (send canvas append-string (port->string (gopher-response-data-port response))))
+        (send canvas search-text "he")))
 
   (send canvas end-edit-sequence)  
   (printf "append finished~n"))
