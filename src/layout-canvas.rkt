@@ -1408,7 +1408,6 @@
 
     ;; needle is a byte string
     (define/public (find-in-canvas needle-string)
-      (define needle (string->bytes/utf-8 needle-string))
       (define (new-find-selection cursor start end)
         (selection (dlist (dlist-head cursor) #f) start end #f))
       
@@ -1422,12 +1421,9 @@
         
         skip-table)
 
-      (define skip-table (make-skip-table-horspool needle))
-      (define needle-length (bytes-length needle))
-
       ;; run boyer-moore-horspool string search
       ;; return dlist of selection structs representing matches
-      (define (find-in-element cursor)
+      (define (find-in-element cursor skip-table)
         (define e (dlist-head-value cursor))
         (define haystack (string->bytes/utf-8 (element-snip e)))
         (define stop-pos (bytes-length haystack))
@@ -1455,25 +1451,30 @@
                     [else
                      (loop-match (sub1 i) (sub1 needle-index))]))])])))
 
-      (define results
-        (let loop ([cursor (dlist-cursor elements)]
-                   [matches (dlist-new)])
-          (define e (dlist-head-value cursor))
-          (cond
-            [(false? e) matches]
-            [(highlightable-element? e)
-             (define hits (find-in-element cursor))
-             (if (dlist-advance-head! cursor)
-                 (loop cursor (if (dlist-empty? hits) matches (dlist-append! hits matches)))
-                 (if (dlist-empty? hits)
-                     matches
-                     (dlist-append! hits matches)))]
-            [else
-             (if (dlist-advance-head! cursor)
-                 (loop cursor matches)
-                 matches)])))
+      (define needle (string->bytes/utf-8 needle-string))
+      (define needle-length (bytes-length needle))
+      (define skip-table (make-skip-table-horspool needle))
 
-      (set! find-in-canvas-selections results)
+      (when (> needle-length 0)
+        (define results
+          (let loop ([cursor (dlist-cursor elements)]
+                     [matches (dlist-new)])
+            (define e (dlist-head-value cursor))
+            (cond
+              [(false? e) matches]
+              [(highlightable-element? e)
+               (define hits (find-in-element cursor skip-table))
+               (if (dlist-advance-head! cursor)
+                   (loop cursor (if (dlist-empty? hits) matches (dlist-append! hits matches)))
+                   (if (dlist-empty? hits)
+                       matches
+                       (dlist-append! hits matches)))]
+              [else
+               (if (dlist-advance-head! cursor)
+                   (loop cursor matches)
+                   matches)])))
+        (set! find-in-canvas-selections results))
+      
       void)
 
     (define/public (find-results-length)
