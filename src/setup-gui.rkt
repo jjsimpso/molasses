@@ -190,6 +190,30 @@
           (when o
             (send o do-edit-operation 'select-all)))))
 
+  (new menu-item%
+       (label "Find in Page")
+       (parent edit-menu)
+       (shortcut #\F)
+       (shortcut-prefix '(ctl))
+       (callback 
+        (lambda (item event)
+          (if (member find-panel (send frame get-children))
+              ; close find ui
+              (let ([canvas (active-page-canvas tab-panel)])
+                (send find-text-field set-value "")
+                (send find-results-msg set-label "0 items found")
+                (send frame delete-child find-panel)
+                (when canvas
+                  (send canvas find-results-clear)
+                  (send canvas focus)))
+              ; open find ui
+              (begin
+                (send frame change-children
+                      (lambda (children)
+                        (define-values (front end) (split-at-right children 1))
+                        (append front (cons find-panel end))))
+                (send find-text-field focus))))))
+
   (new checkable-menu-item%
        (label "Word Wrap")
        (parent tab-menu)
@@ -367,6 +391,48 @@
          (callback tab-panel-callback)
          (choices '())))
 
+  (define find-panel
+    (new horizontal-panel%
+         (parent frame)
+         (style '(deleted))
+         (stretchable-height #f)))
+
+  (define find-text-field
+    (new text-field%
+         (label "Find")
+         (parent find-panel)
+         (stretchable-width #f)
+         (callback
+          (lambda (item event)
+            (case (send event get-event-type)
+              [(text-field-enter)
+               (define canvas (active-page-canvas tab-panel))
+               (when canvas
+                 (printf "searching for ~a~n" (send find-text-field get-value))
+                 (send canvas find-in-canvas (send find-text-field get-value))
+                 (send find-results-msg set-label (format "~a items found" (send canvas find-results-length))))]
+              [(text-field)
+               void])))))
+
+  (define find-results-msg
+    (new message%
+         (label "0 items found")
+         (parent find-panel)
+         (auto-resize #t)
+         (stretchable-width #f)))
+
+  (define find-results-prev
+    (new button%
+         (label "<-")
+         (parent find-panel)
+         (stretchable-width #f)))
+
+  (define find-results-next
+    (new button%
+         (label "->")
+         (parent find-panel)
+         (stretchable-width #f)))
+  
   (define status-bar
     (new horizontal-pane%
          (parent frame)
