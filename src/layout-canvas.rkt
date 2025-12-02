@@ -1,7 +1,6 @@
 #lang racket/gui
 
-(require racket/treelist
-         "dlist.rkt"
+(require "dlist.rkt"
          "gopher.rkt"
          "config.rkt"
          "memoize.rkt"
@@ -128,8 +127,9 @@
     (define mouse-selection-start #f) 
     (define mouse-selection-end #f) ; false or a pair holding x,y coordinates in virtual canvas coordinates
 
-    ;; a treelist of selections holding the results of a "find in page" text search
-    (define find-in-page-selections (treelist))
+    ;; a dlist of selections holding the results of a "find in page" text search
+    (define find-in-canvas-selections (dlist-new))
+    (define find-in-canvas-cur-sel #f)
     
     (define (selection-equal? s1 s2)
       (or (and (false? s1) (false? s2))
@@ -1407,7 +1407,7 @@
                      s)]))))
 
     ;; needle is a byte string
-    (define/public (search-text needle-string)
+    (define/public (find-in-canvas needle-string)
       (define needle (string->bytes/utf-8 needle-string))
       (define (new-find-selection cursor start end)
         (selection (dlist (dlist-head cursor) #f) start end #f))
@@ -1426,13 +1426,13 @@
       (define needle-length (bytes-length needle))
 
       ;; run boyer-moore-horspool string search
-      ;; return treelist of selection structs representing matches
+      ;; return dlist of selection structs representing matches
       (define (find-in-element cursor)
         (define e (dlist-head-value cursor))
         (define haystack (string->bytes/utf-8 (element-snip e)))
         (define stop-pos (bytes-length haystack))
         (let loop ([pos (- needle-length 1)]
-                   [hits (treelist)])
+                   [hits (dlist-new)])
           (cond
             [(>= pos stop-pos) hits]
             [else
@@ -1451,34 +1451,46 @@
                      (loop (+ pos skip) hits)]
                     [(= needle-index 0)
                      (loop (+ pos skip)
-                           (treelist-add hits (new-find-selection cursor i (+ i needle-length))))]
+                           (dlist-add! hits (new-find-selection cursor i (+ i needle-length))))]
                     [else
                      (loop-match (sub1 i) (sub1 needle-index))]))])])))
 
       (define results
         (let loop ([cursor (dlist-cursor elements)]
-                   [matches (treelist)])
+                   [matches (dlist-new)])
           (define e (dlist-head-value cursor))
           (cond
             [(false? e) matches]
             [(highlightable-element? e)
              (define hits (find-in-element cursor))
              (if (dlist-advance-head! cursor)
-                 (loop cursor (if (treelist-empty? hits) matches (treelist-append hits matches)))
-                 (if (treelist-empty? hits) matches (treelist-append hits matches)))
-             #;(if (empty? hits)
-                 (loop cursor matches)
-                 (loop cursor (append hits matches)))]
+                 (loop cursor (if (dlist-empty? hits) matches (dlist-append! hits matches)))
+                 (if (dlist-empty? hits)
+                     matches
+                     (dlist-append! hits matches)))]
             [else
              (if (dlist-advance-head! cursor)
                  (loop cursor matches)
                  matches)])))
 
-      (set! find-in-page-selections results)
+      (set! find-in-canvas-selections results)
       void)
 
+    (define/public (find-results-length)
+      (dlist-length find-in-canvas-selections))
+
+    (define/public (find-results-clear)
+      (set! find-in-canvas-selections (dlist-new))
+      (set! find-in-canvas-cur-sel #f))
+    
+    (define/public (find-results-next)
+      void)
+
+    (define/public (find-results-prev)
+      void)
+    
     (define (draw-find-results dc top bottom)
-      (for ([sel (in-treelist find-in-page-selections)])
+      (for ([sel (in-dlist find-in-canvas-selections)])
         (define elements (selection-elements sel))
         (define head-element (dlist-head-value elements))
         (cond
@@ -1492,7 +1504,7 @@
            (when (and (< (element-ypos head-element) bottom)
                       (>= (+ (element-ypos tail-element) (get-element-height layout-ctx tail-element)) top))
              (draw-highlight sel dc))])))
-    
+
     (define/public (redo-layout)
       (unless (dlist-empty? elements)
         ; invalidate snip size caches in case the style was changed
@@ -1619,7 +1631,7 @@
     ;; add element e to the end of the elements dlist and update visible elements
     (define (append-element e)
       (define-values (dw dh) (get-drawable-size))
-      (dlist-append! elements e)
+      (dlist-add! elements e)
       ; send a positive value for change argument to trigger a check to expand tail of the visible-elements list
       (update-visible-elements! 1 scroll-y (+ scroll-y dh)))
     
@@ -2001,7 +2013,7 @@
         (add-gopher-menu canvas)
         (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
           (send canvas append-string (port->string (gopher-response-data-port response))))
-        (send canvas search-text "he")))
+        (send canvas find-in-canvas "he")))
 
   (send canvas end-edit-sequence)  
   (printf "append finished~n"))

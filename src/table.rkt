@@ -421,14 +421,14 @@
       #;(printf "cell append-snip~n")
       (define e (element s end-of-line alignment properties))
       (initial-place-element e (layout-context-place-x layout-ctx) (layout-context-place-y layout-ctx))
-      (dlist-append! elements e))
+      (dlist-add! elements e))
 
     (define/public (append-string s [style #f] [end-of-line #t] [alignment 'unaligned] [properties '()])
       #;(printf "cell append-string ~a~n" s)
       (define e (element s end-of-line alignment properties))
       (set-element-text-style! e (or style default-style))
       (initial-place-element e (layout-context-place-x layout-ctx) (layout-context-place-y layout-ctx))
-      (dlist-append! elements e))
+      (dlist-add! elements e))
 
     (define (find-last-element [alignments '(unaligned center)])
       ;; the end-of-line flag is only relevant for unaligned or centered elements

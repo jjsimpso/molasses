@@ -661,7 +661,7 @@
 
     (define/override (append-snip s [end-of-line #f] [alignment 'unaligned] [properties '()])
       (when (is-a? s menu-item-snip%)
-        (dlist-append! menu-items s))
+        (dlist-add! menu-items s))
       (super append-snip s end-of-line alignment properties))
 
     (define/override (erase)

@@ -21,9 +21,10 @@
          dlist-head-next
          dlist-tail-prev
          dlist-ref
-         dlist-append!
+         dlist-add!
          dlist-push!
          dlist-pop!
+         dlist-append!
          dlist-length
          dlist->list
          in-dlist
@@ -94,21 +95,25 @@
            #:when (= i index))
     node))
 
-(define (dlist-append! dl value)
+;; add a new value to the end of the dlist and return the dlist
+(define (dlist-add! dl value)
   (define old-tail (dlist-tail dl))
   (cond
     [(and old-tail (dlink-next old-tail))
      ;; prevent appending if tail is not the last element of the dlist
      ;; this could be because dl points to list structure shared by another dlist
-     (raise-argument-error 'dlist-append! "(not (dlink-next (dlist-tail dl)))" dl)]
+     (raise-argument-error 'dlist-add! "(not (dlink-next (dlist-tail dl)))" dl)]
     [old-tail
      (set-dlist-tail! dl (dlink value old-tail #f))
-     (set-dlink-next! old-tail (dlist-tail dl))]
+     (set-dlink-next! old-tail (dlist-tail dl))
+     dl]
     [(dlist-head dl)
      (set-dlist-tail! dl (dlink value (dlist-head dl) #f))
-     (set-dlink-next! (dlist-head dl) (dlist-tail dl))]
+     (set-dlink-next! (dlist-head dl) (dlist-tail dl))
+     dl]
     [else
-     (set-dlist-head! dl (dlink value #f #f))]))
+     (set-dlist-head! dl (dlink value #f #f))
+     dl]))
 
 (define (dlist-push! dl value)
   (define old-head (dlist-head dl))
@@ -151,6 +156,25 @@
   (if old-head
       (dlink-value old-head)
       #f))
+
+;; returns a new dlist, but modifies the link structure of its arguments
+(define (dlist-append! dl1 dl2)
+  (cond
+    [(dlist-empty? dl1) (dlist (dlist-head dl2) (dlist-tail dl2))]
+    [(dlist-empty? dl2) (dlist (dlist-head dl1) (dlist-tail dl2))]
+    [else
+     ; link the two dlists together
+     (set-dlink-prev! (dlist-head dl2) (or (dlist-tail dl1) (dlist-head dl1)))
+     (set-dlink-next! (or (dlist-tail dl1) (dlist-head dl1)) (dlist-head dl2))
+     ; create a new dlist spanning both arguments
+     (dlist (dlist-head dl1) (or (dlist-tail dl2) (dlist-head dl2)))]))
+
+#;(define (dlist-append dl1 dl2)
+  (cond
+    [(dlist-empty? dl1) (dlist (dlist-head dl2) (dlist-tail dl2))]
+    [(dlist-empty? dl2) (dlist (dlist-head dl1) (dlist-tail dl2))]
+    [else
+     void]))
 
 (define (dlist-length dl)
   (define head (dlist-head dl))
@@ -397,17 +421,17 @@
   (define a-dlist (dlist-new))
   (check-equal? (for/list ([v (in-dlist a-dlist)]) v) '())
   (check-equal? (for/list ([v (in-dlist-reverse a-dlist)]) v) '())
-  (dlist-append! a-dlist 3)
+  (dlist-add! a-dlist 3)
   (check-equal? (for/list ([v (in-dlist a-dlist)]) v) '(3))
   (check-equal? (for/list ([v (in-dlist-reverse a-dlist)]) v) '(3))
   (check-equal? (dlink-value (dlist-head a-dlist)) 3)
   (check-equal? (dlist-tail a-dlist) #f)
   (check-equal? (dlist-head-value a-dlist) 3)
   (check-equal? (dlist-tail-value a-dlist) 3)
-  (dlist-append! a-dlist 4)
+  (dlist-add! a-dlist 4)
   (check-equal? (dlink-value (dlist-head a-dlist)) 3)
   (check-equal? (dlink-value (dlist-tail a-dlist)) 4)
-  (dlist-append! a-dlist 5)
+  (dlist-add! a-dlist 5)
   (dlist-push! a-dlist 2)
   (check-equal? (dlink-value (dlist-head a-dlist)) 2)
   (dlist-push! a-dlist 1)
@@ -455,7 +479,7 @@
   (check-equal? (for/list ([v (in-dlist cursor)]) v) '(1 2 3 4))
   (check-equal? 
    (with-handlers [(exn:fail:contract? (lambda (e) #t))]
-     (dlist-append! cursor 6))
+     (dlist-add! cursor 6))
    #t)
   (check-equal? (dlist->list cursor) '(1 2 3 4))
   (check-equal? (for/list ([v (in-dlist cursor)]) v) '(1 2 3 4))
@@ -545,4 +569,33 @@
 
   (dlist-push! a-dlist 'b)
   (check-equal? (dlist->list a-dlist) '(b a))
+
+
+  ; test appending two dlists
+  (define dl1 (dlist-new))
+  (define dl2 (dlist-new))
+  (check-equal? (dlist-append! dl1 dl2) (dlist-new))
+  (check-equal? (dlist-append! dl1 dl2) dl1)
+  (dlist-add! dl1 1)
+  (check-equal? (dlist->list (dlist-append! dl1 dl2)) '(1))
+  (dlist-add! dl2 'a)
+  (check-equal? (dlist->list (dlist-append! dl1 dl2)) '(1 a))
+  (check-equal? (dlist->list dl1) '(1))
+  (check-equal? (dlist->list dl2) '(a))
+  (dlist-add! dl1 2)
+  (check-equal? (dlist->list (dlist-append! dl1 dl2)) '(1 2 a))
+  (check-equal? (dlist->list dl1) '(1 2))
+  (check-equal? (dlist->list dl2) '(a))
+  (dlist-add! dl2 'b)
+  (check-equal? (dlist->list (dlist-append! dl1 dl2)) '(1 2 a b))
+  (check-equal? (dlist->list dl1) '(1 2))
+  (check-equal? (dlist->list dl2) '(a b))
+  (dlist-pop! dl1)
+  (check-equal? (dlist->list (dlist-append! dl1 dl2)) '(2 a b))
+  (check-equal? (dlist->list dl1) '(2))
+  (check-equal? (dlist->list dl2) '(a b))
+  ; this breaks due to shared structure
+  ;(dlist-pop! dl1)
+  ;(check-equal? (dlist->list dl1) '())
+
   a-dlist)
