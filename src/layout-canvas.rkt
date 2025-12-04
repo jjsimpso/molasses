@@ -928,7 +928,7 @@
       (define-values (right bottom) (values (+ left dw) (+ top dh)))
 
       (define-values (w h) (get-size))
-      ;(printf "on-size client=~ax~a(was ~ax~a) window=~ax~a canvas=~ax~a~n" cw ch cached-client-width cached-client-height w h dw dh)
+      (printf "on-size client=~ax~a(was ~ax~a) window=~ax~a canvas=~ax~a~n" cw ch cached-client-width cached-client-height w h dw dh)
 
       (when (not visible-elements)
         (set-visible-elements!))
@@ -1465,10 +1465,10 @@
               [(highlightable-element? e)
                (define hits (find-in-element cursor skip-table))
                (if (dlist-advance-head! cursor)
-                   (loop cursor (if (dlist-empty? hits) matches (dlist-append! hits matches)))
+                   (loop cursor (if (dlist-empty? hits) matches (dlist-append! matches hits)))
                    (if (dlist-empty? hits)
                        matches
-                       (dlist-append! hits matches)))]
+                       (dlist-append! matches hits)))]
               [else
                (if (dlist-advance-head! cursor)
                    (loop cursor matches)
@@ -1483,12 +1483,45 @@
     (define/public (find-results-clear)
       (set! find-in-canvas-selections (dlist-new))
       (set! find-in-canvas-cur-sel #f))
-    
+
+    ;; returns #t if current find selection changed
     (define/public (find-results-next)
-      void)
+      (define (scroll-to-next-result)
+        (define e (dlist-head-value (selection-elements (dlink-value find-in-canvas-cur-sel))))
+        (define-values (dw dh) (get-drawable-size))
+        (define-values (_ top) (get-view-start))
+        (define bottom (+ top dh))
+        (unless (element-visible? e top bottom)
+          (scroll-to (get-element-y e))))
+      
+      (cond
+        [(and find-in-canvas-cur-sel (dlink-next find-in-canvas-cur-sel))
+         (set! find-in-canvas-cur-sel (dlink-next find-in-canvas-cur-sel))
+         (scroll-to-next-result)
+         #t]
+        [(and (false? find-in-canvas-cur-sel) (not (dlist-empty? find-in-canvas-selections)))
+         (set! find-in-canvas-cur-sel (dlist-head find-in-canvas-selections))
+         (scroll-to-next-result)
+         #t]
+        [else
+         #f]))
 
     (define/public (find-results-prev)
-      void)
+      (define (scroll-to-prev-result)
+        (define e (dlist-head-value (selection-elements (dlink-value find-in-canvas-cur-sel))))
+        (define-values (dw dh) (get-drawable-size))
+        (define-values (_ top) (get-view-start))
+        (define bottom (+ top dh))
+        (unless (element-visible? e top bottom)
+          (scroll-to (get-element-y e))))
+      
+      (cond
+        [(and find-in-canvas-cur-sel (dlink-prev find-in-canvas-cur-sel))
+         (set! find-in-canvas-cur-sel (dlink-prev find-in-canvas-cur-sel))
+         (scroll-to-prev-result)
+         #t]
+        [else
+         #f]))
     
     (define (draw-find-results dc top bottom)
       (for ([sel (in-dlist find-in-canvas-selections)])

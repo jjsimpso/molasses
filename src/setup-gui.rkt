@@ -203,6 +203,8 @@
                 (send find-text-field set-value "")
                 (send find-results-msg set-label "0 items found")
                 (send frame delete-child find-panel)
+                (set! find-results-number 0)
+                (set! find-results-index 0)
                 (when canvas
                   (send canvas find-results-clear)
                   (send canvas focus)))
@@ -391,6 +393,9 @@
          (callback tab-panel-callback)
          (choices '())))
 
+  (define find-results-number 0)
+  (define find-results-index 0)
+  
   (define find-panel
     (new horizontal-panel%
          (parent frame)
@@ -410,7 +415,12 @@
                (when canvas
                  (printf "searching for ~a~n" (send find-text-field get-value))
                  (send canvas find-in-canvas (send find-text-field get-value))
-                 (send find-results-msg set-label (format "~a items found" (send canvas find-results-length))))]
+                 (set! find-results-number (send canvas find-results-length))
+                 (set! find-results-index 0)
+                 (send canvas refresh)
+                 (if (> find-results-number 0)
+                     (send find-results-msg set-label (format "0 of ~a items found" find-results-number))
+                     (send find-results-msg set-label (format "0 items found"))))]
               [(text-field)
                void])))))
 
@@ -425,13 +435,27 @@
     (new button%
          (label "<-")
          (parent find-panel)
-         (stretchable-width #f)))
+         (stretchable-width #f)
+         (callback
+          (lambda (item event)
+            (define canvas (active-page-canvas tab-panel))
+            (when canvas
+              (when (send canvas find-results-prev)
+                (set! find-results-index (sub1 find-results-index))
+                (send find-results-msg set-label (format "~a of ~a items found" find-results-index find-results-number))))))))
 
   (define find-results-next
     (new button%
          (label "->")
          (parent find-panel)
-         (stretchable-width #f)))
+         (stretchable-width #f)
+         (callback
+          (lambda (item event)
+            (define canvas (active-page-canvas tab-panel))
+            (when canvas
+              (when (send canvas find-results-next)
+                (set! find-results-index (add1 find-results-index))
+                (send find-results-msg set-label (format "~a of ~a items found" find-results-index find-results-number))))))))
   
   (define status-bar
     (new horizontal-pane%
