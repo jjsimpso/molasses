@@ -129,7 +129,13 @@
 
     ;; a dlist of selections holding the results of a "find in page" text search
     (define find-in-canvas-selections (dlist-new))
-    (define find-in-canvas-cur-sel #f)
+    ; points to the dlink of the currently highlighted find result
+    (define find-in-canvas-cur-dlink #f)
+
+    (define (find-in-canvas-cur-sel)
+      (if find-in-canvas-cur-dlink
+          (dlink-value find-in-canvas-cur-dlink)
+          #f))
     
     (define (selection-equal? s1 s2)
       (or (and (false? s1) (false? s2))
@@ -227,15 +233,17 @@
                    (- cw xmargin) (- ch ymargin)
                    0 0))]))
 
-    (define (make-highlight-style from-style)
+    (define (make-highlight-style from-style toggle-underline)
       (define highlight-bg-color (send from-style get-foreground))
       (define highlight-fg-color (send from-style get-background))
       (define highlight-delta (send* (make-object style-delta%)
                                 (set-delta-foreground highlight-fg-color)
                                 (set-delta-background highlight-bg-color)))
+      (when toggle-underline
+        (send highlight-delta set-delta 'change-toggle-underline))
       (send styles find-or-create-style from-style highlight-delta))
 
-    (define make-highlight-style-cached (memoize make-highlight-style make-hasheq))
+    (define make-highlight-style-cached (memoize-2args make-highlight-style make-hasheq))
     
     (define (draw-highlight highlight-selection dc)
       (when highlight-selection
@@ -249,7 +257,8 @@
         (for ([e (in-dlist sel-elements)]
               #:when (and (highlightable-element? e)
                           (element-visible? e top bottom)))
-          (define highlight-style (make-highlight-style-cached (get-style e)))
+          (define highlight-style
+            (make-highlight-style-cached (get-style e) (eq? highlight-selection (find-in-canvas-cur-sel))))
           (when (not (eq? highlight-style current-style))
             (set! current-style highlight-style)
             (send current-style switch-to dc #f))
@@ -1482,12 +1491,12 @@
 
     (define/public (find-results-clear)
       (set! find-in-canvas-selections (dlist-new))
-      (set! find-in-canvas-cur-sel #f))
+      (set! find-in-canvas-cur-dlink #f))
 
     ;; returns #t if current find selection changed
     (define/public (find-results-next)
       (define (scroll-to-next-result)
-        (define e (dlist-head-value (selection-elements (dlink-value find-in-canvas-cur-sel))))
+        (define e (dlist-head-value (selection-elements (dlink-value find-in-canvas-cur-dlink))))
         (define-values (dw dh) (get-drawable-size))
         (define-values (_ top) (get-view-start))
         (define bottom (+ top dh))
@@ -1495,12 +1504,12 @@
           (scroll-to (get-element-y e))))
       
       (cond
-        [(and find-in-canvas-cur-sel (dlink-next find-in-canvas-cur-sel))
-         (set! find-in-canvas-cur-sel (dlink-next find-in-canvas-cur-sel))
+        [(and find-in-canvas-cur-dlink (dlink-next find-in-canvas-cur-dlink))
+         (set! find-in-canvas-cur-dlink (dlink-next find-in-canvas-cur-dlink))
          (scroll-to-next-result)
          #t]
-        [(and (false? find-in-canvas-cur-sel) (not (dlist-empty? find-in-canvas-selections)))
-         (set! find-in-canvas-cur-sel (dlist-head find-in-canvas-selections))
+        [(and (false? find-in-canvas-cur-dlink) (not (dlist-empty? find-in-canvas-selections)))
+         (set! find-in-canvas-cur-dlink (dlist-head find-in-canvas-selections))
          (scroll-to-next-result)
          #t]
         [else
@@ -1508,7 +1517,7 @@
 
     (define/public (find-results-prev)
       (define (scroll-to-prev-result)
-        (define e (dlist-head-value (selection-elements (dlink-value find-in-canvas-cur-sel))))
+        (define e (dlist-head-value (selection-elements (dlink-value find-in-canvas-cur-dlink))))
         (define-values (dw dh) (get-drawable-size))
         (define-values (_ top) (get-view-start))
         (define bottom (+ top dh))
@@ -1516,8 +1525,8 @@
           (scroll-to (get-element-y e))))
       
       (cond
-        [(and find-in-canvas-cur-sel (dlink-prev find-in-canvas-cur-sel))
-         (set! find-in-canvas-cur-sel (dlink-prev find-in-canvas-cur-sel))
+        [(and find-in-canvas-cur-dlink (dlink-prev find-in-canvas-cur-dlink))
+         (set! find-in-canvas-cur-dlink (dlink-prev find-in-canvas-cur-dlink))
          (scroll-to-prev-result)
          #t]
         [else
