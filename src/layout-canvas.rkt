@@ -1421,38 +1421,38 @@
         (selection (dlist (dlist-head cursor) #f) start end #f))
       
       (define (make-skip-table-horspool phrase)
-        (define phrase-length (bytes-length phrase))
-        (define skip-table (make-vector 256 phrase-length))
+        (define phrase-length (string-length phrase))
+        (define skip-table (make-hasheqv))
         
         (for ([i (in-range 0 (- phrase-length 1))]
               [ch phrase])
-          (vector-set! skip-table ch (- phrase-length i 1)))
+          (hash-set! skip-table ch (- phrase-length i 1)))
         
         skip-table)
 
       ;; run boyer-moore-horspool string search
       ;; return dlist of selection structs representing matches
-      (define (find-in-element cursor skip-table)
+      (define (find-in-element cursor skip-table needle needle-length)
         (define e (dlist-head-value cursor))
-        (define haystack (string->bytes/utf-8 (element-snip e)))
-        (define stop-pos (bytes-length haystack))
+        (define haystack (element-snip e))
+        (define stop-pos (string-length haystack))
         (let loop ([pos (- needle-length 1)]
                    [hits (dlist-new)])
           (cond
             [(>= pos stop-pos) hits]
             [else
-             (define b (bytes-ref haystack pos))
-             (define skip (vector-ref skip-table b))
+             (define ch (string-ref haystack pos))
+             (define skip (hash-ref skip-table ch needle-length))
              (cond
                [(>= pos stop-pos) hits]
-               [(not (= b (bytes-ref needle (- needle-length 1)))) 
+               [(not (char=? ch (string-ref needle (- needle-length 1)))) 
                 (loop (+ pos skip) hits)]
                [else
                 (let loop-match ([i (sub1 pos)]
                                  [needle-index (- needle-length 2)])
                   (cond
-                    [(not (= (bytes-ref haystack i)
-                             (bytes-ref needle needle-index)))
+                    [(not (char=? (string-ref haystack i)
+                                  (string-ref needle needle-index)))
                      (loop (+ pos skip) hits)]
                     [(= needle-index 0)
                      (loop (+ pos skip)
@@ -1460,8 +1460,8 @@
                     [else
                      (loop-match (sub1 i) (sub1 needle-index))]))])])))
 
-      (define needle (string->bytes/utf-8 needle-string))
-      (define needle-length (bytes-length needle))
+      (define needle needle-string)
+      (define needle-length (string-length needle))
       (define skip-table (make-skip-table-horspool needle))
 
       (when (> needle-length 0)
@@ -1472,7 +1472,7 @@
             (cond
               [(false? e) matches]
               [(highlightable-element? e)
-               (define hits (find-in-element cursor skip-table))
+               (define hits (find-in-element cursor skip-table needle needle-length))
                (if (dlist-advance-head! cursor)
                    (loop cursor (if (dlist-empty? hits) matches (dlist-append! matches hits)))
                    (if (dlist-empty? hits)
