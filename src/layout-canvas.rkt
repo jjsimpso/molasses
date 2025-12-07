@@ -1416,7 +1416,7 @@
                      s)]))))
 
     ;; needle is a byte string
-    (define/public (find-in-canvas needle-string)
+    (define/public (find-in-canvas needle-string [match-case #f])
       (define (new-find-selection cursor start end)
         (selection (dlist (dlist-head cursor) #f) start end #f))
       
@@ -1430,11 +1430,16 @@
         
         skip-table)
 
+      ;(define compare? (if match-case char=? char-ci=?))
+      
       ;; run boyer-moore-horspool string search
       ;; return dlist of selection structs representing matches
       (define (find-in-element cursor skip-table needle needle-length)
         (define e (dlist-head-value cursor))
-        (define haystack (element-snip e))
+        (define haystack
+          (if match-case
+              (element-snip e)
+              (string-foldcase (element-snip e))))
         (define stop-pos (string-length haystack))
         (let loop ([pos (- needle-length 1)]
                    [hits (dlist-new)])
@@ -1460,7 +1465,10 @@
                     [else
                      (loop-match (sub1 i) (sub1 needle-index))]))])])))
 
-      (define needle needle-string)
+      (define needle
+        (if match-case
+            needle-string
+            (string-foldcase needle-string)))
       (define needle-length (string-length needle))
       (define skip-table (make-skip-table-horspool needle))
 

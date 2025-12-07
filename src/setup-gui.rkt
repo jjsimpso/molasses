@@ -405,6 +405,23 @@
          (style '(deleted))
          (stretchable-height #f)))
 
+  (define (find-text-callback item event)
+    (case (send event get-event-type)
+      [(text-field-enter)
+       (define canvas (active-page-canvas tab-panel))
+       (when canvas
+         (printf "searching for ~a~n" (send find-text-field get-value))
+         (send canvas find-results-clear)
+         (send canvas find-in-canvas (send find-text-field get-value) (send find-case-checkbox get-value))
+         (set! find-results-number (send canvas find-results-length))
+         (set! find-results-index 0)
+         (send canvas refresh)
+         (if (> find-results-number 0)
+             (send find-results-msg set-label (format "0 of ~a items found" find-results-number))
+             (send find-results-msg set-label (format "0 items found"))))]
+      [(text-field)
+       void]))
+  
   (define find-text-field
     (new text-field%
          (label "Find")
@@ -412,20 +429,7 @@
          (stretchable-width #f)
          (callback
           (lambda (item event)
-            (case (send event get-event-type)
-              [(text-field-enter)
-               (define canvas (active-page-canvas tab-panel))
-               (when canvas
-                 (printf "searching for ~a~n" (send find-text-field get-value))
-                 (send canvas find-in-canvas (send find-text-field get-value))
-                 (set! find-results-number (send canvas find-results-length))
-                 (set! find-results-index 0)
-                 (send canvas refresh)
-                 (if (> find-results-number 0)
-                     (send find-results-msg set-label (format "0 of ~a items found" find-results-number))
-                     (send find-results-msg set-label (format "0 items found"))))]
-              [(text-field)
-               void])))))
+            (find-text-callback item event)))))
 
   (define find-results-prev
     (new button%
@@ -467,6 +471,14 @@
          (parent find-panel)
          (alignment '(right center))
          (stretchable-width #t)))
+
+  (define find-case-checkbox
+    (new check-box%
+         (label "Match case")
+         (parent find-panel-right-pane)
+         (callback
+          (lambda (item event)
+            (find-text-callback find-text-field (new control-event% (event-type 'text-field-enter)))))))
   
   (define find-panel-close-button
     (new button%
