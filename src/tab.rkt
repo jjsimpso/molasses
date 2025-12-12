@@ -2,9 +2,10 @@
 
 (require racket/serialize)
 
-(require "widgets.rkt")
-(require "config.rkt")
-(require "request.rkt")
+(require "widgets.rkt"
+         "config.rkt"
+         "request.rkt"
+         "find-panel.rkt")
 
 (provide init-new-tab
          active-page-canvas
@@ -18,6 +19,8 @@
          update-tab-order
          open-help-tab
          find-tp-address-field
+         find-tp-find-panel
+         unhide-find-panel
          save-tabs
          load-tabs
          get-all-tab-canvases)
@@ -26,7 +29,8 @@
 (struct tab-info
   (id
    index
-   contents)
+   contents
+   find-panel)
   #:prefab
   #:mutable)
 
@@ -123,6 +127,9 @@
          (horiz-margin 0)
          (callback
           (lambda (item event)
+            (define fpanel (tab-info-find-panel (find-tab-with-id tab-id)))
+            (when (and fpanel (send fpanel visible?))
+              (send fpanel close))
             (send page-canvas go-back)
             ;; set the focus back to the canvas
             (send page-canvas focus)))))
@@ -166,6 +173,13 @@
          (smooth-scrolling canvas-smooth-scrolling)
          (wheel-step 10)))
 
+  (define find-panel
+    (new find-panel%
+         (parent tab-contents)
+         (find-canvas page-canvas)
+         (style '(deleted))
+         (stretchable-height #f)))
+  
   (init-styles (send page-canvas get-style-list))
   ;; init to gopher/gemini styles
   (send page-canvas set-default-style "Standard")
@@ -178,7 +192,7 @@
   (send address-field focus)
   
   (set! tab-list
-        (cons (tab-info tab-id index tab-contents)
+        (cons (tab-info tab-id index tab-contents find-panel)
               tab-list)))
 
 (define (active-page-canvas tp)
@@ -333,6 +347,25 @@ END
       (for/first ([grandchild (in-list (send child get-children))]
                   #:when (is-a? grandchild text-field%))
         grandchild))))
+
+(define (find-tp-find-panel tp)
+  (define tab (find-tab-at-index (send tp get-selection)))
+  (when tab
+    (define children (send (tab-info-contents tab) get-children))
+    (for/first ([child (in-list children)]
+                #:when (is-a? child find-panel%))
+      child)))
+
+(define (unhide-find-panel tp)
+  (define tab (find-tab-at-index (send tp get-selection)))
+  (when tab
+    (define find-panel (tab-info-find-panel tab))
+    (define tab-contents (tab-info-contents tab))
+    (send tab-contents change-children
+          (lambda (children)
+            ;(define-values (front end) (split-at-right children 1))
+            (append children (list find-panel))))
+    (send find-panel focus)))
 
 ;; returns the tab at index's canvas widget or #f
 (define (find-tab-canvas index)

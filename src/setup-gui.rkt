@@ -197,16 +197,10 @@
        (shortcut-prefix '(ctl))
        (callback 
         (lambda (item event)
-          (if (member find-panel (send frame get-children))
-              ; close find ui
-              (find-panel-close)
-              ; open find ui
-              (begin
-                (send frame change-children
-                      (lambda (children)
-                        (define-values (front end) (split-at-right children 1))
-                        (append front (cons find-panel end))))
-                (send find-text-field focus))))))
+          (define fpanel (find-tp-find-panel tab-panel))
+          (if fpanel
+              (send fpanel close)
+              (unhide-find-panel tab-panel)))))
 
   (new checkable-menu-item%
        (label "Word Wrap")
@@ -384,110 +378,6 @@
          (style '(flat-portable no-border new-button can-close can-reorder))
          (callback tab-panel-callback)
          (choices '())))
-
-  (define find-results-number 0)
-  (define find-results-index 0)
-
-  (define (find-panel-close)
-    (define canvas (active-page-canvas tab-panel))
-    (send find-text-field set-value "")
-    (send find-results-msg set-label "0 items found")
-    (send frame delete-child find-panel)
-    (set! find-results-number 0)
-    (set! find-results-index 0)
-    (when canvas
-      (send canvas find-results-clear)
-      (send canvas focus)))
-
-  (define find-panel
-    (new horizontal-panel%
-         (parent frame)
-         (style '(deleted))
-         (stretchable-height #f)))
-
-  (define (find-text-callback item event)
-    (case (send event get-event-type)
-      [(text-field-enter)
-       (define canvas (active-page-canvas tab-panel))
-       (when canvas
-         (printf "searching for ~a~n" (send find-text-field get-value))
-         (send canvas find-results-clear)
-         (send canvas find-in-canvas (send find-text-field get-value) (send find-case-checkbox get-value))
-         (set! find-results-number (send canvas find-results-length))
-         (set! find-results-index 0)
-         (send canvas refresh)
-         (if (> find-results-number 0)
-             (send find-results-msg set-label (format "0 of ~a items found" find-results-number))
-             (send find-results-msg set-label (format "0 items found"))))]
-      [(text-field)
-       void]))
-  
-  (define find-text-field
-    (new text-field%
-         (label "Find")
-         (parent find-panel)
-         (stretchable-width #f)
-         (callback
-          (lambda (item event)
-            (find-text-callback item event)))))
-
-  (define find-results-prev
-    (new button%
-         (label "<-")
-         (parent find-panel)
-         (stretchable-width #f)
-         (callback
-          (lambda (item event)
-            (define canvas (active-page-canvas tab-panel))
-            (when canvas
-              (when (send canvas find-results-prev)
-                (send canvas refresh)
-                (set! find-results-index (sub1 find-results-index))
-                (send find-results-msg set-label (format "~a of ~a items found" find-results-index find-results-number))))))))
-
-  (define find-results-next
-    (new button%
-         (label "->")
-         (parent find-panel)
-         (stretchable-width #f)
-         (callback
-          (lambda (item event)
-            (define canvas (active-page-canvas tab-panel))
-            (when canvas
-              (when (send canvas find-results-next)
-                (send canvas refresh)
-                (set! find-results-index (add1 find-results-index))
-                (send find-results-msg set-label (format "~a of ~a items found" find-results-index find-results-number))))))))
-
-  (define find-results-msg
-    (new message%
-         (label "0 items found")
-         (parent find-panel)
-         (auto-resize #t)
-         (stretchable-width #f)))
-
-  (define find-panel-right-pane
-    (new horizontal-pane%
-         (parent find-panel)
-         (alignment '(right center))
-         (stretchable-width #t)))
-
-  (define find-case-checkbox
-    (new check-box%
-         (label "Match case")
-         (parent find-panel-right-pane)
-         (callback
-          (lambda (item event)
-            (find-text-callback find-text-field (new control-event% (event-type 'text-field-enter)))))))
-  
-  (define find-panel-close-button
-    (new button%
-         (label "Close")
-         (parent find-panel-right-pane)
-         (stretchable-width #f)
-         (callback
-          (lambda (item event)
-            (find-panel-close)))))
 
   (define status-bar
     (new horizontal-pane%
