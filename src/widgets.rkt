@@ -490,10 +490,10 @@
 
 (define browser-canvas%
   (class layout-canvas% (super-new)
-    (init-field [tab-id 0]
-                [default-bg-color (make-color 33 33 33)]
+    (init-field [default-bg-color (make-color 33 33 33)]
                 [update-status-cb #f]
-                [update-address-cb #f])
+                [update-address-cb #f]
+                [on-load-cb #f])
     (inherit set-canvas-background
              set-background-image
              get-client-size
@@ -715,13 +715,13 @@
         (if text
             (begin
               (set! status-text text)
-              (update-status-cb tab-id text))
-            (update-status-cb tab-id status-text))))
+              (update-status-cb text))
+            (update-status-cb status-text))))
     
     ;; takes a request struct and updates UI elements using the provided callback
     (define/public (update-address req)
       (when update-address-cb
-        (update-address-cb tab-id req)))
+        (update-address-cb req)))
 
     (define/public (init-gopher-menu [initial-selection-pos #f])
       (set! gopher-menu? #t)
@@ -773,6 +773,8 @@
 
       (clear-mouse-selection)
 
+      (when on-load-cb (on-load-cb))
+      
       ;; shutdown the previous request thread if it hasn't finished 
       ;; I think we only need to shutdown the custodian if the thread never completed
       (when (and (thread? request-thread-id)

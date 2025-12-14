@@ -69,26 +69,6 @@
   (send tp change-children
         (lambda (c*) '()))
 
-  ;; callback called when the browser-canvas loads a new page
-  ;; update the tab label for the canvas's tab and update the address text field in the tab
-  (define (update-address id req)
-    (define tab (find-tab-with-id id))
-    ;; set the label for the tab
-    (send tp set-item-label (tab-info-index tab) (string-append (request-host req) (request-path/selector req)))
-    ;; set the address text field
-    (send address-field set-value (request->url req))
-    ;; disable/enable the back button based on existence of history
-    (if (empty? (send page-canvas get-history))
-        (send back-button enable #f)
-        (send back-button enable #t)))
-
-  ;; callback called when the browser-canvas needs to update a status message
-  ;; update the text of the message% widget on the status bar
-  (define (update-status id text)
-    ;(printf "update-status: id=~a, curid=~a, text=~a~n" id (active-tab-id tp) text)
-    (when (= id (active-tab-id tp))
-      (send status-msg set-label text)))
-
   ;; gotta replace this at some point
   ;; gets the status-msg message% widget from status-bar
   (define status-msg
@@ -127,9 +107,6 @@
          (horiz-margin 0)
          (callback
           (lambda (item event)
-            (define fpanel (tab-info-find-panel (find-tab-with-id tab-id)))
-            (when (and fpanel (send fpanel visible?))
-              (send fpanel close))
             (send page-canvas go-back)
             ;; set the focus back to the canvas
             (send page-canvas focus)))))
@@ -166,10 +143,34 @@
 
   (define page-canvas
     (new browser-canvas% (parent tab-contents)
-         (tab-id tab-id)
          (default-bg-color canvas-bg-color)
-         (update-status-cb update-status)
-         (update-address-cb update-address)
+         ;; callback called when the browser-canvas needs to update a status message
+         ;; update the text of the message% widget on the status bar
+         (update-status-cb
+          (lambda (text)
+            (printf "update-status: id=~a, curid=~a, text=~a~n" tab-id (active-tab-id tp) text)
+            (when (= tab-id (active-tab-id tp))
+              (send status-msg set-label text))))
+         (update-address-cb
+          ;; callback called when the browser-canvas loads a new page
+          ;; update the tab label for the canvas's tab and update the address text field in the tab
+          (lambda (req)
+            (define tab (find-tab-with-id tab-id))
+            ;; set the label for the tab
+            (send tp set-item-label (tab-info-index tab) (string-append (request-host req) (request-path/selector req)))
+            ;; set the address text field
+            (send address-field set-value (request->url req))
+            ;; disable/enable the back button based on existence of history
+            (if (empty? (send page-canvas get-history))
+                (send back-button enable #f)
+                (send back-button enable #t))))
+         ;; callback called when the browser-canvas loads a new page-canvas
+         ;; when the find panel is open, close it
+         (on-load-cb
+          (lambda ()
+            (define fpanel (tab-info-find-panel (find-tab-with-id tab-id)))
+            (when (and fpanel (send fpanel visible?))
+              (send fpanel close))))
          (smooth-scrolling canvas-smooth-scrolling)
          (wheel-step 10)))
 
@@ -413,7 +414,7 @@ END
   (unless (= num-tabs 1)
     ;; remove the deleted tab from our global list of tabs
     (set! tab-list
-          (remove (tab-info null tab-index null)
+          (remove (tab-info null tab-index null null)
                   tab-list
                   (lambda (a b)
                     (= (tab-info-index a)
