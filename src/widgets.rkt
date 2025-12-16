@@ -888,6 +888,7 @@
          (define history-saved (assq 'history list-of-data))
          (define url-saved (assq 'current-url list-of-data))
          (define mode-saved (assq 'mode list-of-data))
+         (define font-size-add-saved (assq 'font-size-add list-of-data))
          
          (when history-saved
            #;(printf "loading tab history: ~a~n" (cadr history-saved))
@@ -899,10 +900,30 @@
          
          (when (and url-saved (browser-url? (cadr url-saved)))
            #;(printf "loading tab url: ~a~n" (cadr url-saved))
-           (go (browser-url-req (cadr url-saved))))]))
+           (go (browser-url-req (cadr url-saved))))
+
+         (when font-size-add-saved
+           #;(printf "loading tab mode: ~a~n" (cadr font-size-add-saved))
+           (define standard (send (get-style-list) find-named-style "Standard"))
+           (when standard
+             (define delta (make-object style-delta%))
+             (send standard get-delta delta)
+             (define additive-factor (max 0 (cadr font-size-add-saved)))
+             (send delta set-delta 'change-bigger additive-factor)
+             ;(printf "increasing font size to ~a~n" (send delta get-size-add))
+             (send standard set-delta delta)))]))
     
     (define/public (get-restore-data)
-      `((current-url ,current-url) (history ,history) (mode ,(get-mode))))
+      (define standard (send (get-style-list) find-named-style "Standard"))
+      (define font-size-add
+        (if standard
+            (let ([delta (make-object style-delta%)])
+              (send standard get-delta delta)
+              (send delta get-size-add))
+            0))
+      (if (not (= font-size-add 0))
+          `((current-url ,current-url) (history ,history) (mode ,(get-mode)) (font-size-add ,font-size-add))
+          `((current-url ,current-url) (history ,history) (mode ,(get-mode)))))
 
     (define/public (get-history)
       (for/list ([item (in-list history)])

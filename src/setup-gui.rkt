@@ -50,7 +50,7 @@
               #f))))
 
        (define (save-settings)
-         (put-preferences (list 'smooth-scrolling) (list canvas-smooth-scrolling) #f pref-file))
+         (put-preferences (list 'smooth-scrolling 'light-mode) (list canvas-smooth-scrolling canvas-light-mode) #f pref-file))
        
        (define/augment (on-close)
          (save-settings)
@@ -97,34 +97,6 @@
   (define (change-canvas-horizontal-inset canvas amount)
     (define inset (send canvas horizontal-inset))
     (send canvas set-horizontal-inset (max 0 (+ inset amount))))
-  
-  (define (set-light-mode canvas on?)
-    (define (set-style-color name fg-color bg-color)
-      (define style (send (send canvas get-style-list) find-named-style name))
-      (when style
-        ;(printf "setting ~a's light mode to ~a~n" name on?)
-        (define delta (make-object style-delta%))
-        (send style get-delta delta)
-        (send* delta
-          (set-delta-foreground fg-color)
-          (set-delta-background bg-color))
-        (send style set-delta delta)))
-
-    (send canvas begin-edit-sequence)
-    (if on?
-        (begin
-          (set-field! default-bg-color canvas light-canvas-bg-color)
-          (send canvas set-canvas-background light-canvas-bg-color)
-          (set-style-color "Standard" light-text-fg-color light-text-bg-color)
-          (set-style-color "Link" light-link-color light-text-bg-color)
-          (set-style-color "Link Highlight" light-link-highlight-color light-text-bg-color))
-        (begin
-          (set-field! default-bg-color canvas canvas-bg-color)
-          (send canvas set-canvas-background canvas-bg-color)
-          (set-style-color "Standard" text-fg-color text-bg-color)
-          (set-style-color "Link" link-color text-bg-color)
-          (set-style-color "Link Highlight" link-highlight-color text-bg-color)))
-    (send canvas end-edit-sequence))
   
   (define menu-bar (new menu-bar% (parent frame)))
   (define file-menu 
@@ -404,6 +376,7 @@
          (stretchable-width #f)))
 
   (set-canvas-smooth-scrolling! (get-preference 'smooth-scrolling (lambda () #t) 'timestamp pref-file))
+  (set-canvas-light-mode! (get-preference 'light-mode (lambda () #f) 'timestamp pref-file))
   
   ;; load any saved tabs, else initialize two tabs, one open to the
   ;; molasses home page and one containing the introductory help

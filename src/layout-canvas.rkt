@@ -937,7 +937,7 @@
       (define-values (right bottom) (values (+ left dw) (+ top dh)))
 
       (define-values (w h) (get-size))
-      (printf "on-size client=~ax~a(was ~ax~a) window=~ax~a canvas=~ax~a~n" cw ch cached-client-width cached-client-height w h dw dh)
+      #;(printf "on-size client=~ax~a(was ~ax~a) window=~ax~a canvas=~ax~a~n" cw ch cached-client-width cached-client-height w h dw dh)
 
       (when (not visible-elements)
         (set-visible-elements!))
@@ -1434,6 +1434,8 @@
       
       ;; run boyer-moore-horspool string search
       ;; return dlist of selection structs representing matches
+      ;; TODO: find strings that span multiple elements
+      ;; TODO: find within non-string elements
       (define (find-in-element cursor skip-table needle needle-length)
         (define e (dlist-head-value cursor))
         (define haystack

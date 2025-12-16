@@ -21,6 +21,7 @@
          find-tp-address-field
          find-tp-find-panel
          unhide-find-panel
+         set-light-mode
          save-tabs
          load-tabs
          get-all-tab-canvases)
@@ -148,7 +149,7 @@
          ;; update the text of the message% widget on the status bar
          (update-status-cb
           (lambda (text)
-            (printf "update-status: id=~a, curid=~a, text=~a~n" tab-id (active-tab-id tp) text)
+            #;(printf "update-status: id=~a, curid=~a, text=~a~n" tab-id (active-tab-id tp) text)
             (when (= tab-id (active-tab-id tp))
               (send status-msg set-label text))))
          (update-address-cb
@@ -185,6 +186,8 @@
   ;; init to gopher/gemini styles
   (send page-canvas set-default-style "Standard")
 
+  (set-light-mode page-canvas canvas-light-mode)
+  
   #;(send* page-canvas
     (force-display-focus #t)
     (lazy-refresh #t))
@@ -457,6 +460,34 @@ END
   (define new-selection (index-of former-indices (send tp get-selection)))
   (send tp set-selection new-selection)
   (change-tab tp new-selection))
+
+(define (set-light-mode canvas on?)
+    (define (set-style-color name fg-color bg-color)
+      (define style (send (send canvas get-style-list) find-named-style name))
+      (when style
+        #;(printf "setting ~a's light mode to ~a~n" name on?)
+        (define delta (make-object style-delta%))
+        (send style get-delta delta)
+        (send* delta
+          (set-delta-foreground fg-color)
+          (set-delta-background bg-color))
+        (send style set-delta delta)))
+
+    (send canvas begin-edit-sequence)
+    (if on?
+        (begin
+          (set-field! default-bg-color canvas light-canvas-bg-color)
+          (send canvas set-canvas-background light-canvas-bg-color)
+          (set-style-color "Standard" light-text-fg-color light-text-bg-color)
+          (set-style-color "Link" light-link-color light-text-bg-color)
+          (set-style-color "Link Highlight" light-link-highlight-color light-text-bg-color))
+        (begin
+          (set-field! default-bg-color canvas canvas-bg-color)
+          (send canvas set-canvas-background canvas-bg-color)
+          (set-style-color "Standard" text-fg-color text-bg-color)
+          (set-style-color "Link" link-color text-bg-color)
+          (set-style-color "Link Highlight" link-highlight-color text-bg-color)))
+  (send canvas end-edit-sequence))
 
 (define (tab-info->save-data tab)
   (define index (tab-info-index tab))
