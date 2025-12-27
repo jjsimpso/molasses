@@ -478,10 +478,15 @@
       (show-http-error (http-response-status response))
       (begin
         (send canvas begin-edit-sequence)
-        (render-html-to-text (http-response-data-port response)
-                             canvas
-                             #t
-                             #f)
+        (with-handlers ([exn:fail?
+                         (lambda (exn)
+                           (eprintf "Caught HTML parsing error~n")
+                           (send canvas append-string "Error parsing HTML")
+                           #f)])
+          (render-html-to-text (http-response-data-port response)
+                               canvas
+                               #t
+                               #f))
         (send canvas end-edit-sequence)
         (when initial-selection-pos
           (define y (send canvas find-anchor-position initial-selection-pos))
