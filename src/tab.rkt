@@ -173,7 +173,7 @@
             (when (and fpanel (send fpanel visible?))
               (send fpanel close))))
          (smooth-scrolling canvas-smooth-scrolling)
-         (wheel-step 10)))
+         (wheel-step 60)))
 
   (define find-panel
     (new find-panel%

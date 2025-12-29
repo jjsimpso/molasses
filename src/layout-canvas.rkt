@@ -450,13 +450,20 @@
     (define hscroll-enabled? #f)
     (define vscroll-enabled? #f)
 
-    (define/override (get-scroll-pos which)
+    (define (from-scroll-units which units)
       (cond
         [(eq? which 'vertical)
-         (* (super get-scroll-pos which) scrollbar-vert-step-size)]
+         (* units scrollbar-vert-step-size)]
         [else
-         (super get-scroll-pos which)]))
+         units]))
 
+    (define (to-scroll-units which pos)
+      (cond
+        [(eq? which 'vertical)
+         (quotient pos scrollbar-vert-step-size)]
+        [else
+         pos]))
+    
     (define/override (get-scroll-range which)
       (cond
         [(eq? which 'vertical)
@@ -467,7 +474,7 @@
     (define/override (set-scroll-pos which value)
       (cond
         [(eq? which 'vertical)
-         ;(printf " set-scroll-pos: ~a, ~a(~a)~n" which value (quotient value scrollbar-vert-step-size))
+         (printf " set-scroll-pos: ~a, ~a(~a)~n" which value (quotient value scrollbar-vert-step-size))
          (super set-scroll-pos which (quotient value scrollbar-vert-step-size))]
         [else
          (super set-scroll-pos which value)]))
@@ -500,33 +507,37 @@
     (define (update-scrollbars new-width new-height)
       #;(printf "update-scrollbars, thread=~a~n" (current-thread))
       (when (semaphore-try-wait? edit-lock)
-        (define-values (dw dh) (get-drawable-size))
-        (update-scrollbar-step-size new-width new-height)
-        (set-scroll-range 'horizontal (exact-truncate (max 1 (- new-width dw))))
-        (set-scroll-range 'vertical (exact-truncate (max 1 (- new-height dh))))
-        (set-scroll-page 'horizontal 100)
-        (set-scroll-page 'vertical (max 1 dh))
-        ;; when scrollbar's are enabled, we need to recreate the offscreen bitmap because the client size changes
-        ;(printf "hscroll-enabled=~a, vscroll-enabled=~a~n" hscroll-enabled? vscroll-enabled?)
-        (when (not (equal? hscroll-enabled? (> new-width dw)))
-          (set! hscroll-enabled? (> new-width dw))
-          ;(printf " hscroll enabled changed to ~a (nw=~a, dw=~a)~n" hscroll-enabled? new-width dw)
-          (send offscreen-dc set-bitmap #f)
-          (show-scrollbars hscroll-enabled? vscroll-enabled?))
-        (when (not (equal? vscroll-enabled? (> new-height dh)))
-          (set! vscroll-enabled? (> new-height dh))
-          ;(printf " vscroll enabled changed to ~a (nh=~a, dh=~a)~n" vscroll-enabled? new-height dh)
-          (send offscreen-dc set-bitmap #f)
-          (show-scrollbars hscroll-enabled? vscroll-enabled?)
-          ;; the vertial scrollbar changes the client width and thus the layout
-          ;; so if it changes we need to rerun the layout
-          (reset-layout)
-          (define-values (vx vy) (get-virtual-size))
-          (define-values (ndw ndh) (get-drawable-size))
-          (set-scroll-range 'horizontal (exact-truncate (max 1 (- vx ndw))))
-          (set-scroll-range 'vertical (exact-truncate (max 1 (- vy ndh))))
-          (set-scroll-page 'vertical (max 1 ndh)))
-        (semaphore-post edit-lock)))
+        (dynamic-wind
+          (lambda () void)
+          (lambda ()
+            (define-values (dw dh) (get-drawable-size))
+            (update-scrollbar-step-size new-width new-height)
+            (set-scroll-range 'horizontal (exact-truncate (max 1 (- new-width dw))))
+            (set-scroll-range 'vertical (exact-truncate (max 1 (- new-height dh))))
+            (set-scroll-page 'horizontal 100)
+            (set-scroll-page 'vertical (max 1 dh))
+            ;; when scrollbar's are enabled, we need to recreate the offscreen bitmap because the client size changes
+            ;(printf "hscroll-enabled=~a, vscroll-enabled=~a~n" hscroll-enabled? vscroll-enabled?)
+            (when (not (equal? hscroll-enabled? (> new-width dw)))
+              (set! hscroll-enabled? (> new-width dw))
+              ;(printf " hscroll enabled changed to ~a (nw=~a, dw=~a)~n" hscroll-enabled? new-width dw)
+              (send offscreen-dc set-bitmap #f)
+              (show-scrollbars hscroll-enabled? vscroll-enabled?))
+            (when (not (equal? vscroll-enabled? (> new-height dh)))
+              (set! vscroll-enabled? (> new-height dh))
+              ;(printf " vscroll enabled changed to ~a (nh=~a, dh=~a)~n" vscroll-enabled? new-height dh)
+              (send offscreen-dc set-bitmap #f)
+              (show-scrollbars hscroll-enabled? vscroll-enabled?)
+              ;; the vertial scrollbar changes the client width and thus the layout
+              ;; so if it changes we need to rerun the layout
+              (reset-layout)
+              (define-values (vx vy) (get-virtual-size))
+              (define-values (ndw ndh) (get-drawable-size))
+              (set-scroll-range 'horizontal (exact-truncate (max 1 (- vx ndw))))
+              (set-scroll-range 'vertical (exact-truncate (max 1 (- vy ndh))))
+              (set-scroll-page 'vertical (max 1 ndh))))
+          (lambda ()
+            (semaphore-post edit-lock)))))
 
     (define (reset-layout)
       ;(printf "resetting layout, thread=~a~n" (current-thread))
@@ -909,26 +920,24 @@
 
     (define/override (on-scroll event)
       (define-values (dw dh) (get-drawable-size))
-      (define refresh? #f)
-      ;(printf "on-scroll: ~a ~a(~a)~n" (send event get-direction) (send event get-position) (get-scroll-pos (send event get-direction)))
-      
+      (define pos (from-scroll-units (send event get-direction) (send event get-position)))
+      (printf "on-scroll: ~a ~a(~a)~n" (send event get-direction) (send event get-position) pos)
+
       (if (eq? (send event get-direction) 'vertical)
-          (let* ([top (get-scroll-pos 'vertical)]
+          (let* ([top pos]
                  [bottom (+ top dh)]
                  [change (- top scroll-y)])
             (when (not (= change 0))
-              (set! refresh? #t))
-            (set! scroll-y top)
-            (if (not visible-elements)
-                (set-visible-elements!)
-                (update-visible-elements! change top bottom)))
-          (let* ([left (get-scroll-pos 'horizontal)]
+              (set! scroll-y top)
+              (if (not visible-elements)
+                  (set-visible-elements!)
+                  (update-visible-elements! change top bottom))
+              (refresh)))
+          (let* ([left pos]
                  [change (- left scroll-x)])
             (when (not (= change 0))
-              (set! refresh? #t))
-            (set! scroll-x left)))
-            
-      (when refresh? (refresh)))
+              (set! scroll-x left)
+              (refresh)))))
     
     (define/override (on-size width height)
       (define-values (cw ch) (get-client-size))
@@ -999,11 +1008,27 @@
                (max 0 (- scroll-pos wheel-step))
                (min max-scroll (+ scroll-pos wheel-step))))
          ;(printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
-         (scroll-to new-scroll-pos #f)]
+         (if smooth-scrolling
+             (let* ([step-size (/ (- new-scroll-pos scroll-pos) smooth-scroll-steps)]
+                    [step (if (< step-size 0)
+                              (min -1 (round step-size))
+                              (max 1 (round step-size)))])
+               (for ([pos (in-inclusive-range (+ scroll-pos step)
+                                              new-scroll-pos
+                                              step)])
+                 (queue-callback
+                  (lambda ()
+                    (set-scroll-pos 'vertical pos)
+                    (on-scroll (new scroll-event%
+                                    [event-type 'thumb]
+                                    [direction 'vertical]
+                                    [position (to-scroll-units 'vertical pos)])))
+                  #t)))
+             (scroll-to new-scroll-pos))]
         [(up down)
          (define max-scroll (get-scroll-range 'vertical))
          (define scroll-pos scroll-y)
-         (define line-height wheel-step)
+         (define line-height 10)
          (define new-scroll-pos
            (if (eq? key-code 'up)
                (max 0 (- scroll-pos line-height))
@@ -1601,7 +1626,8 @@
                 0
                 (exact-truncate y))))
 
-      #;(printf "scroll-to ~a, thread=~a~n" y (current-thread))
+      ;(printf "scroll-to ~a, thread=~a~n" y (current-thread))
+      (printf "scroll-to ~a, ts=~a~n" y (current-milliseconds))
       
       (when (not (= new-scroll-pos old-scroll-pos))
         (when smooth
