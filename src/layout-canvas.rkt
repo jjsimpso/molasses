@@ -15,7 +15,7 @@
      (style '(hscroll vscroll resize-corner no-autoclear)))
     (init [horiz-margin 5]
           [vert-margin 5])
-    (init-field [wheel-step 10]
+    (init-field [wheel-step 50]
                 [smooth-scrolling #f]
                 [smooth-scroll-steps 5]
                 [snip-xmargin 0]
@@ -474,7 +474,7 @@
     (define/override (set-scroll-pos which value)
       (cond
         [(eq? which 'vertical)
-         (printf " set-scroll-pos: ~a, ~a(~a)~n" which value (quotient value scrollbar-vert-step-size))
+         ;(printf " set-scroll-pos: ~a, ~a(~a)~n" which value (quotient value scrollbar-vert-step-size))
          (super set-scroll-pos which (quotient value scrollbar-vert-step-size))]
         [else
          (super set-scroll-pos which value)]))
@@ -929,6 +929,7 @@
                  [change (- top scroll-y)])
             (when (not (= change 0))
               (set! scroll-y top)
+              (set! smooth-scroll-target-y top)
               (if (not visible-elements)
                   (set-visible-elements!)
                   (update-visible-elements! change top bottom))
@@ -997,34 +998,68 @@
                  (clip-lines (element-lines e) x y))
              e)))
 
+    (define smooth-scroll-target-y scroll-y)
+    (define smooth-thread
+      (thread
+       (lambda ()
+         (define new-message-evt (thread-receive-evt))
+         (let loop ([new-scroll-pos (thread-receive)]
+                    [scroll-pos scroll-y])
+           (printf "smooth scrolling to ~a (from ~a)~n" new-scroll-pos scroll-pos)
+           (define step-size (/ (- new-scroll-pos scroll-pos) smooth-scroll-steps))
+           (define step (if (< step-size 0)
+                            (min -1 (round step-size))
+                            (max 1 (round step-size))))
+           (let loop2 ([pos (+ scroll-pos step)]
+                       [i 0])
+             (cond
+               [(= i smooth-scroll-steps)
+                ; in case target position didn't divide evenly into scroll steps,
+                ; scroll the final bit
+                (unless (= pos new-scroll-pos)
+                  (queue-callback (lambda () (scroll-to new-scroll-pos)) #t))
+                (loop (thread-receive) scroll-y)]
+               [else
+                ;(printf "queue callback~n")
+                (queue-callback (lambda () (scroll-to pos)) #t)
+                (define next (sync/timeout 0.016 new-message-evt))
+                ;(printf "next = ~a~n" next)
+                (if (evt? next)
+                    (loop (thread-receive) pos)
+                    (loop2 (+ pos step) (add1 i)))]))))))
+
+    ;; todo: check min/max scroll value in the dispatch functions since they are public methods
+    (define/public (dispatch-scroll ypos [force-non-smooth? #f])
+      (when (not (= ypos scroll-y))
+        ; set this rather we are actually using smooth scrolling or not
+        ; to keep things in sync if smooth scrolling is enabled later
+        (set! smooth-scroll-target-y ypos)
+        (if (and smooth-scrolling (false? force-non-smooth?))
+            (thread-send smooth-thread ypos)
+            (scroll-to ypos))))
+
+    (define/public (dispatch-scroll-sync ypos [force-non-smooth? #f])
+      (when (not (= ypos scroll-y))
+        ; set this rather we are actually using smooth scrolling or not
+        ; to keep things in sync if smooth scrolling is enabled later
+        (set! smooth-scroll-target-y ypos)
+        (scroll-to ypos (and smooth-scrolling (false? force-non-smooth?)))))
+    
     (define/override (on-char event)
       (define key-code (send event get-key-code))
       (case (send event get-key-code)
         [(wheel-up wheel-down)
          (define max-scroll (get-scroll-range 'vertical))
-         (define scroll-pos scroll-y)
+         (define scroll-pos
+           (if smooth-scrolling
+               smooth-scroll-target-y
+               scroll-y))
          (define new-scroll-pos
            (if (eq? key-code 'wheel-up)
                (max 0 (- scroll-pos wheel-step))
                (min max-scroll (+ scroll-pos wheel-step))))
-         ;(printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
-         (if smooth-scrolling
-             (let* ([step-size (/ (- new-scroll-pos scroll-pos) smooth-scroll-steps)]
-                    [step (if (< step-size 0)
-                              (min -1 (round step-size))
-                              (max 1 (round step-size)))])
-               (for ([pos (in-inclusive-range (+ scroll-pos step)
-                                              new-scroll-pos
-                                              step)])
-                 (queue-callback
-                  (lambda ()
-                    (set-scroll-pos 'vertical pos)
-                    (on-scroll (new scroll-event%
-                                    [event-type 'thumb]
-                                    [direction 'vertical]
-                                    [position (to-scroll-units 'vertical pos)])))
-                  #t)))
-             (scroll-to new-scroll-pos))]
+         (printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
+         (dispatch-scroll new-scroll-pos)]
         [(up down)
          (define max-scroll (get-scroll-range 'vertical))
          (define scroll-pos scroll-y)
@@ -1034,23 +1069,23 @@
                (max 0 (- scroll-pos line-height))
                (min max-scroll (+ scroll-pos line-height))))
          ;(printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
-         (scroll-to new-scroll-pos)]
+         (dispatch-scroll new-scroll-pos #t)]
         [(next)
          (define-values (dw dh) (get-drawable-size))
          (define-values (x y) (get-view-start))
          ;(printf "page down to ~a~n" (+ y dh))
-         (scroll-to (+ y dh) smooth-scrolling)]
+         (dispatch-scroll (+ y dh))]
         [(prior)
          (define-values (dw dh) (get-drawable-size))
          (define-values (x y) (get-view-start))
          ;(printf "page up to ~a~n" (- y dh))
-         (scroll-to (- y dh) smooth-scrolling)]
+         (dispatch-scroll (- y dh))]
         [(home)
-         (scroll-to 0 smooth-scrolling)]
+         (dispatch-scroll 0)]
         [(end)
          (define-values (vx vy) (get-virtual-size))
          (define-values (dw dh) (get-drawable-size))
-         (scroll-to (- vy dh) smooth-scrolling)]))
+         (dispatch-scroll (- vy dh))]))
 
     ;; store the element that has mouse focus. send on-goodbye-event to an element's snip if it loses focus
     (define element-with-focus #f)
@@ -1144,10 +1179,10 @@
               (cond
                 [(> ey dh)
                  ;; scroll down if mouse is below bottom edge
-                 (scroll-to (min (get-scroll-range 'vertical) (+ scroll-y wheel-step)))]
+                 (dispatch-scroll (min (get-scroll-range 'vertical) (+ scroll-y wheel-step)) #t)]
                 [(< ey 0)
                  ;; scroll up if mouse is above top edge
-                 (scroll-to (max 0 (- scroll-y wheel-step)))])]
+                 (dispatch-scroll (max 0 (- scroll-y wheel-step)) #t)])]
              [else
               void]))]
         [(left-up)
@@ -1536,7 +1571,7 @@
         (define-values (_ top) (get-view-start))
         (define bottom (+ top dh))
         (unless (element-visible? e top bottom)
-          (scroll-to (get-element-y e))))
+          (dispatch-scroll (get-element-y e))))
       
       (cond
         [(and find-in-canvas-cur-dlink (dlink-next find-in-canvas-cur-dlink))
@@ -1557,7 +1592,7 @@
         (define-values (_ top) (get-view-start))
         (define bottom (+ top dh))
         (unless (element-visible? e top bottom)
-          (scroll-to (get-element-y e))))
+          (dispatch-scroll (get-element-y e))))
       
       (cond
         [(and find-in-canvas-cur-dlink (dlink-prev find-in-canvas-cur-dlink))
@@ -1610,12 +1645,13 @@
       (set! visible-elements #f)
       (set! scroll-x 0)
       (set! scroll-y 0)
+      (set! smooth-scroll-target-y 0)
       (set-scroll-pos 'horizontal 0)
       (set-scroll-pos 'vertical 0)
       (reset-layout)
       (refresh))
 
-    (define/public (scroll-to y [smooth #f])
+    (define (scroll-to y [smooth #f])
       (define-values (dw dh) (get-drawable-size))
       (define max-scroll (get-scroll-range 'vertical))
       (define old-scroll-pos scroll-y)
@@ -1657,8 +1693,8 @@
               (update-visible-elements! (- new-scroll-pos old-scroll-pos) scroll-y (+ scroll-y dh)))
           (refresh))))
 
-    (define/public (queue-scroll-to y [smooth #f])
-      (queue-callback (lambda () (scroll-to y smooth)) #t))
+    (define/public (queue-scroll-to y [force-non-smooth #f])
+      (queue-callback (lambda () (dispatch-scroll y force-non-smooth)) #t))
     
     (define (lookup-element-from-snip s)
       (for/first ([e (in-dlist elements)]

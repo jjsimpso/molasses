@@ -516,7 +516,8 @@
              refresh
              lookup-snip-position-size
              first-visible-snip
-             scroll-to
+             dispatch-scroll
+             dispatch-scroll-sync
              queue-scroll-to
              redraw-snips)
 
@@ -955,18 +956,18 @@
             [(eq? direction 'down)
              (define max-y (- vy h))
              (define new-y (min max-y (- sy (/ h 4))))
-             (scroll-to new-y canvas-smooth-scrolling)
+             (dispatch-scroll-sync new-y)
              ;; nudge the visible area just a bit so that the first line isn't partially cut off
              (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
              (when (and (< fsy new-y) (< new-y max-y))
-               (scroll-to fsy #f))]
+               (dispatch-scroll-sync fsy #t))]
             [(eq? direction 'up)
              (define new-y (max 0 (- sy (* (/ h 4) 3))))
-             (scroll-to new-y canvas-smooth-scrolling)
+             (dispatch-scroll-sync new-y)
              ;; nudge the visible area just a bit so that the first line isn't partially cut off
              (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
              (when (and (< fsy new-y) (> new-y 0))
-               (scroll-to fsy #f))]
+               (dispatch-scroll-sync fsy #t))]
             [else
              (error "change-selection: invalid direction")]))))
     
@@ -990,7 +991,7 @@
                 ;; just scroll to make the selected menu snip visible
                 (define-values (sx sy sw sh) (lookup-snip-position-size (selection-snip menu-selection)))
                 (define-values (w h) (get-drawable-size))
-                (scroll-to (- sy (/ h 4)) canvas-smooth-scrolling)])]
+                (dispatch-scroll-sync (- sy (/ h 4)))])]
             [(up)
              (define item (find-prev-menu-item))
              (when item
@@ -1007,11 +1008,11 @@
              (define-values (vx vy) (get-virtual-size))
              (define max-y (- vy h))
              (define new-y (min max-y (+ y h)))
-             (scroll-to new-y canvas-smooth-scrolling)
+             (dispatch-scroll-sync new-y)
              ;; nudge the visible area just a bit so that the first line isn't partially cut off
              (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
              (when (and (< fsy new-y) (< new-y max-y))
-               (scroll-to fsy #f))
+               (dispatch-scroll-sync fsy #t))
              (unless (selection-visible? menu-selection)
                (define item (find-next-visible-menu-item))
                (when item
@@ -1020,17 +1021,17 @@
              (define-values (x y) (get-view-start))
              (define-values (w h) (get-drawable-size))
              (define new-y (max 0 (- y h)))
-             (scroll-to new-y canvas-smooth-scrolling)
+             (dispatch-scroll-sync new-y)
              ;; nudge the visible area just a bit so that the first line isn't partially cut off
              (define-values (fsx fsy fsw fsh) (lookup-snip-position-size (first-visible-snip)))
              (when (and (< fsy new-y) (> new-y 0))
-               (scroll-to fsy #f))
+               (dispatch-scroll-sync fsy #t))
              (unless (selection-visible? menu-selection)
                (define item (find-prev-visible-menu-item))
                (when item
                  (update-menu-highlight item)))]
             [(home)
-             (scroll-to 0 canvas-smooth-scrolling)
+             (dispatch-scroll-sync 0)
              (unless (selection-visible? menu-selection)
                (define item (find-first-menu-item))
                (when item
@@ -1038,7 +1039,7 @@
             [(end)
              (define-values (vx vy) (get-virtual-size))
              (define-values (dw dh) (get-drawable-size))
-             (scroll-to (- vy dh) canvas-smooth-scrolling)
+             (dispatch-scroll-sync (- vy dh))
              (unless (selection-visible? menu-selection)
                (define item (find-next-visible-menu-item))
                (when item

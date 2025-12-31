@@ -443,7 +443,7 @@
              (equal? base-file link-file))
          ;; jump to anchor location on current page
          (let ([y (send browser-canvas find-anchor-position anchor)])
-           (and y (send browser-canvas scroll-to y)))
+           (and y (send browser-canvas dispatch-scroll-sync y)))
          (send browser-canvas go
                (struct-copy request
                             base-req
