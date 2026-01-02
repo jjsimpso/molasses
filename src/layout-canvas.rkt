@@ -1028,22 +1028,33 @@
                     (loop (thread-receive) pos)
                     (loop2 (+ pos step) (add1 i)))]))))))
 
-    ;; todo: check min/max scroll value in the dispatch functions since they are public methods
     (define/public (dispatch-scroll ypos [force-non-smooth? #f])
-      (when (not (= ypos scroll-y))
+      (define clamped-ypos
+        (cond
+          [(< ypos 0) 0]
+          [(> ypos (get-scroll-range 'vertical))
+           (get-scroll-range 'vertical)]
+          [else ypos]))
+      (when (not (= clamped-ypos scroll-y))
         ; set this rather we are actually using smooth scrolling or not
         ; to keep things in sync if smooth scrolling is enabled later
-        (set! smooth-scroll-target-y ypos)
+        (set! smooth-scroll-target-y clamped-ypos)
         (if (and smooth-scrolling (false? force-non-smooth?))
-            (thread-send smooth-thread ypos)
-            (scroll-to ypos))))
+            (thread-send smooth-thread clamped-ypos)
+            (scroll-to clamped-ypos))))
 
     (define/public (dispatch-scroll-sync ypos [force-non-smooth? #f])
-      (when (not (= ypos scroll-y))
+      (define clamped-ypos
+        (cond
+          [(< ypos 0) 0]
+          [(> ypos (get-scroll-range 'vertical))
+           (get-scroll-range 'vertical)]
+          [else ypos]))
+      (when (not (= clamped-ypos scroll-y))
         ; set this rather we are actually using smooth scrolling or not
         ; to keep things in sync if smooth scrolling is enabled later
-        (set! smooth-scroll-target-y ypos)
-        (scroll-to ypos (and smooth-scrolling (false? force-non-smooth?)))))
+        (set! smooth-scroll-target-y clamped-ypos)
+        (scroll-to clamped-ypos (and smooth-scrolling (false? force-non-smooth?)))))
     
     (define/override (on-char event)
       (define key-code (send event get-key-code))
@@ -1736,7 +1747,7 @@
                    [prop (in-list (element-properties e))]
                    #:when (and (eq? (car prop) 'anchor)
                                (equal? (cdr prop) name)))
-        #;(printf "find-anchor-position ~a~n" prop)
+        #;(printf "find-anchor-position ~a~n" (element-ypos e))
         (element-ypos e)))
 
     (define/public (layout-space-on-current-line)
