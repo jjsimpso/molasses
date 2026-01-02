@@ -31,21 +31,20 @@
       (send canvas find-results-clear)
       (send (get-parent) delete-child this)
       (send canvas focus))
-  
-    (define (find-text-callback item event)
-      (case (send event get-event-type)
-        [(text-field-enter)
-         (printf "searching for ~a~n" (send find-text-field get-value))
-         (send canvas find-results-clear)
-         (send canvas find-in-canvas (send find-text-field get-value) (send find-case-checkbox get-value))
-         (set! find-results-number (send canvas find-results-length))
-         (set! find-results-index 0)
-         (send canvas refresh)
-         (if (> find-results-number 0)
-             (send find-results-msg set-label (format "0 of ~a items found" find-results-number))
-             (send find-results-msg set-label (format "0 items found")))]
-        [(text-field)
-         void]))
+
+    ;; use to determine if 'text-field-enter event should start a new search or goto next result
+    (define text-field-changed #t)
+    
+    (define (find-text)
+      (printf "searching for ~a~n" (send find-text-field get-value))
+      (send canvas find-results-clear)
+      (send canvas find-in-canvas (send find-text-field get-value) (send find-case-checkbox get-value))
+      (set! find-results-number (send canvas find-results-length))
+      (set! find-results-index 0)
+      (send canvas refresh)
+      (if (> find-results-number 0)
+          (send find-results-msg set-label (format "0 of ~a items found" find-results-number))
+          (send find-results-msg set-label (format "0 items found"))))
 
     (define find-text-field
       (new text-field%
@@ -54,7 +53,16 @@
            (stretchable-width #f)
            (callback
             (lambda (item event)
-              (find-text-callback item event)))))
+              (case (send event get-event-type)
+                [(text-field-enter)
+                 (if text-field-changed
+                     (begin
+                       (set! text-field-changed #f)
+                       (find-text))
+                     (goto-next-result))]
+                [(text-field)
+                 (printf "text field event~n")
+                 (set! text-field-changed #t)])))))
 
     (define find-results-prev
       (new button%
@@ -68,6 +76,12 @@
                 (set! find-results-index (sub1 find-results-index))
                 (send find-results-msg set-label (format "~a of ~a items found" find-results-index find-results-number)))))))
 
+    (define (goto-next-result)
+      (when (send canvas find-results-next)
+        (send canvas refresh)
+        (set! find-results-index (add1 find-results-index))
+        (send find-results-msg set-label (format "~a of ~a items found" find-results-index find-results-number))))
+    
     (define find-results-next
       (new button%
            (label "->")
@@ -75,10 +89,7 @@
            (stretchable-width #f)
            (callback
             (lambda (item event)
-              (when (send canvas find-results-next)
-                (send canvas refresh)
-                (set! find-results-index (add1 find-results-index))
-                (send find-results-msg set-label (format "~a of ~a items found" find-results-index find-results-number)))))))
+              (goto-next-result)))))
 
     (define find-results-msg
       (new message%
@@ -99,7 +110,8 @@
            (parent find-panel-right-pane)
            (callback
             (lambda (item event)
-              (find-text-callback find-text-field (new control-event% (event-type 'text-field-enter)))))))
+              (set! text-field-changed #f)
+              (find-text)))))
   
     (define find-panel-close-button
       (new button%
