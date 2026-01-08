@@ -1509,10 +1509,12 @@
       ;; TODO: find within non-string elements
       (define (find-in-element cursor skip-table needle needle-length)
         (define (ends-in-whitespace? s)
-          (or (char=? (string-ref s (sub1 (string-length s))) #\space)
-              (char=? (string-ref s (sub1 (string-length s))) #\newline)
-              (char=? (string-ref s (sub1 (string-length s))) #\linefeed)))
+          (define last-char (string-ref s (sub1 (string-length s)))) 
+          (or (char=? last-char #\space)
+              (char=? last-char #\newline)
+              (char=? last-char #\linefeed)))
         (define needle-has-space? (string-contains? needle " "))
+        (define needle-last-char (string-ref needle (- needle-length 1)))
         (define e (dlist-head-value cursor))
         (define haystack
           (if match-case
@@ -1538,10 +1540,11 @@
                                                     (element-snip (dlist-peek-head-next cursor))
                                                     (string-foldcase (element-snip (dlist-peek-head-next cursor))))])
                    (printf "checking next element: ~a~n" tail-haystack)
+                   (define tail-haystack-length (string-length tail-haystack))
                    (let loop-tail-match ([tail-pos (- (hash-ref skip-table (string-ref haystack (sub1 stop-pos))) 1 eol-seps)])
                      (printf " tail-pos=~a~n" tail-pos)
                      (cond
-                       [(>= tail-pos (string-length tail-haystack))
+                       [(>= tail-pos tail-haystack-length)
                         ; for now just stop
                         hits]
                        [(< tail-pos 0)
@@ -1550,14 +1553,14 @@
                         (define ch (string-ref tail-haystack tail-pos))
                         (printf " ch=~a~n" ch)
                         (cond
-                          [(>= tail-pos needle-length)
+                          [(>= tail-pos (sub1 needle-length))
                            hits]
                           [(and (false? (hash-ref skip-table ch #f))
-                                (not (char=? ch (string-ref needle (- needle-length 1)))))
+                                (not (char=? ch needle-last-char)))
                            ; stop as soon as we hit a character not in the needle
                            ; the last character of the needle isn't in the skip table so we need an extra check for that
                            hits]
-                          [(not (char=? ch (string-ref needle (- needle-length 1))))
+                          [(not (char=? ch needle-last-char))
                            ; character is not the last character in the needle
                            (printf "~a < ~a~n" (+ tail-pos 1 stop-pos) needle-length)
                            (loop-tail-match (+ tail-pos (hash-ref skip-table ch)))]
@@ -1582,7 +1585,7 @@
              (define skip (hash-ref skip-table ch needle-length))
              (cond
                [(>= pos stop-pos) hits]
-               [(not (char=? ch (string-ref needle (- needle-length 1)))) 
+               [(not (char=? ch needle-last-char)) 
                 (loop (+ pos skip) hits)]
                [else
                 ; restart this loop at end of needle even though we just checked this position above
