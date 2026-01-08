@@ -32,6 +32,7 @@
          dlist-cursor
          dlist-peek-tail-next
          dlist-peek-head-prev
+         dlist-peek-head-next
          dlist-advance-head!
          dlist-retreat-head!
          dlist-advance-tail!
@@ -311,6 +312,13 @@
         (and head-prev (dlink-value head-prev)))
       #f))
 
+(define (dlist-peek-head-next dl)
+  (define head (dlist-head dl))
+  (if head
+      (let ([head-next (dlink-next head)])
+        (and head-next (dlink-value head-next)))
+      #f))
+
 ;; advances the head pointer to the next link if it exists
 ;; returns the new head or #f if head didn't change
 (define (dlist-advance-head! dl)
@@ -471,6 +479,7 @@
   (check-equal? (dlist-advance-tail! cursor) #f)
   (check-equal? (dlist-peek-tail-next cursor) #f)
   (check-equal? (dlist-peek-head-prev cursor) #f)
+  (check-equal? (dlist-peek-head-next cursor) 2)
   
   (dlist-retreat-tail! cursor)
   (check-equal? (dlist-tail-value cursor) 4)

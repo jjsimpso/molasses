@@ -1505,9 +1505,14 @@
       
       ;; run boyer-moore-horspool string search
       ;; return dlist of selection structs representing matches
-      ;; TODO: find strings that span multiple elements
+      ;; TODO: find strings that span more than 2 elements
       ;; TODO: find within non-string elements
       (define (find-in-element cursor skip-table needle needle-length)
+        (define (ends-in-whitespace? s)
+          (or (char=? (string-ref s (sub1 (string-length s))) #\space)
+              (char=? (string-ref s (sub1 (string-length s))) #\newline)
+              (char=? (string-ref s (sub1 (string-length s))) #\linefeed)))
+        (define needle-has-space? (string-contains? needle " "))
         (define e (dlist-head-value cursor))
         (define haystack
           (if match-case
@@ -1517,7 +1522,61 @@
         (let loop ([pos (- needle-length 1)]
                    [hits (dlist-new)])
           (cond
-            [(>= pos stop-pos) hits]
+            [(>= pos stop-pos)
+             ; check if the remaining text could be part of the needle spanning into the next element
+             (if (and needle-has-space?
+                      (> stop-pos 0)
+                      (hash-ref skip-table (string-ref haystack (sub1 stop-pos)) #f)
+                      (and (dlist-head-next cursor) (highlightable-element? (dlist-peek-head-next cursor))))
+                 ;
+                 (let loop-tail ([new-sel (selection (dlist (dlist-head cursor) (dlist-head-next cursor)) 0 #f 0)]
+                                 [eol-seps (if (and (element-end-of-line e)
+                                                    (not (ends-in-whitespace? haystack)))
+                                               1
+                                               0)]
+                                 [tail-haystack (if match-case
+                                                    (element-snip (dlist-peek-head-next cursor))
+                                                    (string-foldcase (element-snip (dlist-peek-head-next cursor))))])
+                   (printf "checking next element: ~a~n" tail-haystack)
+                   (let loop-tail-match ([tail-pos (- (hash-ref skip-table (string-ref haystack (sub1 stop-pos))) 1 eol-seps)])
+                     (printf " tail-pos=~a~n" tail-pos)
+                     (cond
+                       [(>= tail-pos (string-length tail-haystack))
+                        ; for now just stop
+                        hits]
+                       [(< tail-pos 0)
+                        hits]
+                       [else
+                        (define ch (string-ref tail-haystack tail-pos))
+                        (printf " ch=~a~n" ch)
+                        (cond
+                          [(>= tail-pos needle-length)
+                           hits]
+                          [(and (false? (hash-ref skip-table ch #f))
+                                (not (char=? ch (string-ref needle (- needle-length 1)))))
+                           ; stop as soon as we hit a character not in the needle
+                           ; the last character of the needle isn't in the skip table so we need an extra check for that
+                           hits]
+                          [(not (char=? ch (string-ref needle (- needle-length 1))))
+                           ; character is not the last character in the needle
+                           (printf "~a < ~a~n" (+ tail-pos 1 stop-pos) needle-length)
+                           (loop-tail-match (+ tail-pos (hash-ref skip-table ch)))]
+                          [(< (+ tail-pos 1 eol-seps stop-pos) needle-length)
+                           ; the previous haystack plus current position isn't big enough for needle
+                           (loop-tail-match (+ tail-pos needle-length))]
+                          [else
+                           ; we are at the end of the needle, so compare against the combined haystacks
+                           (define head-start (max 0 (+ eol-seps (- stop-pos (- needle-length (add1 tail-pos))))))
+                           (define combined-haystack
+                             (string-normalize-spaces #:trim? #f
+                              (string-append (substring haystack head-start)
+                                             (if (element-end-of-line e) "\n" "")
+                                             (substring tail-haystack 0 (add1 tail-pos)))))
+                           (printf "  head-start=~a, combined=~a~n" head-start combined-haystack)
+                           (if (string=? combined-haystack needle)
+                               (dlist-add! hits (selection (dlist (dlist-head cursor) (dlist-head-next cursor)) head-start stop-pos (add1 tail-pos)))
+                            hits)])])))
+                 hits)]
             [else
              (define ch (string-ref haystack pos))
              (define skip (hash-ref skip-table ch needle-length))
@@ -2132,16 +2191,20 @@
         (send canvas set-background-image bg)
         (send canvas append-string highlander-text)
         (send canvas append-string "\n\n")
-        (send canvas append-string "text\nwith lots\nof\nnewlines")
+        (send canvas append-string "text \nwith lots\nof\nnewlines")
         (send canvas append-string "text ending with just carriage return\n")
         (send canvas append-string "text ending with carriage return + new line\r\n")
         (send canvas append-string "text ending with just new line\n")
         (send canvas append-string "text1" #f #f)
         (send canvas append-string "text2\n")
         (add-gopher-menu canvas)
-        (let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
-          (send canvas append-string (port->string (gopher-response-data-port response))))
-        (send canvas find-in-canvas "he")))
+        #;(let ([response (gopher-fetch "gopher.endangeredsoft.org" test-selector #\0 70)])
+            (send canvas append-string (port->string (gopher-response-data-port response))))
+        ;(send canvas find-in-canvas "lots of")
+        ;(send canvas find-in-canvas "newlines text")
+        ;(send canvas find-in-canvas "lines text")
+        ;(send canvas find-in-canvas " ending with just new line text1")
+        (send canvas find-in-canvas "text with")))
 
   (send canvas end-edit-sequence)  
   (printf "append finished~n"))
