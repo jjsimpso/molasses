@@ -1526,8 +1526,10 @@
                [(not (char=? ch (string-ref needle (- needle-length 1)))) 
                 (loop (+ pos skip) hits)]
                [else
-                (let loop-match ([i (sub1 pos)]
-                                 [needle-index (- needle-length 2)])
+                ; restart this loop at end of needle even though we just checked this position above
+                ; this makes it simpler to handle single character needles
+                (let loop-match ([i pos]
+                                 [needle-index (- needle-length 1)])
                   (cond
                     [(not (char=? (string-ref haystack i)
                                   (string-ref needle needle-index)))
