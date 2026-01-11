@@ -233,14 +233,27 @@
                    (- cw xmargin) (- ch ymargin)
                    0 0))]))
 
-    (define (make-highlight-style from-style toggle-underline)
-      (define highlight-bg-color (send from-style get-foreground))
-      (define highlight-fg-color (send from-style get-background))
-      (define highlight-delta (send* (make-object style-delta%)
-                                (set-delta-foreground highlight-fg-color)
-                                (set-delta-background highlight-bg-color)))
-      (when toggle-underline
-        (send highlight-delta set-delta 'change-toggle-underline))
+    (define (complementary-color c)
+      (make-object color% (- 255 (send c red)) (- 255 (send c green)) (- 255 (send c blue)) (send c alpha)))
+
+    (define (color-average c1 c2)
+      (make-object color%
+                    (exact-truncate (/ (+ (send c1 red) (send c2 red)) 2))
+                    (exact-truncate (/ (+ (send c1 green) (send c2 green)) 2))
+                    (exact-truncate (/ (+ (send c1 blue) (send c2 blue)) 2))
+                    (send c1 alpha)))
+      
+    (define (make-highlight-style from-style selected?)
+      (define highlight-delta
+        (if selected?
+            (let ([avg (color-average (send from-style get-foreground) (send from-style get-background))])
+              (send* (make-object style-delta%)
+                (set-delta-foreground (complementary-color avg))
+                (set-delta-background avg)))
+            (send* (make-object style-delta%)
+              (set-delta-foreground (complementary-color (send from-style get-foreground)))
+              (set-delta-background (complementary-color (send from-style get-background))))))
+
       (send styles find-or-create-style from-style highlight-delta))
 
     (define make-highlight-style-cached (memoize-2args make-highlight-style make-hasheq))
