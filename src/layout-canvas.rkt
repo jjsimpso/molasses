@@ -216,22 +216,46 @@
           (send (element-snip e) draw dc x y left top right bottom dx dy 'no-caret)))
 
     (define (draw-selection e sel sel-elements x y left top cw ch dc)
-      (cond
-        [(eq? e (dlist-head-value sel-elements))
-         ;(printf "  draw head from ~a to ~a~n" (selection-head-start-pos sel) (selection-head-end-pos sel))
-         (define-values (w u1 u2 u3) (send dc get-text-extent (substring (element-snip e) 0 (selection-head-start-pos sel))))
-         (send dc draw-text (substring (element-snip e) (selection-head-start-pos sel) (selection-head-end-pos sel)) (+ x w) y)]
-        [(eq? e (dlist-tail-value sel-elements))
-         ;(printf "  draw tail from 0 to ~a~n" (selection-tail-end-pos sel))
-         (send dc draw-text (substring (element-snip e) 0 (selection-tail-end-pos sel)) x y)]
-        [else
-         (if (and (wrap-text?) (string? (element-snip e)))
-             (draw-wrapped-text e dc left top 0 0)
-             (draw e dc
-                   x y
-                   0 0
-                   (- cw xmargin) (- ch ymargin)
-                   0 0))]))
+      (if (wrap-text?)
+          (cond
+            [(eq? e (dlist-head-value sel-elements))
+             (define start-pos (selection-head-start-pos sel))
+             (define end-pos (selection-head-end-pos sel))
+             (printf "  draw wrapped head from ~a to ~a~n" start-pos end-pos)
+             (for ([wl (element-lines e)]
+                   #:when (and (<= start-pos (wrapped-line-end-pos wl))
+                               (<= (wrapped-line-start-pos wl) end-pos)))
+               (define s (substring (element-snip e)
+                                    (max start-pos (wrapped-line-start-pos wl))
+                                    (min end-pos (wrapped-line-end-pos wl))))
+               (printf "   drawing ~a~n" s)
+               (if (< (wrapped-line-start-pos wl) start-pos)
+                   (let-values ([(w u1 u2 u3) (send dc get-text-extent (substring (element-snip e) (wrapped-line-start-pos wl) start-pos))])
+                     (send dc draw-text s (+ x w) (+ (- (wrapped-line-y wl) top) ymargin)))
+                   (send dc draw-text s x (+ (- (wrapped-line-y wl) top) ymargin))))]
+            [(eq? e (dlist-tail-value sel-elements))
+             (define start-pos 0)
+             (define end-pos (selection-tail-end-pos sel))
+             (printf "  draw wrapped tail from ~a to ~a~n" start-pos end-pos)
+             (for ([wl (element-lines e)]
+                   #:break (> (wrapped-line-start-pos wl) end-pos))
+               (define s (substring (element-snip e)
+                                    (max start-pos (wrapped-line-start-pos wl))
+                                    (min end-pos (wrapped-line-end-pos wl))))
+               (printf "   drawing ~a~n" s)
+               (send dc draw-text s x (+ (- (wrapped-line-y wl) top) ymargin)))]
+            [else
+             (draw-wrapped-text e dc left top 0 0)])
+          (cond
+            [(eq? e (dlist-head-value sel-elements))
+             ;(printf "  draw head from ~a to ~a~n" (selection-head-start-pos sel) (selection-head-end-pos sel))
+             (define-values (w u1 u2 u3) (send dc get-text-extent (substring (element-snip e) 0 (selection-head-start-pos sel))))
+             (send dc draw-text (substring (element-snip e) (selection-head-start-pos sel) (selection-head-end-pos sel)) (+ x w) y)]
+            [(eq? e (dlist-tail-value sel-elements))
+             ;(printf "  draw tail from 0 to ~a~n" (selection-tail-end-pos sel))
+             (send dc draw-text (substring (element-snip e) 0 (selection-tail-end-pos sel)) x y)]
+            [else
+             (draw e dc x y 0 0 (- cw xmargin) (- ch ymargin) 0 0)])))
 
     (define (complementary-color c)
       (make-object color% (- 255 (send c red)) (- 255 (send c green)) (- 255 (send c blue)) (send c alpha)))
@@ -2096,7 +2120,7 @@
   (define layout-test #f)
   (if layout-test
       (send canvas set-mode 'layout)
-      (send canvas set-mode 'plaintext))
+      (send canvas set-mode 'wrapped))
 
   (send frame show #t)
 
@@ -2220,7 +2244,9 @@
         ;(send canvas find-in-canvas "newlines text")
         ;(send canvas find-in-canvas "lines text")
         ;(send canvas find-in-canvas " ending with just new line text1")
-        (send canvas find-in-canvas "text with")))
+        ;(send canvas find-in-canvas "there are others")
+        (send canvas find-in-canvas "the")
+        #;(send canvas find-in-canvas "text with")))
 
   (send canvas end-edit-sequence)  
   (printf "append finished~n"))
