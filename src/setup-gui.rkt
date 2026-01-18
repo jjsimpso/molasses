@@ -317,6 +317,12 @@
        (callback (lambda (item event)
                    (goto-home-page tab-panel))))
 
+  (new menu-item%
+       (label "Edit Bookmarks")
+       (parent bookmark-menu)
+       (callback (lambda (item event)
+                   (open-bookmark-editor frame bookmark-menu goto-bookmark))))
+  
   (new separator-menu-item%
        (parent bookmark-menu))
 
