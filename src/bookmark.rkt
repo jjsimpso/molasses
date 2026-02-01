@@ -68,21 +68,18 @@
         (define selected-url (send lb get-data selected-idx))
         (define swap-name (send lb get-string swap-idx))
         (define swap-url (send lb get-data swap-idx))
-        (printf "swapping ~a and ~a~n" selected-name swap-name)
         (send lb set-string swap-idx selected-url 1)
         (send lb set-string swap-idx selected-name 0)
         (send lb set-data swap-idx selected-url)
         (send lb set-string selected-idx swap-url 1)
         (send lb set-string selected-idx swap-name 0)
         (send lb set-data selected-idx swap-url)
-        (send lb select swap-idx)
-        (printf "selected index was ~a now ~a~n" selected-idx (car (send lb get-selections))))))
+        (send lb select swap-idx))))
 
   (define be-frame
     (new
      (class frame% (super-new)
        (define/override (on-subwindow-char receiver event)
-         (printf "on-subwindow-char ~a~n" (send event get-key-code))
          (case (send event get-key-code)
            [(#\rubout) (delete-bookmark)]
            [else
@@ -160,17 +157,8 @@
          (stretchable-width #f)
          (callback
           (lambda (item event)
-            #;(display bm-list)
             (set! bookmark-list bm-list)
             (save-bookmarks)
-            #;(define menu-items
-              (map (lambda (item)
-                     (if (is-a? item labelled-menu-item<%>)
-                         (send item get-plain-label)
-                         void))
-                   (send menu-w-bookmarks get-items)))
-            #;(display menu-items)
-
             ;; delete all bookmark menu items
             (for ([item (in-list (send menu-w-bookmarks get-items))]
                   #:when (is-a? item labelled-menu-item<%>))
@@ -191,8 +179,9 @@
   ;; the only way to get the values for the second column is to store it as per-item data
   (for ([url (in-list url-list)]
         [i (in-naturals 0)])
-    (printf "set data ~a to ~a~n" i url)
     (send lb set-data i url))
-  (send lb set-column-width 0 (exact-truncate (* (send be-frame get-width) 0.5)) 100 2000)
+  (define half-width (exact-truncate (* (send be-frame get-width) 0.5)))
+  (send lb set-column-width 0 half-width 100 2000)
+  (send lb set-column-width 1 half-width 100 2000)
   (send be-frame show #t)
   (send be-frame focus))
