@@ -512,25 +512,25 @@
       (cond
         [(eq? which 'vertical)
          ;(printf " set-scroll-pos: ~a, ~a(~a)~n" which value (quotient value scrollbar-vert-step-size))
-         (super set-scroll-pos which (quotient value scrollbar-vert-step-size))]
+         (super set-scroll-pos which (exact-truncate (quotient value scrollbar-vert-step-size)))]
         [else
-         (super set-scroll-pos which value)]))
+         (super set-scroll-pos which (exact-truncate value))]))
 
     (define/override (set-scroll-range which value)
       (cond
         [(eq? which 'vertical)
          ;(printf " set-scroll-range: ~a, ~a(~a)~n" which value (/ value scrollbar-vert-step-size))
-         (super set-scroll-range which (quotient value scrollbar-vert-step-size))]
+         (super set-scroll-range which (exact-truncate (quotient value scrollbar-vert-step-size)))]
         [else
-         (super set-scroll-range which value)]))
+         (super set-scroll-range which (exact-truncate value))]))
 
     (define/override (set-scroll-page which value)
       (cond
         [(eq? which 'vertical)
          ;(printf " set-scroll-page: ~a, ~a(~a)~n" which value (/ value scrollbar-vert-step-size))
-         (super set-scroll-page which (quotient value scrollbar-vert-step-size))]
+         (super set-scroll-page which (exact-truncate (quotient value scrollbar-vert-step-size)))]
         [else
-         (super set-scroll-page which value)]))
+         (super set-scroll-page which (exact-truncate value))]))
 
     (define (update-scrollbar-step-size new-width new-height)
       ; only update vertical step size for now
@@ -549,8 +549,8 @@
           (lambda ()
             (define-values (dw dh) (get-drawable-size))
             (update-scrollbar-step-size new-width new-height)
-            (set-scroll-range 'horizontal (exact-truncate (max 1 (- new-width dw))))
-            (set-scroll-range 'vertical (exact-truncate (max 1 (- new-height dh))))
+            (set-scroll-range 'horizontal (max 1 (- new-width dw)))
+            (set-scroll-range 'vertical (max 1 (- new-height dh)))
             (set-scroll-page 'horizontal 100)
             (set-scroll-page 'vertical (max 1 dh))
             ;; when scrollbar's are enabled, we need to recreate the offscreen bitmap because the client size changes
@@ -570,8 +570,8 @@
               (reset-layout)
               (define-values (vx vy) (get-virtual-size))
               (define-values (ndw ndh) (get-drawable-size))
-              (set-scroll-range 'horizontal (exact-truncate (max 1 (- vx ndw))))
-              (set-scroll-range 'vertical (exact-truncate (max 1 (- vy ndh))))
+              (set-scroll-range 'horizontal (max 1 (- vx ndw)))
+              (set-scroll-range 'vertical (max 1 (- vy ndh)))
               (set-scroll-page 'vertical (max 1 ndh))))
           (lambda ()
             (semaphore-post edit-lock)))))
