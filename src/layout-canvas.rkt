@@ -270,13 +270,13 @@
     (define (make-highlight-style from-style selected?)
       (define highlight-delta
         (if selected?
+            (send* (make-object style-delta%)
+              (set-delta-foreground (complementary-color (send from-style get-foreground)))
+              (set-delta-background (complementary-color (send from-style get-background))))
             (let ([avg (color-average (send from-style get-foreground) (send from-style get-background))])
               (send* (make-object style-delta%)
                 (set-delta-foreground (complementary-color avg))
-                (set-delta-background avg)))
-            (send* (make-object style-delta%)
-              (set-delta-foreground (complementary-color (send from-style get-foreground)))
-              (set-delta-background (complementary-color (send from-style get-background))))))
+                (set-delta-background avg)))))
 
       (send styles find-or-create-style from-style highlight-delta))
 
@@ -295,7 +295,9 @@
               #:when (and (highlightable-element? e)
                           (element-visible? e top bottom)))
           (define highlight-style
-            (make-highlight-style-cached (get-style e) (eq? highlight-selection (find-in-canvas-cur-sel))))
+            (make-highlight-style-cached (get-style e)
+                                         (or (eq? highlight-selection mouse-selection)
+                                             (eq? highlight-selection (find-in-canvas-cur-sel)))))
           (when (not (eq? highlight-style current-style))
             (set! current-style highlight-style)
             (send current-style switch-to dc #f))
