@@ -214,9 +214,15 @@
 This is Molasses, your browser for the Slow Internet. If you think of
 the Internet as an information super highway, then think of the Slow
 Internet as a country road. You can use Molasses to return to a
-simpler time. Currently Molasses supports two protocols: Gopher and
-Gemini.  Gopher is an authentically old protocol while Gemini is a new
-protocol with an old soul.
+simpler time. Molasses supports two slow internet protocols: Gopher
+and Gemini. Gopher is an authentically old protocol while Gemini is a
+new protocol with an old soul.
+
+Molasses also supports HTTP, but only in a limited sense. Molasses can
+render most of HTML 3.2, which provides good support for HTML from the
+mid-90s. Molasses does not support CSS or scripting of any kind. With
+these two constraints, Molasses is not geared towards browsing the
+modern web.
 
 Molasses is a tabbed browser, so open as many tabs as you want! When
 exiting, any open tabs are saved and will be restored the next time
@@ -256,21 +262,46 @@ CTRL+L     : Select address text
 CTRL+T     : New Tab
 CTRL+PGUP  : Next Tab
 CTRL+PGDWN : Next Tab
+CTRL+C     : Copy
+CTRL+V     : Paste
+CTRL+A     : Select All
+CTRL+F     : Find in Page
+CTRL+=     : Increase current tab's font size
+CTRL+-     : Decrease current tab's font size
 
 
 DOWNLOADING FILES
 -----------------
-If the type of a Gopher menu item or Gemini link is not supported
+If the type of a Gopher menu item or Gemini/HTTP link is not supported
 natively by Molasses, the file can still be downloaded for local
 viewing. Progress of active and completed downloads can be viewed by
 clicking on "Downloads" in the bottom right hand corner of the UI. A
-pop-up menu will show all downloaded files and their progress. 
+pop-up menu will show all downloaded files and their progress.
 Selecting an item from this list will either cancel the download or,
 in the case of completed downloads, remove the entry from the download
 list.
+
+
+BOOKMARKS
+---------
+Molasses alows saving and editing bookmarks via the Bookmarks
+menu. Select "Bookmark Page" to create a bookmark to the currently
+loaded page/address.
+
+
+OTHER OPTIONS
+-------------
+For slower computers, you can disable smooth scrolling in the Options
+menu. Under Options you will also find a setting to enable Light Mode,
+which changes the default font and background colors.
+
+There is also a setting to enable word wrap, which is disabled by
+default. When rendering HTML the word wrap option is disabled, since
+HTML rendering implies word wrapping. The word wrap setting is
+per-tab.
 END
         )
-  (send page-canvas scroll-to 0)
+  (send page-canvas dispatch-scroll-sync 0 #t)
   (send page-canvas focus))
 
 (define (next-tab tp)
