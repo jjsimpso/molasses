@@ -221,14 +221,14 @@
             [(eq? e (dlist-head-value sel-elements))
              (define start-pos (selection-head-start-pos sel))
              (define end-pos (selection-head-end-pos sel))
-             (printf "  draw wrapped head from ~a to ~a~n" start-pos end-pos)
+             #;(printf "  draw wrapped head from ~a to ~a~n" start-pos end-pos)
              (for ([wl (element-lines e)]
                    #:when (and (<= start-pos (wrapped-line-end-pos wl))
                                (<= (wrapped-line-start-pos wl) end-pos)))
                (define s (substring (element-snip e)
                                     (max start-pos (wrapped-line-start-pos wl))
                                     (min end-pos (wrapped-line-end-pos wl))))
-               (printf "   drawing ~a~n" s)
+               #;(printf "   drawing ~a~n" s)
                (if (< (wrapped-line-start-pos wl) start-pos)
                    (let-values ([(w u1 u2 u3) (send dc get-text-extent (substring (element-snip e) (wrapped-line-start-pos wl) start-pos))])
                      (send dc draw-text s (+ x w) (+ (- (wrapped-line-y wl) top) ymargin)))
@@ -236,13 +236,13 @@
             [(eq? e (dlist-tail-value sel-elements))
              (define start-pos 0)
              (define end-pos (selection-tail-end-pos sel))
-             (printf "  draw wrapped tail from ~a to ~a~n" start-pos end-pos)
+             #;(printf "  draw wrapped tail from ~a to ~a~n" start-pos end-pos)
              (for ([wl (element-lines e)]
                    #:break (> (wrapped-line-start-pos wl) end-pos))
                (define s (substring (element-snip e)
                                     (max start-pos (wrapped-line-start-pos wl))
                                     (min end-pos (wrapped-line-end-pos wl))))
-               (printf "   drawing ~a~n" s)
+               #;(printf "   drawing ~a~n" s)
                (send dc draw-text s x (+ (- (wrapped-line-y wl) top) ymargin)))]
             [else
              (draw-wrapped-text e dc left top 0 0)])
@@ -499,7 +499,7 @@
     (define (to-scroll-units which pos)
       (cond
         [(eq? which 'vertical)
-         (quotient pos scrollbar-vert-step-size)]
+         (exact-truncate (/ pos scrollbar-vert-step-size))]
         [else
          pos]))
     
@@ -513,16 +513,16 @@
     (define/override (set-scroll-pos which value)
       (cond
         [(eq? which 'vertical)
-         ;(printf " set-scroll-pos: ~a, ~a(~a)~n" which value (quotient value scrollbar-vert-step-size))
-         (super set-scroll-pos which (exact-truncate (quotient value scrollbar-vert-step-size)))]
+         ;(printf " set-scroll-pos: ~a, ~a(~a)~n" which value (/ value scrollbar-vert-step-size))
+         (super set-scroll-pos which (exact-truncate (/ value scrollbar-vert-step-size)))]
         [else
          (super set-scroll-pos which (exact-truncate value))]))
 
     (define/override (set-scroll-range which value)
       (cond
         [(eq? which 'vertical)
-         ;(printf " set-scroll-range: ~a, ~a(~a)~n" which value (/ value scrollbar-vert-step-size))
-         (super set-scroll-range which (exact-truncate (quotient value scrollbar-vert-step-size)))]
+         #;(printf " set-scroll-range: ~a, ~a(~a)~n" which value (/ value scrollbar-vert-step-size))
+         (super set-scroll-range which (exact-truncate (/ value scrollbar-vert-step-size)))]
         [else
          (super set-scroll-range which (exact-truncate value))]))
 
@@ -530,7 +530,7 @@
       (cond
         [(eq? which 'vertical)
          ;(printf " set-scroll-page: ~a, ~a(~a)~n" which value (/ value scrollbar-vert-step-size))
-         (super set-scroll-page which (exact-truncate (quotient value scrollbar-vert-step-size)))]
+         (super set-scroll-page which (exact-truncate (/ value scrollbar-vert-step-size)))]
         [else
          (super set-scroll-page which (exact-truncate value))]))
 
@@ -550,6 +550,7 @@
           (lambda () void)
           (lambda ()
             (define-values (dw dh) (get-drawable-size))
+            #;(printf "update-scrollbars dw=~a, dh=~a, nw=~a, nh=~a)~n" dw dh new-width new-height)
             (update-scrollbar-step-size new-width new-height)
             (set-scroll-range 'horizontal (max 1 (- new-width dw)))
             (set-scroll-range 'vertical (max 1 (- new-height dh)))
@@ -572,6 +573,7 @@
               (reset-layout)
               (define-values (vx vy) (get-virtual-size))
               (define-values (ndw ndh) (get-drawable-size))
+              ;(printf " vx=~a, vy=~a, ndw=~a, ndh=~a~n" vx vy ndw ndh)
               (set-scroll-range 'horizontal (max 1 (- vx ndw)))
               (set-scroll-range 'vertical (max 1 (- vy ndh)))
               (set-scroll-page 'vertical (max 1 ndh))))
@@ -960,7 +962,7 @@
     (define/override (on-scroll event)
       (define-values (dw dh) (get-drawable-size))
       (define pos (from-scroll-units (send event get-direction) (send event get-position)))
-      (printf "on-scroll: ~a ~a(~a)~n" (send event get-direction) (send event get-position) pos)
+      #;(printf "on-scroll: ~a ~a(~a)~n" (send event get-direction) (send event get-position) pos)
 
       (if (eq? (send event get-direction) 'vertical)
           (let* ([top pos]
@@ -1044,8 +1046,8 @@
          (define new-message-evt (thread-receive-evt))
          (let loop ([new-scroll-pos (thread-receive)]
                     [scroll-pos scroll-y])
-           (printf "smooth scrolling to ~a (from ~a)~n" new-scroll-pos scroll-pos)
-           (define step-size (/ (- new-scroll-pos scroll-pos) smooth-scroll-steps))
+           #;(printf "smooth scrolling to ~a (from ~a)~n" new-scroll-pos scroll-pos)
+           (define step-size (exact-truncate (/ (- new-scroll-pos scroll-pos) smooth-scroll-steps)))
            (define step (if (< step-size 0)
                             (min -1 (round step-size))
                             (max 1 (round step-size))))
@@ -1108,7 +1110,7 @@
            (if (eq? key-code 'wheel-up)
                (max 0 (- scroll-pos wheel-step))
                (min max-scroll (+ scroll-pos wheel-step))))
-         (printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
+         #;(printf "new scroll-y ~a, max ~a~n" new-scroll-pos max-scroll)
          (dispatch-scroll new-scroll-pos)]
         [(up down)
          (define max-scroll (get-scroll-range 'vertical))
@@ -1578,10 +1580,10 @@
                                  [tail-haystack (if match-case
                                                     (element-snip (dlist-peek-head-next cursor))
                                                     (string-foldcase (element-snip (dlist-peek-head-next cursor))))])
-                   (printf "checking next element: ~a~n" tail-haystack)
+                   #;(printf "checking next element: ~a~n" tail-haystack)
                    (define tail-haystack-length (string-length tail-haystack))
                    (let loop-tail-match ([tail-pos (- (hash-ref skip-table (string-ref haystack (sub1 stop-pos))) 1 eol-seps)])
-                     (printf " tail-pos=~a~n" tail-pos)
+                     #;(printf " tail-pos=~a~n" tail-pos)
                      (cond
                        [(>= tail-pos tail-haystack-length)
                         ; for now just stop
@@ -1590,7 +1592,7 @@
                         hits]
                        [else
                         (define ch (string-ref tail-haystack tail-pos))
-                        (printf " ch=~a~n" ch)
+                        #;(printf " ch=~a~n" ch)
                         (cond
                           [(>= tail-pos (sub1 needle-length))
                            hits]
@@ -1601,7 +1603,7 @@
                            hits]
                           [(not (char=? ch needle-last-char))
                            ; character is not the last character in the needle
-                           (printf "~a < ~a~n" (+ tail-pos 1 stop-pos) needle-length)
+                           #;(printf "~a < ~a~n" (+ tail-pos 1 stop-pos) needle-length)
                            (loop-tail-match (+ tail-pos (hash-ref skip-table ch)))]
                           [(< (+ tail-pos 1 eol-seps stop-pos) needle-length)
                            ; the previous haystack plus current position isn't big enough for needle
@@ -1614,7 +1616,7 @@
                               (string-append (substring haystack head-start)
                                              (if (element-end-of-line e) "\n" "")
                                              (substring tail-haystack 0 (add1 tail-pos)))))
-                           (printf "  head-start=~a, combined=~a~n" head-start combined-haystack)
+                           #;(printf "  head-start=~a, combined=~a~n" head-start combined-haystack)
                            (if (string=? combined-haystack needle)
                                (dlist-add! hits (selection (dlist (dlist-head cursor) (dlist-head-next cursor)) head-start stop-pos (add1 tail-pos)))
                             hits)])])))
@@ -1777,11 +1779,11 @@
                 (exact-truncate y))))
 
       ;(printf "scroll-to ~a, thread=~a~n" y (current-thread))
-      (printf "scroll-to ~a, ts=~a~n" y (current-milliseconds))
+      ;(printf "scroll-to ~a, ts=~a~n" y (current-milliseconds))
       
       (when (not (= new-scroll-pos old-scroll-pos))
         (when smooth
-          (let* ([step-size (/ (- new-scroll-pos old-scroll-pos) smooth-scroll-steps)]
+          (let* ([step-size (exact-truncate (/ (- new-scroll-pos old-scroll-pos) smooth-scroll-steps))]
                  [step (if (< step-size 0)
                            (min -1 (round step-size))
                            (max 1 (round step-size)))])

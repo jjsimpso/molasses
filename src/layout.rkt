@@ -440,8 +440,8 @@
                 max-width)]
          [(not (empty? (layout-context-center-elements ctx)))
           ; there is a partial line of centered elements, shift existing elements over to make room
-          (define old-margin ( / (- total-width (layout-context-left-width ctx) (layout-context-center-width ctx) (layout-context-right-width ctx)) 2))
-          (define margin ( / (- total-width (layout-context-left-width ctx) (layout-context-center-width ctx) (layout-context-right-width ctx) width) 2))
+          (define old-margin (exact-truncate (/ (- total-width (layout-context-left-width ctx) (layout-context-center-width ctx) (layout-context-right-width ctx)) 2)))
+          (define margin (exact-truncate (/ (- total-width (layout-context-left-width ctx) (layout-context-center-width ctx) (layout-context-right-width ctx) width) 2)))
           (define diff (- margin old-margin))
           ;(printf "shift centered elements over: lcw=~a, width =~a, margin ~a to ~a, diff=~a~n" (layout-context-center-width ctx) width old-margin margin diff)
           (adjust-elements-xpos! (layout-context-center-elements ctx) diff)
@@ -484,7 +484,7 @@
          [else
           (define space-available (- total-width (layout-context-left-width ctx) (layout-context-right-width ctx)))
           (define space-leftover (- space-available width))
-          (define xpos (+ (layout-context-left-width ctx) (/ space-leftover 2)))
+          (define xpos (+ (layout-context-left-width ctx) (exact-truncate (/ space-leftover 2))))
           (define new-ypos ypos)
           (when (not (empty? remaining-words))
             (set! new-ypos (calc-next-line-y ypos (layout-context-center-elements ctx)))
@@ -646,7 +646,7 @@
        (values top bottom)]
       [(middle)
        (define height (- bottom top))
-       (define new-top (max 0 (- (layout-context-baseline-pos ctx) (/ height 2))))
+       (define new-top (max 0 (- (layout-context-baseline-pos ctx) (exact-truncate (/ height 2)))))
        (define new-bottom (+ new-top height))
        (cond
          [(< new-top top)
@@ -740,17 +740,17 @@
          ; the canvas user must end a line before adding an element with the other alignment
          ; otherwise, behavior is undefined
          (if (empty? (layout-context-center-elements ctx))
-             (let ([margin (/ (- total-width (layout-context-left-width ctx) (layout-context-right-width ctx) ew) 2)])
+             (let ([margin (exact-truncate (/ (- total-width (layout-context-left-width ctx) (layout-context-right-width ctx) ew) 2))])
                (set-layout-context-center-elements! ctx (cons e (layout-context-center-elements ctx)))
                (set-layout-context-center-width! ctx (+ ew (layout-context-snip-xmargin ctx)))
                (set-layout-context-baseline-pos! ctx (initial-baseline y eh valign))
                (values (+ (layout-context-left-width ctx) margin) y (+ (layout-context-left-width ctx) margin ew) (+ y eh)))
-             (let* ([margin (/ (- total-width (layout-context-left-width ctx) (layout-context-right-width ctx) (layout-context-center-width ctx) ew) 2)]
+             (let* ([margin (exact-truncate (/ (- total-width (layout-context-left-width ctx) (layout-context-right-width ctx) (layout-context-center-width ctx) ew) 2))]
                     [pos (+ (layout-context-left-width ctx) margin (layout-context-center-width ctx))]
                     [y1 y]
                     [y2 (+ y eh)])
                ; reposition each centered element on the line
-               (define old-margin ( / (- total-width (layout-context-left-width ctx) (layout-context-center-width ctx) (layout-context-right-width ctx)) 2))
+               (define old-margin (exact-truncate (/ (- total-width (layout-context-left-width ctx) (layout-context-center-width ctx) (layout-context-right-width ctx)) 2)))
                (define diff (- margin old-margin))
                (adjust-elements-xpos! (layout-context-center-elements ctx) diff)
                (set!-values (y1 y2) (adjust-for-valign y1 y2 valign (layout-context-center-elements ctx)))
