@@ -123,7 +123,7 @@
      (send canvas begin-edit-sequence)
      (with-handlers ([exn:fail?
                       (lambda (exn)
-                        (eprintf "Caught HTML parsing error~n")
+                        (eprintf "Caught HTML parsing error: ~a~n" exn)
                         (send canvas append-string "Error parsing HTML")
                         #f)])
        (render-html-to-text (gopher-response-data-port resp)
