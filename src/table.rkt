@@ -130,6 +130,20 @@
     ;; list of all elements in order of insertion
     (define elements (dlist-new))
 
+    ;; loop through any visible tables in the cell and update their cell coordinates
+    ;; need to make sure this happens even if the table doesn't need to be redrawn
+    ;; this is a hack, but fixes nested tables not having the right canvas coordinates,
+    ;; which in turn would break event handling for snips inside them
+    (define/public (update-table-cell-coords)
+      (define-values (x y) (get-position))
+      #;(printf "update-table-cell-coords~n")
+      (for ([e (in-dlist elements)]
+            #:when (is-a? (element-snip e) table-snip%))
+        (define-values (tx ty) (values (+ x (element-xpos e) xmargin)
+                                       (+ y (element-ypos e) ymargin valign-offset)))
+        (send (element-snip e) update-cell-coords tx ty)))
+      
+      
     (define (draw-wrapped-text e dc ox oy)
       (for ([line (in-list (element-lines e))])
         ;(printf "draw-wrapped-text: (~a,~a) ~a~n" (+ oy (wrapped-line-x line)) (+ oy (wrapped-line-y line)) (substring (element-snip e) (wrapped-line-start-pos line) (wrapped-line-end-pos line)))
@@ -227,14 +241,14 @@
                                      (- y canvas-y ymargin valign-offset)))
       (define e (select-element cx cy))
 
-      ;(printf "cell on-event ~ax~a, canvas ~ax~a, cell coord ~ax~a~n" x y canvas-x canvas-y cx cy)
+      #;(printf " cell on-event ~ax~a, canvas ~ax~a, cell coord ~ax~a~n" x y canvas-x canvas-y cx cy)
 
       (case (send event get-event-type)
         [(left-down middle-down right-down motion)
          (check-element-enter-leave e cx cy event)
          
          (when (and e (is-a? (element-snip e) snip%))
-           #;(printf "on-event: pass event at ~ax~a to snip coords ~ax~a, canvas:~ax~a, element at ~ax~a~n"
+           #;(printf " cell on-event2: pass event at ~ax~a to snip coords ~ax~a, canvas:~ax~a, element at ~ax~a~n"
                  (send event get-x) (send event get-y)
                  (+ (element-xpos e) xmargin) (+ (element-ypos e) ymargin valign-offset)
                  x y
@@ -535,13 +549,14 @@
             0))
 
       (when (table-position-changed? firstx firsty)
-        #;(printf "table position changed~n")
+        #;(printf "table position changed: ~ax~a~n" firstx firsty)
         (set-first-row-position firstx firsty)
         (for/fold ([rowy firsty])
                   ([row (in-list rows)])
           (for/fold ([rowx firstx])
                     ([c (in-list row)])
             (send c set-position rowx rowy)
+            (send c update-table-cell-coords)
             (+ rowx (send c get-width) xpos-liminal-space))
           (+ rowy (row-height row) ypos-liminal-space))))
     
@@ -666,6 +681,7 @@
         (for/or ([c (in-list row)])
           (define-values (cx cy) (send c get-position))
           (define-values (cw ch) (send c get-size))
+          #;(printf " select-cell ~ax~a fr:~ax~a~n" cx cy first-row-x first-row-y)
           (and (>= x cx)
                (<= x (+ cx cw))
                (>= y cy)
@@ -681,7 +697,7 @@
                                         (send event get-y)))
          (define-values (tx ty) (values (- ex x)
                                         (- ey y)))
-         ;(printf "on-event: ~ax~a - ~ax~a = ~ax~a~n" ex ey x y tx ty)
+         #;(printf " table on-event: ~ax~a - ~ax~a = ~ax~a~n" ex ey x y tx ty)
          ; use raw canvas coordinates rather than coords relative to the table's position to
          ; select cell. each cell will save its raw canvas coordinates when drawn.
          (define c (select-cell ex ey))
