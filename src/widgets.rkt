@@ -390,6 +390,33 @@
     (send canvas end-edit-sequence)
     (close-input-port (gemini-response-data-port resp)))
 
+  (define (handle-gemini-item data-port mimetype from-url)
+    (cond
+      [(string-prefix? mimetype "text/gemini")
+       (send canvas begin-edit-sequence)
+       (insert-gemini-text canvas data-port from-url)
+       (send canvas end-edit-sequence)]
+      [(string-prefix? mimetype "text/")
+       (send canvas begin-edit-sequence)
+       ;; this isn't ideal but is still a lot faster than inserting one line at a time
+       ;; (text% treats #\return as a newline so DOS formatted files have extra newlines)
+       (send canvas append-string (string-replace
+                                   (port->string data-port)
+                                   "\r\n"
+                                   "\n"))
+       (send canvas end-edit-sequence)]
+      [(string-prefix? mimetype "image/")
+       (define img (make-object image-snip% data-port 'unknown))
+       (send canvas begin-edit-sequence)
+       (send canvas append-snip img #t)
+       (send canvas end-edit-sequence)]
+      [else
+       (send canvas begin-edit-sequence)
+       (send canvas append-string (format "unknown mimetype: ~a~n" mimetype))
+       (send canvas append-string (format "Initiating download of ~a~n" (request-path/selector req)))
+       (send canvas end-edit-sequence)
+       (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]))
+  
   ;; need to clear this flag since it is used in the on-char event handler
   (set-field! gopher-menu? canvas #f)
   
@@ -412,43 +439,18 @@
            (goto-gemini query-request canvas))
          (void))]
     [(20 21)
-     (let ([data-port (gemini-response-data-port resp)]
-           [mimetype (gemini-response-meta resp)]
-           [from-url (gemini-response-from-url resp)])
-       (cond
-         [(string-prefix? mimetype "text/gemini")
-          (send canvas begin-edit-sequence)
-          (insert-gemini-text canvas data-port from-url)
-          (send canvas end-edit-sequence)]
-         [(string-prefix? mimetype "text/")
-          (send canvas begin-edit-sequence)
-          ;; this isn't ideal but is still a lot faster than inserting one line at a time
-          ;; (text% treats #\return as a newline so DOS formatted files have extra newlines)
-          (send canvas append-string (string-replace
-                                      (port->string data-port)
-                                      "\r\n"
-                                      "\n"))
-          (send canvas end-edit-sequence)]
-         [(string-prefix? mimetype "image/")
-          (define img (make-object image-snip% data-port 'unknown))
-          (send canvas begin-edit-sequence)
-          (send canvas append-snip img #t)
-          (send canvas end-edit-sequence)]
-         [else
-          (send canvas begin-edit-sequence)
-          (send canvas append-string (format "unknown mimetype: ~a~n" mimetype))
-          (send canvas append-string (format "Initiating download of ~a~n" (request-path/selector req)))
-          (send canvas end-edit-sequence)
-          (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]))
+     (handle-gemini-item (gemini-response-data-port resp) (gemini-response-meta resp) (gemini-response-from-url resp))
      (close-input-port (gemini-response-data-port resp))
      req]
     [(30 31)
-     ;; initiate a file download
-     (send canvas begin-edit-sequence)
-     (send canvas append-string (format "Initiating download of ~a~n" (request-path/selector req)))
-     (send canvas end-edit-sequence)
-     (save-gemini-to-file (gemini-response-data-port resp) (request-path/selector req))]
-    
+     (cond
+       [(string-prefix? (gemini-response-meta resp) "gemini://")
+        (close-input-port (gemini-response-data-port resp))
+        (goto-gemini (url->request (gemini-response-meta resp)) canvas)]
+       [else
+        (handle-gemini-item (gemini-response-data-port resp) (gemini-response-meta resp) (gemini-response-from-url resp))
+        (close-input-port (gemini-response-data-port resp))
+        req])]
     [(40) (show-gemini-error "Temporary failure")]
     [(41) (show-gemini-error "Server unavailable")]
     [(42) (show-gemini-error "CGI error")]
