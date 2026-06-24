@@ -14,7 +14,7 @@ Molasses is a multi-tabbed browser for the "slow" internet, including Gopher and
 * **Done** Give option to open 'd' and 'P' item types in external application.
 
 ## Platform
-Molasses is a Racket GUI application, which means it will run on Windows, MacOS, and Linux. If Racket is already installed on a system, Molasses can be installed from the official Racket package catalog. Just run `raco setup molasses`. Installing the package will also install the necessary dependencies, including #lang magic, another of my projects.
+Molasses is a Racket GUI application, which means it will run on Windows, MacOS, and Linux. If Racket is already installed on a system, Molasses can be installed from the official Racket package catalog. Just run `raco pkg install molasses`. Installing the package will also install the necessary dependencies, including #lang magic, another of my projects.
 
 Racket can be downloaded from [The Racket Homepage](https://racket-lang.org)
 
